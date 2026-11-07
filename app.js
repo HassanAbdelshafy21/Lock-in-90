@@ -104,6 +104,7 @@ function draw() {
   if (S.quickWater && S.got.days) { S.quickWater = false; const dd = dayDoc(today()); dd.water = (dd.water || 0) + 250; saveDay(today()); S.view = 'today'; history.replaceState(null, '', '#today'); toast(`+250 ml · ${L(dd.water)} L today`); }
   const R = C.computeRun(S.settings, S.days, now());
   $('top').innerHTML = topHTML(R);
+  if (S.view === 'progress') photosOn();
   m.innerHTML = bannersHTML(R) + (S.view === 'train' ? trainHTML(R) : S.view === 'progress' ? progressHTML(R) : S.view === 'setup' ? setupHTML(R) : todayHTML(R));
 }
 const topIdle = () => `<div class="top-row"><div><div class="daylabel">90-day challenge</div><div class="daynum">LOCK IN</div></div></div>`;
@@ -668,7 +669,7 @@ document.addEventListener('click', async ev => {
     case 'signin': return signin();
     case 'signup': return emailAuth(true);
     case 'resetpw': { const em = ($('si-email') && $('si-email').value || '').trim(); if (!em) return toast('Type your email above first.'); try { await sendPasswordResetEmail(auth, em); toast('Reset link sent. Check your email.'); } catch (e) { toast(AUTH_MSG[e && e.code] || 'Couldn’t send the reset email.'); } return; }
-    case 'signout': S.unsub.forEach(u => u()); S.unsub = []; await signOut(auth); return;
+    case 'signout': S.unsub.forEach(u => u()); S.unsub = []; S.photosOn = false; S.photos = {}; await signOut(auth); return;
     case 'tab': return go(v);
     case 'jump': { const el = $(v); if (el) el.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' }); return; }
     case 'start': {
@@ -868,6 +869,11 @@ function subscribe() {
   S.unsub.push(onSnapshot(collection(db, up('foods')), qs => { qs.docs.forEach(x => S.foods[x.id] = x.data()); }));
   S.unsub.push(onSnapshot(collection(db, up('activities')), qs => { qs.docs.forEach(x => S.acts[x.id] = x.data()); render(); }));
   S.unsub.push(onSnapshot(collection(db, up('meta')), qs => { qs.docs.forEach(x => S.meta[x.id] = x.data()); render(); }));
+}
+// photos are large: load them only when Progress is opened
+function photosOn() {
+  if (S.photosOn || !S.user) return;
+  S.photosOn = true;
   S.unsub.push(onSnapshot(collection(db, up('photos')), qs => { qs.docs.forEach(x => S.photos[x.id] = x.data()); if (S.view === 'progress') render(); }));
 }
 onAuthStateChanged(auth, u => {

@@ -72,15 +72,20 @@ const LIST = [
 ];
 async function reminders(uid, settings) {
   const n = C.nowIn(TZ), nowMin = n.hour * 60 + n.minute, date = n.date;
-  const daysSnap = await db.collection(`users/${uid}/days`).where('date', '>=', C.addDays(settings.startDate, -1)).get();
-  const days = {}; daysSnap.forEach(d => { days[d.id] = d.data(); });
+  const rm0 = settings.reminders || {};
+  const logRef0 = db.doc(`users/${uid}/meta/notify`);
+  const log0 = (await logRef0.get()).data() || {};
+  const sent0 = log0.date === date ? log0.sent || [] : [];
+  // Only the morning, evening and final messages need the full history (for the day count); otherwise read just today.
+  const needRun = TEST || ['morning', 'evening', 'final'].some(k => { const r = LIST.find(x => x.key === k); return rm0[k] !== false && !sent0.includes(r.id) && nowMin >= r.t && nowMin <= r.t + 150; });
+  const days = {};
+  if (needRun) { (await db.collection(`users/${uid}/days`).where('date', '>=', C.addDays(settings.startDate, -1)).get()).forEach(d => { days[d.id] = d.data(); }); }
+  else { const s = await db.doc(`users/${uid}/days/${date}`).get(); if (s.exists) days[date] = s.data(); }
   const day = days[date] || {};
-  const R = C.computeRun(settings, days, n);
+  const R = needRun ? C.computeRun(settings, days, n) : { dayNum: 0, done: 0, critical: false };
   const ev = C.evalDay(settings, day, date);
   const rm = settings.reminders || {};
-  const logRef = db.doc(`users/${uid}/meta/notify`);
-  const log = (await logRef.get()).data() || {};
-  const sent = log.date === date ? log.sent || [] : [];
+  const logRef = logRef0, sent = [...sent0];
   const L = ml => String(C.round(ml / 1000, 2));
 
   if (TEST) await ntfy('Lock In 90 test', `Notifications work. Day ${Math.min(R.dayNum, 90)} of 90, streak ${R.done}.`, { tags: 'white_check_mark' });
@@ -129,7 +134,7 @@ async function reminders(uid, settings) {
     sent.push(r.id);
     if (msg) await ntfy(msg[0], msg[1], msg[2]);
   }
-  await logRef.set({ date, sent });
+  if (log0.date !== date || sent.length !== sent0.length) await logRef.set({ date, sent });
 }
 
 /* ---------- main ---------- */
