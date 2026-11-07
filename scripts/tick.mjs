@@ -10,9 +10,10 @@ const TEST = process.env.TEST === 'true';
 admin.initializeApp({ credential: admin.credential.cert(JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT)) });
 const db = admin.firestore();
 
+let CURRENT_TOPIC = null;
 async function ntfy(title, body, { priority = 3, tags = '' } = {}) {
-  if (!TOPIC) { console.log('[no NTFY_TOPIC]', title, body); return; }
-  const r = await fetch(`https://ntfy.sh/${encodeURIComponent(TOPIC)}`, { method: 'POST', body, headers: { Title: title, Click: APP_URL, Priority: String(priority), Tags: tags } });
+  if (!CURRENT_TOPIC) { console.log('[no topic for this user]', title); return; }
+  const r = await fetch(`https://ntfy.sh/${encodeURIComponent(CURRENT_TOPIC)}`, { method: 'POST', body, headers: { Title: title, Click: APP_URL, Priority: String(priority), Tags: tags } });
   console.log('ntfy', title, r.status);
 }
 
@@ -132,11 +133,15 @@ async function reminders(uid, settings) {
 }
 
 /* ---------- main ---------- */
+// Each person sets their own ntfy topic in the app (Setup → Reminders).
+// The NTFY_TOPIC secret is only a fallback for the first person who started using the app.
 const users = await db.collection('users').listDocuments();
-for (const u of users) {
-  const s = await db.doc(`users/${u.id}/settings/main`).get();
-  if (!s.exists) continue;
-  const settings = s.data();
+const all = [];
+for (const u of users) { const s = await db.doc(`users/${u.id}/settings/main`).get(); if (s.exists) all.push({ id: u.id, settings: s.data() }); }
+const firstUser = all.slice().sort((a, b) => String(a.settings.created || '').localeCompare(String(b.settings.created || '')))[0];
+for (const { id, settings } of all) {
+  const u = { id };
+  CURRENT_TOPIC = settings.ntfyTopic || (firstUser && firstUser.id === id ? TOPIC : null);
   try { await stravaSync(u.id, settings); } catch (e) { console.log('strava error', e.message); }
   try { await reminders(u.id, settings); } catch (e) { console.log('reminder error', e.message); }
 }

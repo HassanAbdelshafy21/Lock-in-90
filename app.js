@@ -495,6 +495,7 @@ function setupHTML(R) {
   // reminders + strava
   const rm = st.reminders || {}, sv = S.meta.strava;
   h += `<section class="card"><div class="card-h"><h2>Reminders</h2></div><p class="hint">Sent to the ntfy app on your phone. Each one checks your day first and stays quiet if there’s nothing to do. Times can run 5 to 15 minutes late.</p>
+  <div class="sup-r"><span class="sub">Your ntfy topic</span><div class="row"><input class="in grow" id="s-topic" data-topic="1" value="${esc(st.ntfyTopic || '')}" placeholder="e.g. lockin90-a1b2c3d4e5f6" autocomplete="off" spellcheck="false"><button class="btn small" data-act="gentopic">New</button></div><p class="hint">Subscribe to this exact name in the ntfy app. Treat it like a password. Leave it empty and no reminders are sent.</p></div>
   ${REMINDERS.map(([k, label]) => { const on = k === 'meals' ? rm[k] === true : rm[k] !== false; return `<div class="setup-r"><span>${esc(label)}</span><div class="seg"><button data-act="remind" data-v="${k}:1" aria-pressed="${on}">On</button><button data-act="remind" data-v="${k}:0" aria-pressed="${!on}">Off</button></div></div>`; }).join('')}</section>`;
   if (sv) h += `<section class="card"><div class="card-h"><h2>Strava</h2>${sv && sv.ok ? pill('done', 'Connected') : pill('todo', 'Not connected')}</div>
   <p class="hint">${sv && sv.lastSync ? `Last sync ${new Date(sv.lastSync).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}. ${sv.count ? sv.count + ' activities synced.' : ''}` : 'Connects once the Strava step in the setup guide is done. Checks every 30 minutes.'}</p></section>`;
@@ -742,6 +743,7 @@ document.addEventListener('click', async ev => {
     case 'sdel': S.settings.supps = S.settings.supps.filter(x => x.id !== b.dataset.id); saveSettings(); break;
     case 'sadd': { const n = $('s-new').value.trim(); if (!n) return; S.settings.supps.push({ id: 's' + Date.now().toString(36), name: n.slice(0, 40), req: false, am: 'Any time', pm: 'Any time' }); $('s-new').value = ''; $('s-new').blur(); saveSettings(); break; }
     case 'remind': { const [k, on] = v.split(':'); S.settings.reminders = { ...(S.settings.reminders || {}), [k]: on === '1' }; saveSettings(); break; }
+    case 'gentopic': { const r = new Uint8Array(6); crypto.getRandomValues(r); S.settings.ntfyTopic = 'lockin90-' + [...r].map(x => x.toString(16).padStart(2, '0')).join(''); saveSettings(); toast('New topic created. Subscribe to it in ntfy.'); break; }
     case 'export': return exportBackup();
     case 'restart1': S.confirm = 'restart'; break;
     case 'cancel': S.confirm = null; break;
@@ -774,6 +776,7 @@ document.addEventListener('change', ev => {
   if (t.dataset.dayfield) { const v = parseFloat(t.value); dayDoc(D)[t.dataset.dayfield] = isNaN(v) ? null : v; saveDay(D); return; }
   if (t.dataset.plan !== undefined) { S.settings.plan = { ...(S.settings.plan || C.DEFAULT_PLAN), [t.dataset.plan]: t.value }; saveSettings(); return; }
   if (t.dataset.setting) { const v = parseFloat(t.value); S.settings[t.dataset.setting] = isNaN(v) ? null : v; saveSettings(); if (t.dataset.setting === 'waterGoal') { t.blur(); draw(); } return; }
+  if (t.dataset.topic) { S.settings.ntfyTopic = t.value.trim().replace(/[^A-Za-z0-9_-]/g, '').slice(0, 64); saveSettings(); return; }
   if (t.dataset.target) { const v = parseFloat(t.value); S.settings.targets = { ...(S.settings.targets || {}), [t.dataset.target]: isNaN(v) ? null : v }; saveSettings(); return; }
   if (t.dataset.mealtime) { S.settings.meals.find(x => x.id === t.dataset.mealtime).time = t.value; savePlan(); return; }
   if (t.dataset.stime) { const [id, k] = t.dataset.stime.split(':'); S.settings.supps.find(x => x.id === id)[k] = t.value; saveSettings(); return; }
