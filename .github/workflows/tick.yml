@@ -27,5 +27,5 @@ jobs:
           STRAVA_CLIENT_ID: ${{ secrets.STRAVA_CLIENT_ID }}
           STRAVA_CLIENT_SECRET: ${{ secrets.STRAVA_CLIENT_SECRET }}
           NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
-          APP_URL: https://hassanabdelshafy21.github.io/lock-in-90/
+          APP_URL: https://hassanabdelshafy21.github.io/Lock-in-90/
           TEST: ${{ inputs.test || 'false' }}

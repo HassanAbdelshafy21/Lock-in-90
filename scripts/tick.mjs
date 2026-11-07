@@ -3,7 +3,7 @@ import admin from 'firebase-admin';
 import * as C from '../core.js';
 
 const TZ = 'Africa/Cairo';
-const APP_URL = process.env.APP_URL || 'https://hassanabdelshafy21.github.io/lock-in-90/';
+const APP_URL = process.env.APP_URL || 'https://hassanabdelshafy21.github.io/Lock-in-90/';
 const TOPIC = process.env.NTFY_TOPIC;
 const TEST = process.env.TEST === 'true';
 

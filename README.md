@@ -22,4 +22,4 @@ A personal 90-day challenge tracker that works offline and syncs through Firebas
    → Authorize → copy the whole `localhost` address from the address bar → Actions → **strava-connect** → Run workflow → paste it.
 6. **Test reminders:** Actions → **tick** → Run workflow → tick "Send a test notification".
 
-App: https://hassanabdelshafy21.github.io/lock-in-90/
+App: https://hassanabdelshafy21.github.io/Lock-in-90/
