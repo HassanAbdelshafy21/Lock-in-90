@@ -315,7 +315,7 @@ function staminaHTML() {
   <div class="slots">${wk.sessions.map((s, i) => { const done = ses[i]; return `<div class="slot ${done ? 'done' : ''}"><b>${done ? 'Done' : 'Session ' + (i + 1)}</b><span>${esc(done ? `${done.mode} · ${done.min} min` : s.text)}</span></div>`; }).join('')}</div>
   <div class="spread"><span class="hint">Stamina streak: <b class="num">${streak}</b> full week${streak === 1 ? '' : 's'}</span><span class="hint">Days: ${(st.days || []).map(i => C.DAYNAMES[i].slice(0, 3)).join(', ') || 'none set'}</span></div>
   ${C.isTestWeek(w) ? `<div class="banner b-info"><strong>Test week</strong><p>Do the 12-minute test once this week: same machine as last time, cover as much distance as you can in 12 minutes, then log it as a Test.</p></div>` : ''}</section>`;
-  h += `<section class="card"><div class="card-h"><h2>Log a session</h2><span class="hint">Strava sessions log themselves</span></div>
+  h += `<section class="card"><div class="card-h"><h2>Log a session</h2></div>
   <div class="form"><label>Machine<select class="in" id="st-mode">${CARDIO_MODES.map(m => `<option>${m}</option>`).join('')}</select></label>
   <label>Type<select class="in" id="st-kind"><option value="easy">Easy</option><option value="intervals">Intervals</option><option value="test">12-min test</option></select></label>
   <label>Minutes<input class="in" id="st-min" type="number" inputmode="numeric" value="${wk.sessions[0].min}"></label>
@@ -440,7 +440,7 @@ function setupHTML(R) {
   });
   h += `<button class="btn" data-act="mealadd">+ Add a meal</button></section>`;
   // weekly plan
-  h += `<section class="card"><div class="card-h"><h2>Weekly training</h2></div><p class="hint">What counts as training each day. Gym days tick themselves when Lyfta sends the workout to Strava.</p>
+  h += `<section class="card"><div class="card-h"><h2>Weekly training</h2></div><p class="hint">What counts as training each day. Tick gym days on Today after you log the workout in Lyfta.</p>
   ${[6, 0, 1, 2, 3, 4, 5].map(i => `<div class="setup-r"><label for="p-${i}">${C.DAYNAMES[i]}</label><select class="in" id="p-${i}" data-plan="${i}">${Object.keys(C.TT).map(k => `<option value="${k}" ${plan[i] === k ? 'selected' : ''}>${C.TT[k].label}</option>`).join('')}</select></div>`).join('')}</section>`;
   // stamina
   h += `<section class="card"><div class="card-h"><h2>Stamina track</h2>${pill('opt', 'Bonus')}</div>
@@ -455,7 +455,7 @@ function setupHTML(R) {
   const rm = st.reminders || {}, sv = S.meta.strava;
   h += `<section class="card"><div class="card-h"><h2>Reminders</h2></div><p class="hint">Sent to the ntfy app on your phone. Each one checks your day first and stays quiet if there’s nothing to do. Times can run 5 to 15 minutes late.</p>
   ${REMINDERS.map(([k, label]) => `<div class="setup-r"><span>${esc(label)}</span><div class="seg"><button data-act="remind" data-v="${k}:1" aria-pressed="${rm[k] !== false}">On</button><button data-act="remind" data-v="${k}:0" aria-pressed="${rm[k] === false}">Off</button></div></div>`).join('')}</section>`;
-  h += `<section class="card"><div class="card-h"><h2>Strava</h2>${sv && sv.ok ? pill('done', 'Connected') : pill('todo', 'Not connected')}</div>
+  if (sv) h += `<section class="card"><div class="card-h"><h2>Strava</h2>${sv && sv.ok ? pill('done', 'Connected') : pill('todo', 'Not connected')}</div>
   <p class="hint">${sv && sv.lastSync ? `Last sync ${new Date(sv.lastSync).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}. ${sv.count ? sv.count + ' activities synced.' : ''}` : 'Connects once the Strava step in the setup guide is done. Checks every 30 minutes.'}</p></section>`;
   // account and data
   h += `<section class="card"><div class="card-h"><h2>Data</h2></div>
