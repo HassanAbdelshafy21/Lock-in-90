@@ -1,5 +1,5 @@
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js';
-import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js';
+import { getAuth, GoogleAuthProvider, signInWithPopup, getRedirectResult, onAuthStateChanged, signOut, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js';
 import { initializeFirestore, getFirestore, persistentLocalCache, persistentMultipleTabManager, doc, collection, onSnapshot, setDoc, deleteDoc, writeBatch } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
 import * as C from './core.js';
 import { EX, POSE, figSVG, YT, LINES, FOODS, COACH_MEALS, DEFAULT_SUPPS, SLOTS, CARDIO_MODES } from './data.js';
@@ -134,7 +134,13 @@ function bannersHTML(R) {
 
 /* ---------- sign-in and welcome ---------- */
 function signinHTML() {
-  return `<section class="signin"><h1>LOCK<br><span>IN 90</span></h1><p class="hint">Sign in once with Google. After that the app works offline and syncs when you’re back online.</p><button class="btn primary block" data-act="signin">Sign in with Google</button></section>`;
+  return `<section class="signin"><h1>LOCK<br><span>IN 90</span></h1><p class="hint">Sign in once. After that the app works offline and syncs when you’re back online.</p>
+  <button class="btn primary block" data-act="signin">Sign in with Google</button>
+  <span class="sub">or with email (works in every browser, best on iPhone)</span>
+  <form class="form" id="email-form" style="text-align:left"><label class="full">Email<input class="in" id="si-email" type="email" autocomplete="email" required></label>
+  <label class="full">Password<input class="in" id="si-pass" type="password" autocomplete="current-password" minlength="6" required></label>
+  <button class="btn primary" type="submit" data-mode="in">Sign in</button><button class="btn" type="button" data-act="signup">Create account</button></form>
+  <button class="link" data-act="resetpw">Forgot password?</button></section>`;
 }
 function waterSelect(id, attr, val) { return `<select class="in" id="${id}" ${attr}>${WATER_OPTS.map(v => `<option value="${v}" ${v === val ? 'selected' : ''}>${L(v)} L</option>`).join('')}</select>`; }
 function welcomeHTML() {
@@ -660,6 +666,8 @@ document.addEventListener('click', async ev => {
   const act = b.dataset.act, v = b.dataset.v, D = editDate();
   switch (act) {
     case 'signin': return signin();
+    case 'signup': return emailAuth(true);
+    case 'resetpw': { const em = ($('si-email') && $('si-email').value || '').trim(); if (!em) return toast('Type your email above first.'); try { await sendPasswordResetEmail(auth, em); toast('Reset link sent. Check your email.'); } catch (e) { toast(AUTH_MSG[e && e.code] || 'Couldn’t send the reset email.'); } return; }
     case 'signout': S.unsub.forEach(u => u()); S.unsub = []; await signOut(auth); return;
     case 'tab': return go(v);
     case 'jump': { const el = $(v); if (el) el.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' }); return; }
@@ -825,14 +833,23 @@ async function importBackup(file) {
 
 /* ---------- auth + data ---------- */
 async function signin() {
-  const p = new GoogleAuthProvider();
-  try { await signInWithPopup(auth, p); }
+  try { await signInWithPopup(auth, new GoogleAuthProvider()); }
   catch (e) {
-    if (e && (e.code === 'auth/popup-blocked' || e.code === 'auth/operation-not-supported-in-this-environment')) { try { await signInWithRedirect(auth, p); } catch (e2) { toast('Sign-in failed. Check your connection.'); } }
-    else if (e && e.code === 'auth/unauthorized-domain') toast('This address isn’t authorized in Firebase yet. Add it under Authentication → Settings → Authorized domains.');
-    else if (e && e.code !== 'auth/popup-closed-by-user') toast('Sign-in failed. Check your connection and try again.');
+    const c = e && e.code;
+    if (c === 'auth/popup-closed-by-user' || c === 'auth/cancelled-popup-request') return;
+    if (c === 'auth/popup-blocked' || c === 'auth/operation-not-supported-in-this-environment' || c === 'auth/web-storage-unsupported') toast('Google sign-in doesn’t work in this browser. Use email sign-in below.');
+    else if (c === 'auth/unauthorized-domain') toast('This address isn’t authorized in Firebase yet.');
+    else toast('Google sign-in failed. Try email sign-in below.');
   }
 }
+const AUTH_MSG = { 'auth/invalid-email': 'That email address isn’t valid.', 'auth/missing-password': 'Enter a password.', 'auth/weak-password': 'Use a password of at least 6 characters.', 'auth/email-already-in-use': 'That email already has an account. Tap Sign in instead.', 'auth/invalid-credential': 'Wrong email or password.', 'auth/wrong-password': 'Wrong email or password.', 'auth/user-not-found': 'No account with that email. Tap Create account.', 'auth/too-many-requests': 'Too many attempts. Wait a few minutes and try again.', 'auth/operation-not-allowed': 'Email sign-in isn’t switched on in Firebase yet.', 'auth/network-request-failed': 'No connection. Sign-in needs internet the first time.' };
+async function emailAuth(create) {
+  const email = ($('si-email').value || '').trim(), pass = $('si-pass').value || '';
+  if (!email || !pass) return toast('Enter your email and a password.');
+  try { create ? await createUserWithEmailAndPassword(auth, email, pass) : await signInWithEmailAndPassword(auth, email, pass); }
+  catch (e) { toast(AUTH_MSG[e && e.code] || 'Sign-in failed. Try again.'); }
+}
+document.addEventListener('submit', e => { if (e.target.id === 'email-form') { e.preventDefault(); emailAuth(false); } });
 getRedirectResult(auth).catch(() => { });
 function subscribe() {
   S.unsub.forEach(u => u()); S.unsub = [];
