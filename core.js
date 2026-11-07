@@ -38,9 +38,20 @@ export function sumItems(items) {
   (items || []).forEach(it => { const m = itemMacros(it); t.k += m.k; t.p += m.p; t.c += m.c; t.f += m.f; });
   return t;
 }
-export function plannedMeals(settings, day) {
+/* the meal plan changes over time: settings.planLog keeps a copy per change date, so each day uses the plan that was active then */
+export function mealsOn(settings, date) {
+  const log = settings.planLog || {};
+  const keys = Object.keys(log).sort();
+  if (!keys.length) return settings.meals || [];
+  const past = keys.filter(k => !date || k <= date);
+  return log[past.length ? past[past.length - 1] : keys[0]] || [];
+}
+export function plannedMeals(settings, day, date) {
   const skip = (day && day.skip) || {};
-  return (settings.meals || []).filter(m => !skip[m.id]);
+  return mealsOn(settings, date || (day && day.date)).filter(m => !skip[m.id]);
+}
+export function planTargets(settings, day, date) {
+  return sumItems(plannedMeals(settings, day, date).flatMap(m => m.items || []));
 }
 export function dayTotals(settings, day) {
   const t = { k: 0, p: 0, c: 0, f: 0 };
@@ -63,7 +74,7 @@ export function trainType(settings, date) {
 }
 export function pillars(settings, day, date) {
   day = day || {};
-  const pm = plannedMeals(settings, day);
+  const pm = plannedMeals(settings, day, date);
   const meals = day.meals || {};
   const isClean = id => meals[id] && (meals[id].status === 'plan' || meals[id].status === 'swap');
   const off = pm.filter(m => meals[m.id] && meals[m.id].status === 'off');

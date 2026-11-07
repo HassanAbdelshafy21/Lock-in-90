@@ -84,6 +84,17 @@ async function reminders(uid, settings) {
 
   if (TEST) await ntfy('Lock In 90 test', `Notifications work. Day ${Math.min(R.dayNum, 90)} of 90, streak ${R.done}.`, { tags: 'white_check_mark' });
 
+  // meal log reminders (opt-in): 45 min after each planned meal time if it isn't logged
+  if (rm.meals === true) {
+    for (const m of C.plannedMeals(settings, day, date)) {
+      const [hh, mm] = String(m.time || '').split(':').map(Number);
+      if (isNaN(hh)) continue;
+      const due = hh * 60 + (mm || 0) + 45, id = 'meal_' + m.id;
+      if (sent.includes(id) || nowMin < due || nowMin > due + 150) continue;
+      sent.push(id);
+      if (!(day.meals && day.meals[m.id] && day.meals[m.id].status)) await ntfy(`Log ${m.name}`, `${m.name} (${m.time}) isn't logged yet. One tap: As planned.`, { tags: 'fork_and_knife' });
+    }
+  }
   for (const r of LIST) {
     if (rm[r.key] === false || sent.includes(r.id)) continue;
     if (nowMin < r.t || nowMin > r.t + 150) continue;
