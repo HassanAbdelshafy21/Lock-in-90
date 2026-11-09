@@ -450,3 +450,34 @@ h1,h2,h3{text-wrap:balance}
 .ckl li .num{text-align:end;font-size:12.5px}
 .link.danger{color:var(--bad)}
 .ckl .link{white-space:nowrap;padding:4px 2px;font-size:13px}
+
+/* if-then, reflection, craving, focus, camera guide, body numbers, challenge, coach link */
+.card.ifthen{border-inline-start:5px solid var(--accent);display:grid;gap:4px}.card.ifthen p{margin:0;font-size:14.5px}
+.card.reflect{display:grid;gap:8px;border:1.5px solid var(--bad)}.card.reflect h3{margin:0;font-family:var(--f-display);font-weight:700;font-size:24px}.card.reflect p{margin:0}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip2{border:1px solid var(--line);background:var(--surface-2);border-radius:999px;padding:7px 12px;font:inherit;font-size:13px;color:var(--ink);cursor:pointer}
+.crwait{display:grid;justify-items:center;gap:8px;margin:10px 0 14px}
+.crt{font-family:var(--f-display);font-weight:800;font-size:72px;line-height:1;color:var(--water)}
+.crtip{margin:0;text-align:center;font-size:15px;max-width:320px;min-height:44px}
+.crq{font-family:var(--f-display);font-size:24px;margin:10px 0}
+.card.focus{display:grid;gap:6px;border:1.5px dashed var(--spark)}.card.focus h3{margin:0;font-family:var(--f-display);font-weight:700;font-size:22px}.card.focus .hint{margin:0}
+.focusline{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 10px;width:100%;margin:0 0 14px;padding:12px 14px;border:1px solid var(--line);border-radius:14px;background:var(--surface);font:inherit;color:inherit;text-align:start;cursor:pointer}
+.focusline .sub{grid-column:1/-1}.focusline b{font-size:14px}.focusline .mbar{grid-column:1/-1}.focusline .mbar i{background:var(--spark)}
+.focusline.done{border-color:var(--good)}.focusline.done .mbar i{background:var(--good)}
+.camwrap{position:relative;width:min(88vw,420px);aspect-ratio:3/4;border-radius:18px;overflow:hidden;background:#000}
+.camwrap video,.camwrap .cg-ghost{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.cg-ghost{opacity:.35;pointer-events:none}
+.cg-count{position:absolute;inset:0;display:grid;place-items:center;font-family:var(--f-display);font-weight:800;font-size:120px;color:#fff;text-shadow:0 4px 18px rgba(0,0,0,.5)}
+.photo-btn.guide{margin-top:6px}
+.bodynum{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:12px 0 4px}
+.bodynum div{display:grid;gap:3px;padding:11px 12px;border-radius:12px;background:var(--surface-2)}
+.bodynum b{font-family:var(--f-display);font-weight:800;font-size:28px;line-height:1}
+.bodynum span{font-family:var(--f-mono);font-size:10px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted)}
+.bodynum small{font-size:11.5px;color:var(--ink-2)}
+.wb{font-style:normal;font-size:12px;font-weight:600}.wb.ok{color:var(--good)}.wb.mid{color:var(--warn)}.wb.high{color:var(--bad)}.wb.low{color:var(--warn)}
+.chal{display:grid;gap:5px;margin:0 0 12px;padding:11px 12px;border-radius:12px;background:var(--surface-2)}
+.chal b{font-size:15px}
+.crow{display:grid;grid-template-columns:28px minmax(0,1fr) auto;gap:8px;font-size:14px;align-items:center}.crow.me{font-weight:600}
+.linkbox{padding:10px 12px;border-radius:10px;background:var(--surface-2);font-size:12px;word-break:break-all;margin-bottom:8px}
+
+.timer .btn:not(.primary):not(.good){background:transparent;border-color:rgba(255,255,255,.35);color:var(--hdr-fg)}

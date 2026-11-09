@@ -226,12 +226,61 @@ export const AR = {
   "+{n} ml · {n} L today": "+{n} مل · {n} لتر اليوم", "+{n} L · {n} L today": "+{n} لتر · {n} لتر اليوم", "Imported {n} days.": "تم استيراد {n} أيام.", "Cheers need the updated Firestore rules (see the README).": "التشجيع يحتاج تحديث قواعد Firestore (راجع README).",
   "Couldn’t send that. Try again online.": "تعذّر الإرسال. حاول مع وجود إنترنت.", "The Firestore rules need publishing first (see the README).": "يجب نشر قواعد Firestore أولًا (راجع README).",
   "Delete": "حذف", "Check-in deleted.": "حُذفت المتابعة.", "Couldn’t delete the check-in.": "تعذّر حذف المتابعة.", "{n} g protein": "{n} جم بروتين", "{n} g carbs": "{n} جم كربوهيدرات", "{n} g fat": "{n} جم دهون", "last {n}": "آخر {n}", "e.g. {n}": "مثلًا {n}",
+
+  // if-then, reflection, craving, focus, camera, body numbers, challenge, coach
+  "If": "لو", "then": "إذن", "If…": "لو…", "Then I will…": "إذن سأقوم بـ…", "Which day": "أي يوم", "Any day": "أي يوم", "Save plan": "احفظ الخطة", "Ideas": "أفكار", "If-then plans": "خطط لو-إذن", "{n} saved": "{n} محفوظة",
+  "Decide now what you’ll do in your riskiest moments. Plans tied to a weekday show up on Today that day; “any day” plans show in the craving tool.": "قرر الآن ماذا ستفعل في أخطر لحظاتك. الخطط المرتبطة بيوم تظهر في اليوم نفسه؛ وخطط “أي يوم” تظهر في أداة الرغبة.",
+  "e.g. there’s koshari at family lunch": "مثلًا فيه كشري في عزومة العيلة", "e.g. eat my plan first and take one small plate": "مثلًا آكل خطتي الأول وآخد طبق صغير",
+  "there’s a family lunch or an invitation": "فيه عزومة أو غدا عائلي", "I eat out with friends": "باكل برا مع أصحابي", "I get hungry late at night": "بجوع بالليل متأخر", "there are sweets at work or a birthday": "فيه حلويات في الشغل أو عيد ميلاد", "it’s a travel day": "يوم سفر", "I’m too tired to train": "تعبان ومش قادر أتمرن",
+  "I eat my plan portion first, take one small plate and skip seconds": "آكل حصتي من الخطة الأول، وآخد طبق صغير ومفيش طبق تاني", "I order grilled protein with salad and drink water or zero soda": "أطلب بروتين مشوي مع سلطة وأشرب مياه أو صودا زيرو",
+  "I drink 500 ml of water and have my planned snack, or wait 10 minutes": "أشرب 500 مل مياه وآكل السناك المخطط، أو أستنى 10 دقايق", "I say “no thanks, I’m on a challenge” and have tea or coffee": "أقول “لا شكرًا، أنا في تحدي” وأشرب شاي أو قهوة",
+  "I pack my meals and supplements the night before": "أجهز وجباتي ومكملاتي من الليلة اللي قبلها", "I do the warm-up only; if I still want to stop after 10 minutes, I can": "أعمل الإحماء بس؛ ولو لسه عايز أوقف بعد 10 دقايق، أوقف",
+  "Fill in both the “if” and the “then”.": "اكتب “لو” و“إذن” الاثنين.", "Plan saved.": "حُفظت الخطة.", "Plan saved. Edit it any time in Setup.": "حُفظت الخطة. عدّلها في أي وقت من الإعدادات.",
+  "Yesterday didn’t count": "أمس لم يُحسب", "What got in the way?": "إيه اللي وقفك؟", "One tap. No judgement: it’s data for your next plan.": "نقرة واحدة. بدون لوم: دي بيانات لخطتك الجاية.", "Skip": "تخطي",
+  "Social event": "مناسبة اجتماعية", "Travel": "سفر", "Hunger or cravings": "جوع أو رغبة", "No time": "مفيش وقت", "Forgot to log": "نسيت أسجل", "Low motivation": "حماس قليل", "Sick": "مريض", "Other": "أخرى",
+  "Plan for next time": "خطة للمرة الجاية", "Save this if-then plan": "احفظ خطة لو-إذن دي", "No thanks": "لا شكرًا",
+  "Craving": "رغبة", "🌊 Craving? Wait 10 minutes": "🌊 رغبة؟ استنى 10 دقايق", "Give it 10 minutes before you decide. Most cravings pass on their own.": "اديها 10 دقايق قبل ما تقرر. أغلب الرغبات بتعدي لوحدها.",
+  "Sweets": "حلويات", "Fast food": "أكل سريع", "Salty snacks": "سناكس مالحة", "Bread or carbs": "عيش أو نشويات", "Soda or juice": "مشروبات غازية أو عصير", "Something else": "حاجة تانية", "How strong": "قوتها", "Strength": "القوة",
+  "Start the 10-minute wait": "ابدأ انتظار الـ10 دقايق", "+ 500 ml water": "+ 500 مل مياه", "Your plans": "خططك", "It passed": "عدّت", "I’m going to eat it": "هاكلها", "10 minutes done. Is it still there?": "خلصت الـ10 دقايق. لسه موجودة؟", "I still want it": "لسه عايزها",
+  "Drink a big glass of water first. Thirst often feels like hunger.": "اشرب كوباية مياه كبيرة الأول. العطش كتير بيبان زي الجوع.", "Breathe in for 4, out for 6. Do it five times.": "شهيق 4 وزفير 6. كررها 5 مرات.",
+  "Notice where you feel the craving. Name it; don’t fight it.": "لاحظ فين حاسس بالرغبة. سمّيها؛ متحاربهاش.", "Cravings rise and fall like a wave. Most fade within 10 to 15 minutes.": "الرغبات بتطلع وتنزل زي الموجة. أغلبها بيختفي في 10 لـ15 دقيقة.",
+  "Ask yourself: what would Day 90 me do right now?": "اسأل نفسك: أنا في اليوم 90 كنت هعمل إيه دلوقتي؟", "Craving beaten. That’s a real win.": "غلبت الرغبة. ده انتصار حقيقي.", "Okay. Log it honestly so the day stays accurate.": "تمام. سجّلها بصدق عشان اليوم يفضل دقيق.",
+  "Pick one extra goal for this week": "اختر هدف إضافي للأسبوع ده", "Use this": "استخدم ده", "Choose another": "اختر غيره", "This week’s focus": "تركيز الأسبوع", "Weekly focus": "تركيز الأسبوع", "Focus set for this week.": "تم ضبط تركيز الأسبوع.",
+  "One extra goal on top of your four pillars. It never breaks your streak.": "هدف إضافي فوق أركانك الأربعة. عمره ما يكسر السلسلة.",
+  "Sleep 7+ hours on 5 nights": "نوم 7+ ساعات في 5 ليالي", "3 cardio or sport sessions": "3 حصص كارديو أو رياضة", "Tap Commit every morning": "اضغط ألتزم كل صباح", "Weigh in on 5 mornings": "اوزن نفسك 5 صباحات", "No off-plan food all week": "مفيش أكل خارج الخطة طول الأسبوع",
+  "Hit your protein target on 5 days": "حقق هدف البروتين في 5 أيام", "Write a short note every evening": "اكتب ملاحظة قصيرة كل مساء", "Use the craving tool instead of giving in": "استخدم أداة الرغبة بدل ما تستسلم",
+  "📷 Take with photo guide": "📷 صوّر بدليل الصورة", "Choose a photo": "اختر صورة", "Photo ready (camera). Tap Save check-in.": "الصورة جاهزة (كاميرا). اضغط احفظ المتابعة.",
+  "Stand 2–3 m away, same spot and light every week": "قف على بعد 2–3 متر، نفس المكان والإضاءة كل أسبوع", "Switch camera": "تبديل الكاميرا", "Timer: {n} s": "المؤقت: {n} ث", "Timer: off": "المؤقت: متوقف", "Take photo": "التقط الصورة",
+  "Photo taken. Tap Save check-in to keep it.": "تم التصوير. اضغط احفظ المتابعة للاحتفاظ بها.", "Camera permission was refused. Allow the camera for this app, or choose a photo instead.": "تم رفض إذن الكاميرا. اسمح للكاميرا أو اختر صورة بدلًا من ذلك.",
+  "Neck (cm)": "الرقبة (سم)", "Neck": "الرقبة", "neck {n}": "الرقبة {n}", "Height (cm)": "الطول (سم)", "for body numbers": "لأرقام الجسم", "Sleep goal": "هدف النوم", "Bedtime": "وقت النوم", "Sleep last night · goal {n} h": "نوم أمس · الهدف {n} س",
+  "Waist ÷ height": "الوسط ÷ الطول", "Body fat (estimate)": "نسبة الدهون (تقدير)", "Healthy (NICE)": "صحي (NICE)", "Increased health risk (NICE: take care)": "خطر صحي أعلى (NICE: انتبه)", "High health risk (NICE: take action)": "خطر صحي عالٍ (NICE: تصرّف)", "Below the healthy range": "أقل من المدى الصحي",
+  "Under 0.5 means a waist below {n} cm": "أقل من 0.5 يعني وسط أقل من {n} سم", "Add your neck in a check-in": "أضف مقاس الرقبة في المتابعة", "≈ {n} kg fat · {n} kg lean": "≈ {n} كجم دهون · {n} كجم كتلة صافية",
+  "Body fat uses the US Navy tape formula, usually within about 3–4% of a lab scan. Measure the same way every time.": "نسبة الدهون بمعادلة البحرية الأمريكية بشريط القياس، عادة في حدود 3–4% من فحص المعمل. قِس بنفس الطريقة كل مرة.",
+  "Add your height in Setup (and neck in a check-in) to see your waist-to-height ratio and a body-fat estimate.": "أضف طولك في الإعدادات (والرقبة في المتابعة) لترى نسبة الوسط للطول وتقدير الدهون.",
+  "Most days locked in": "أكثر أيام مكتملة", "Most water": "أكثر مياه", "Most active minutes": "أكثر دقائق نشاط", "Best average sleep": "أفضل متوسط نوم", "{n} days": "{n} أيام",
+  "Coach link": "رابط الكابتن", "Sharing": "مشاركة", "Create coach link": "إنشاء رابط الكابتن", "Send to coach": "أرسل للكابتن", "Open": "افتح", "Include my daily notes": "ضمّن ملاحظاتي اليومية", "Stop sharing (the link stops working)": "إيقاف المشاركة (الرابط يتوقف)", "Tap again to stop sharing": "اضغط مرة أخرى لإيقاف المشاركة",
+  "A private, read-only page for your coach: the last 14 days (meals vs plan, water, training, supplements, sleep, sports), your weight trend and measurements. It updates by itself. Anyone with the link can view it, so only send it to your coach.": "صفحة خاصة للقراءة فقط للكابتن: آخر 14 يوم (الوجبات مقابل الخطة، المياه، التمرين، المكملات، النوم، الرياضة)، واتجاه وزنك وقياساتك. بتتحدث لوحدها. أي حد معاه الرابط يقدر يشوفها، فابعته للكابتن بس.",
+  "Coach link created.": "تم إنشاء رابط الكابتن.", "Coach link turned off.": "تم إيقاف رابط الكابتن.", "Link copied. Paste it to your coach.": "نُسخ الرابط. الصقه للكابتن.", "Copy the link above.": "انسخ الرابط بالأعلى.",
+  "The coach link needs the updated Firestore rules (see the README).": "رابط الكابتن يحتاج تحديث قواعد Firestore (راجع README).", "{n} min before bedtime · Wind down (sleep goal)": "{n} دقيقة قبل النوم · استرخاء (هدف النوم)",
+  "Avg sleep · goal met {n}/{n}": "متوسط النوم · تحقق الهدف {n}/{n}", "Wind down": "وقت الاسترخاء", "English": "English",
+  "Lock In 90 · Coach view": "Lock In 90 · عرض الكابتن", "last 7 days": "آخر 7 أيام", "no plan targets": "لا توجد أهداف خطة", "Water goal hit": "تحقيق هدف المياه", "Training days": "أيام التمرين", "{n} rest days": "{n} أيام راحة", "Weight (7-day avg)": "الوزن (متوسط 7 أيام)",
+  "{n} kg since start": "{n} كجم منذ البداية", "-{n} kg since start": "-{n} كجم منذ البداية", "+{n} kg since start": "+{n} كجم منذ البداية", "{n} nights logged": "{n} ليالي مسجلة", "Last 14 days": "آخر 14 يوم", "Notes": "ملاحظات", "Supps": "مكملات", "Sleep": "النوم", "Rest": "راحة",
+  "Measurements": "القياسات", "Dots are weigh-ins; the line is the 7-day average.": "النقاط وزنات؛ الخط هو متوسط 7 أيام.", "Not enough weigh-ins yet.": "لا توجد وزنات كافية بعد.", "plan {n}": "الخطة {n}", "plan {n} g": "الخطة {n} جم", "goal {n} L": "الهدف {n} لتر",
+  "Waist-to-height ratio: {n} (NICE: under {n} is healthy).": "نسبة الوسط للطول: {n} (NICE: أقل من {n} صحي).", "This link is missing its code. Ask for a new link.": "الرابط ناقص الكود. اطلب رابطًا جديدًا.", "This link isn’t active any more. Ask for a new one.": "الرابط لم يعد فعالًا. اطلب واحدًا جديدًا.",
+  "Loading…": "جارٍ التحميل…", "Link not active": "الرابط غير فعال", "Couldn’t load right now. Check the connection and refresh.": "تعذّر التحميل الآن. تأكد من الاتصال وأعد التحميل.",
   "≈ {n} kg raw ({n} kg cooked)": "≈ {n} كجم نيء ({n} كجم مطبوخ)", "photo": "صورة", "Saved.": "تم الحفظ.",
 };
 
 // sentences that contain names or lists: [regex, Arabic builder]
 const UNIT = { can: 'علبة', 'large bottle': 'زجاجة كبيرة', 'small bottle': 'زجاجة صغيرة', bottle: 'زجاجة', piece: 'قطعة', cup: 'كوب', tbsp: 'ملعقة كبيرة', tsp: 'ملعقة صغيرة', slice: 'شريحة', egg: 'بيضة', fruit: 'ثمرة', medium: 'متوسطة', loaf: 'رغيف', plate: 'طبق', bowl: 'طبق', handful: 'حفنة', scoop: 'سكوب', glass: 'كوب', sandwich: 'ساندوتش', serving: 'حصة', 'whole dish': 'الطبق كله', date: 'تمرة', portion: 'حصة', white: 'بياض', 'small box': 'علبة صغيرة', 'large box': 'علبة كبيرة', 'bar 40 g': 'لوح 40 جم', 'cup 105 g': 'كوب 105 جم', 'cup 170 g': 'كوب 170 جم' };
 export const AR_PATTERNS = [
+
+  [/^Your plan for (.+)$/, (m, t) => `خطتك ليوم ${t(m[1])}`], [/^Week (\d+) focus$/, m => `تركيز الأسبوع ${m[1]}`], [/^Suggested from your last 7 days:$/, () => 'مقترح من آخر 7 أيام:'],
+  [/^This week’s challenge · (.+)$/, m => `تحدي الأسبوع · ${m[1]}`], [/^Line yourself up with your (.+) photo$/, m => `طابق وضعك مع صورة ${m[1]}`],
+  [/^(.+) · Day (\d+) \/ 90$/, m => `${m[1]} · اليوم ${m[2]} / 90`], [/^Streak (\d+) · attempt (\d+) · started (.+?)( · updated (.+))?$/, m => `السلسلة ${m[1]} · المحاولة ${m[2]} · البداية ${m[3]}${m[5] ? ' · آخر تحديث ' + m[5] : ''}`],
+  [/^Read-only view shared by (.+) from the Lock In 90 app\. It updates when they log\.$/, m => `عرض للقراءة فقط شاركه ${m[1]} من تطبيق Lock In 90. يتحدث عند التسجيل.`],
+  [/^Your most common reason for a missed day: (.+) \((\d+) times\)\. Add an if-then plan for it in Setup\.$/, (m, t) => `أكثر سبب لفوات اليوم: ${t(m[1])} (${m[2]} مرات). أضف له خطة لو-إذن في الإعدادات.`],
+  [/^You used the craving tool (\d+) times and it passed (\d+) times\.$/, m => `استخدمت أداة الرغبة ${m[1]} مرات وعدّت ${m[2]} مرات.`],
   [/^about (\d+) × (.+)$/, m => `حوالي ${m[1]} × ${UNIT[m[2]] || m[2]}`],
 
   [/^Group (\w+) created\. Tap Invite friends\.$/, m => `تم إنشاء المجموعة ${m[1]}. اضغط دعوة الأصدقاء.`], [/^Your group code is (\w+)$/, m => `كود مجموعتك ${m[1]}`],
@@ -274,9 +323,9 @@ function lookup(core) {
   if (nums.length && AR[t] != null) { let i = 0; return AR[t].replace(/\{n\}/g, () => nums[i++] ?? ''); }
   return null;
 }
-function list(s) { // "A, B, C" where every part is known
+function list(s) { // "A, B, C" where every part is known (a trailing amount like "170 g" is kept)
   if (!s.includes(', ')) return null;
-  const parts = s.split(', '), out = parts.map(p => lookup(p.trim()));
+  const parts = s.split(', '), out = parts.map(p => { const x = p.trim(), m = x.match(/^(.+?) ([\d.]+) (g|ml)$/); return lookup(x) ?? (m && lookup(m[1]) != null ? `${lookup(m[1])} ${m[2]} ${m[3] === 'ml' ? 'مل' : 'جم'}` : null); });
   return out.every(x => x != null) ? out.join('، ') : null;
 }
 export function trText(core) {

@@ -107,7 +107,9 @@ async function reminders(uid, settings) {
     }
   }
   const ram = C.inRamadan(settings, date);
-  const list = ram ? LIST.filter(r => r.key !== 'water' && r.key !== 'burner').concat([{ id: 'w20', key: 'water', t: at(20, 0) }, { id: 'w22', key: 'water', t: at(22, 0) }]) : LIST;
+  const bedM = (() => { const [h, m] = String(settings.bedtime || '23:30').split(':').map(Number); return (isNaN(h) ? 23 * 60 + 30 : h * 60 + (m || 0)) - 30; })();
+  const list = (ram ? LIST.filter(r => r.key !== 'water' && r.key !== 'burner').concat([{ id: 'w20', key: 'water', t: at(20, 0) }, { id: 'w22', key: 'water', t: at(22, 0) }]) : LIST)
+    .concat(rm.bedtime === false ? [] : [{ id: 'bed', key: 'bedtime', t: bedM < 0 ? bedM + 1440 : bedM }]);
   for (const r of list) {
     if (rm[r.key] === false || sent.includes(r.id)) continue;
     if (nowMin < r.t || nowMin > r.t + 150) continue;
@@ -138,6 +140,9 @@ async function reminders(uid, settings) {
     } else if (r.key === 'evening') {
       msg = ev.complete ? [A('Locked in', 'مكتمل'), A(`Day ${Math.min(R.dayNum, 90)} is done. Streak ${R.done}.`, `اليوم ${Math.min(R.dayNum, 90)} اكتمل. السلسلة ${R.done}.`), { tags: 'lock' }]
         : [A(`${ev.missing.length} thing${ev.missing.length === 1 ? '' : 's'} left today`, `متبقٍ ${ev.missing.length} اليوم`), ev.missing.map(trl).join('\n'), { tags: 'warning', priority: 4 }];
+    } else if (r.key === 'bedtime') {
+      const g = settings.sleepGoal || 7.5, bed = settings.bedtime || '23:30', [bh, bm] = bed.split(':').map(Number), wk = ((bh * 60 + bm + g * 60) % 1440), wake = `${String(Math.floor(wk / 60)).padStart(2, '0')}:${String(Math.round(wk % 60)).padStart(2, '0')}`;
+      msg = [A('Wind down', 'وقت الاسترخاء'), A(`Screens off soon. In bed by ${bed} gives you ${g} h of sleep (up at ${wake}). Better sleep means fewer cravings tomorrow.`, `قلّل الشاشات. النوم الساعة ${bed} يعطيك ${g} ساعات نوم (الاستيقاظ ${wake}). نوم أفضل يعني رغبات أقل بكرة.`), { tags: 'zzz' }];
     } else if (r.key === 'final') {
       if (!ev.complete) msg = [A('1 hour left', 'باقي ساعة'), A(`Missing: ${ev.missing.join(', ')}`, `ناقص: ${ev.missing.map(trl).join('، ')}`), { tags: 'rotating_light', priority: 5 }];
     }
@@ -145,6 +150,20 @@ async function reminders(uid, settings) {
     if (msg) await ntfy(msg[0], msg[1], msg[2]);
   }
   if (log0.date !== date || sent.length !== sent0.length) await logRef.set({ date, sent });
+}
+
+/* ---------- cheers from friends -> push ---------- */
+async function pushCheers(uid, settings) {
+  if (!settings.group || !CURRENT_TOPIC) return;
+  const snap = await db.collection(`groups/${settings.group}/members/${uid}/cheers`).where('pushed', '==', false).get();
+  if (snap.empty) return;
+  const ar = settings.lang === 'ar';
+  const TXT = { cheer: ar ? 'كمّل! 👏' : 'Keep going! 👏', nudge: ar ? 'أكمل اليوم، تقدر ⏰' : 'Finish today, you’ve got this ⏰', fire: ar ? 'مكتمل، احترامي 🔥' : 'Locked in, respect 🔥' };
+  for (const d of snap.docs) {
+    const c = d.data();
+    await ntfy(`${c.name || (ar ? 'صديق' : 'A friend')}`, TXT[c.kind] || TXT.cheer, { tags: c.kind === 'nudge' ? 'alarm_clock' : 'clap', priority: c.kind === 'nudge' ? 4 : 3 });
+    await d.ref.update({ pushed: true });
+  }
 }
 
 /* ---------- main ---------- */
@@ -159,5 +178,6 @@ for (const { id, settings } of all) {
   CURRENT_TOPIC = settings.ntfyTopic || (firstUser && firstUser.id === id ? TOPIC : null);
   try { await stravaSync(u.id, settings); } catch (e) { console.log('strava error', e.message); }
   try { await reminders(u.id, settings); } catch (e) { console.log('reminder error', e.message); }
+  try { await pushCheers(u.id, settings); } catch (e) { console.log('cheers error', e.message); }
 }
 console.log('tick done', new Date().toISOString());
