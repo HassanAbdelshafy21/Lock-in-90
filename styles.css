@@ -445,3 +445,8 @@ h1,h2,h3{text-wrap:balance}
 :root[lang="ar"] .card-h h2{font-size:21px}
 :root[lang="ar"] .num,:root[lang="ar"] input[type=number],:root[lang="ar"] .daynum{direction:ltr;unicode-bidi:isolate}
 .langbtn{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:6px 12px;font:inherit;font-size:13px;font-weight:600;color:var(--ink)}
+
+.ckl li{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:10px;align-items:center}
+.ckl li .num{text-align:end;font-size:12.5px}
+.link.danger{color:var(--bad)}
+.ckl .link{white-space:nowrap;padding:4px 2px;font-size:13px}

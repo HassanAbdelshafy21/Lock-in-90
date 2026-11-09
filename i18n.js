@@ -225,7 +225,7 @@ export const AR = {
   "This address isn’t authorized in Firebase yet.": "هذا العنوان غير مصرح به في Firebase بعد.", "Type what you’re looking for first.": "اكتب ما تبحث عنه أولًا.", "Type your email above first.": "اكتب بريدك بالأعلى أولًا.", "You left the group.": "غادرت المجموعة.",
   "+{n} ml · {n} L today": "+{n} مل · {n} لتر اليوم", "+{n} L · {n} L today": "+{n} لتر · {n} لتر اليوم", "Imported {n} days.": "تم استيراد {n} أيام.", "Cheers need the updated Firestore rules (see the README).": "التشجيع يحتاج تحديث قواعد Firestore (راجع README).",
   "Couldn’t send that. Try again online.": "تعذّر الإرسال. حاول مع وجود إنترنت.", "The Firestore rules need publishing first (see the README).": "يجب نشر قواعد Firestore أولًا (راجع README).",
-  "{n} g protein": "{n} جم بروتين", "{n} g carbs": "{n} جم كربوهيدرات", "{n} g fat": "{n} جم دهون", "last {n}": "آخر {n}", "e.g. {n}": "مثلًا {n}",
+  "Delete": "حذف", "Check-in deleted.": "حُذفت المتابعة.", "Couldn’t delete the check-in.": "تعذّر حذف المتابعة.", "{n} g protein": "{n} جم بروتين", "{n} g carbs": "{n} جم كربوهيدرات", "{n} g fat": "{n} جم دهون", "last {n}": "آخر {n}", "e.g. {n}": "مثلًا {n}",
   "≈ {n} kg raw ({n} kg cooked)": "≈ {n} كجم نيء ({n} كجم مطبوخ)", "photo": "صورة", "Saved.": "تم الحفظ.",
 };
 

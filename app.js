@@ -3,7 +3,7 @@ import { getAuth, GoogleAuthProvider, signInWithPopup, getRedirectResult, onAuth
 import { initializeFirestore, getFirestore, persistentLocalCache, persistentMultipleTabManager, doc, collection, onSnapshot, setDoc, getDoc, deleteDoc, writeBatch, query, where, getDocsFromCache, serverTimestamp, Timestamp } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
 import * as C from './core.js';
 import { trText, addFoodNames } from './i18n.js';
-const APP_VERSION = '12 · Ramadan, Arabic, history, cheers';
+const APP_VERSION = '13 · delete check-ins';
 import { EX, POSE, figSVG, YT, LINES, FOODS, COACH_MEALS, DEFAULT_SUPPS, SLOTS, CARDIO_MODES } from './data.js';
 addFoodNames(FOODS);
 
@@ -770,7 +770,8 @@ function progressHTML(R) {
     <input class="range" type="range" min="0" max="100" value="${S.cut}" id="cut" aria-label="Compare photos">`;
   } else if (ph.length === 1) h += `<img src="${ph[0].data}" alt="First photo" style="border-radius:12px"><p class="hint">Add next week’s photo to unlock the before/after slider.</p>`;
   h += measuresHTML(cks);
-  if (cks.length) h += `<ul class="list">${cks.slice().reverse().map(c => `<li><span>${fmt(c.date)}</span><span class="num">${[c.weight && c.weight + ' kg', c.waist && 'waist ' + c.waist, c.chest && 'chest ' + c.chest, c.arm && 'arm ' + c.arm, c.hips && 'hips ' + c.hips].filter(Boolean).join(' · ') || 'photo'}</span></li>`).join('')}</ul>`;
+  const ckDates = [...new Set([...cks.map(c => c.date), ...Object.keys(S.photos)])].sort().reverse();
+  if (ckDates.length) h += `<ul class="list ckl">${ckDates.map(dt => { const c = S.checkins[dt] || {}; return `<li><span>${fmt(dt)}</span><span class="num">${[c.weight && c.weight + ' kg', c.waist && 'waist ' + c.waist, c.chest && 'chest ' + c.chest, c.arm && 'arm ' + c.arm, c.hips && 'hips ' + c.hips, S.photos[dt] && 'photo'].filter(Boolean).join(' · ') || 'photo'}</span><button class="link danger" data-act="ckdel" data-v="${dt}">${S.confirm === 'ck:' + dt ? 'Tap again to delete' : 'Delete'}</button></li>`; }).join('')}</ul>`;
   return h + `</section>`;
 }
 /* real maintenance: average intake minus the energy in your weight change (≈7,700 kcal per kg), over the last 4 weeks */
@@ -1319,6 +1320,13 @@ document.addEventListener('click', async ev => {
     }
     case 'stamdel': { const [dt, i] = v.split(':'); const dd = dayDoc(dt); dd.stamina.splice(+i, 1); saveDay(dt); break; }
     case 'checkin': return saveCheckin();
+    case 'ckdel': {
+      if (S.confirm !== 'ck:' + v) { S.confirm = 'ck:' + v; break; }
+      S.confirm = null;
+      if (S.checkins[v]) { delete S.checkins[v]; setDoc(doc(db, up('checkins/' + v)), stamp('checkins/', { date: v, deleted: true })).catch(() => toast('Couldn’t delete the check-in.')); }
+      if (S.photos[v]) { delete S.photos[v]; setDoc(doc(db, up('photos/' + v)), stamp('photos/', { date: v, deleted: true })).catch(() => { }); }
+      toast('Check-in deleted.'); break;
+    }
     case 'defgym': S.settings.gymTime = v; saveSettings(); break;
     case 'mealup': case 'mealdown': { const ms = planMeals(), i = ms.findIndex(x => x.id === v), j = act === 'mealup' ? i - 1 : i + 1; if (j >= 0 && j < ms.length) { [ms[i], ms[j]] = [ms[j], ms[i]]; savePlan(); } break; }
     case 'mealdel': if (S.confirm === 'meal:' + v) { setPlanMeals(planMeals().filter(x => x.id !== v)); S.confirm = null; savePlan(); } else { S.confirm = 'meal:' + v; b.textContent = 'Tap again to delete'; return; } break;
@@ -1485,7 +1493,7 @@ function subscribe() {
     qs.docs.forEach(x => { if (!busy('days/' + x.id)) S.days[x.id] = x.data(); });
     S.pend.d = qs.metadata.hasPendingWrites; S.got.days = true; render();
   }, true);
-  syncCol('checkins', qs => { qs.docs.forEach(x => S.checkins[x.id] = x.data()); render(); });
+  syncCol('checkins', qs => { qs.docs.forEach(x => { const v = x.data(); if (v.deleted) delete S.checkins[x.id]; else S.checkins[x.id] = v; }); render(); });
   syncCol('foods', qs => { qs.docs.forEach(x => S.foods[x.id] = x.data()); });
   S.unsub.push(onSnapshot(collection(db, up('activities')), qs => { qs.docs.forEach(x => S.acts[x.id] = x.data()); render(); }));
   S.unsub.push(onSnapshot(collection(db, up('meta')), qs => { qs.docs.forEach(x => S.meta[x.id] = x.data()); render(); }));
@@ -1578,7 +1586,7 @@ function friendsHTML() {
 function photosOn() {
   if (S.photosOn || !S.user) return;
   S.photosOn = true;
-  syncCol('photos', qs => { qs.docs.forEach(x => S.photos[x.id] = x.data()); if (S.view === 'progress') render(); });
+  syncCol('photos', qs => { qs.docs.forEach(x => { const v = x.data(); if (v.deleted || !v.data) delete S.photos[x.id]; else S.photos[x.id] = v; }); if (S.view === 'progress') render(); });
 }
 onAuthStateChanged(auth, u => {
   S.user = u; S.authReady = true;
