@@ -3,8 +3,9 @@
 
 export const DAYNAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 export const TT = {
-  gym: { label: 'Gym session', sub: 'Your PPLUL day. Tick it after you log it in Lyfta.' },
-  cali: { label: 'Calisthenics session', sub: 'Log your sets in the Train tab' },
+  gym: { label: 'Gym workout', sub: 'Start it in Train. Finishing the workout ticks today’s training.' },
+  cali: { label: 'Home workout', sub: 'No-equipment workout. Start it in Train.' },
+  cardio: { label: 'Cardio session', sub: 'Run, bike, walk or a class. Log it in Train → Cardio, or tick it here.' },
   recovery: { label: 'Mobility + light skill work', sub: '30 to 40 minutes, low intensity' },
   rest: { label: 'Rest day', sub: 'No training required today' }
 };

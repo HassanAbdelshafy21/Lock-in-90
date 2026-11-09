@@ -4,7 +4,7 @@ A personal 90-day challenge tracker that works offline and syncs through Firebas
 
 - **Required every day:** every planned meal on plan, water goal, that day's training, core supplements. Miss one and the counter resets to Day 1. The day after a miss is flagged "Never miss twice."
 - **Food:** your coach's meal plan (editable, 3–5+ meals), one-tap "As planned", calories and macros from a built-in library (Egyptian staples included, cooked weights), USDA search, barcode scan, custom foods. Drinks logged in meals or extras (coffee, tea, zero cola, milk, juice) count toward the water goal.
-- **Training:** calisthenics with drawn start/finish figures, hold and rest timers, personal bests; a 12-week stamina track that never affects the streak.
+- **Training (v17):** a setup that asks where you train (full gym, dumbbells, or no equipment), your goal, experience and days per week, then builds a plan: full body, push/pull/legs, upper/lower, PPL + upper/lower, body-part split, or PPL ×2. A guided workout shows one exercise at a time with start/end photos, last time's numbers, a progression tip, rest timer, swap, and records. Optional cardio after lifting. Build your own workouts from a library of 873 exercises ([free-exercise-db](https://github.com/yuhonas/free-exercise-db), public domain; photos in `ex/`). The 12-week stamina track lives under Train → Cardio.
 - **Motivation:** morning commitment, a day-complete celebration with a shareable image, a flame streak that warns after 21:00, Day 30/60/90 recaps.
 - **Insights:** weight wins (lowest, since start, this week, to goal), real calorie burn from logs + weight trend, recipe builder, copy a past meal, daily notes.
 - **Design (v16):** one screen for today. A navy scoreboard with four pillar rings around the day number, one lifted “Up next” card, and a short list. Tap a pillar for its details. Progress has Week / Body / Chain / Friends tabs, and Me is a short menu. One typeface (Alexandria, Latin + Arabic, self-hosted, OFL), light and dark palettes, a + button for quick adds.
@@ -18,7 +18,8 @@ A personal 90-day challenge tracker that works offline and syncs through Firebas
 - **Friends board:** create a group, share the 6-character code, and everyone in it sees each other's day count, streak, today's status and the group chain (days everyone locked in), can send each other cheers and nudges (also delivered as phone notifications), and see a weekly group challenge. Nothing else is shared.
 - **Progress:** weekly review, 90-day chain, milestones, weight with 7-day average, measurements, before/after photo slider.
 - **Low reads:** each synced collection loads from the phone's cache and only fetches documents changed since the last sync, so the free Firebase plan covers about 60 people.
-- **Cloud job (GitHub Actions, every 30 min):** sends smart reminders to the ntfy app. (Strava sync is built in but switched off; it only runs if Strava secrets are added.)
+- **Notifications:** real app notifications through Firebase Cloud Messaging (free). Each person taps Me → Reminders → Turn on notifications. On iPhone, add the app to the Home Screen first (iOS 16.4+). People who don't turn them on still get ntfy if they set a topic.
+- **Cloud job (GitHub Actions, every 30 min):** sends the smart reminders. (Strava sync is built in but switched off; it only runs if Strava secrets are added.)
 
 ## Setup
 

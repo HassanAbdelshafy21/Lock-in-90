@@ -3,7 +3,8 @@ import { getAuth, GoogleAuthProvider, signInWithPopup, getRedirectResult, onAuth
 import { initializeFirestore, getFirestore, persistentLocalCache, persistentMultipleTabManager, doc, collection, onSnapshot, setDoc, getDoc, deleteDoc, writeBatch, query, where, getDocsFromCache, serverTimestamp, Timestamp } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
 import * as C from './core.js';
 import { trText, addFoodNames } from './i18n.js';
-const APP_VERSION = '16 · new design';
+import * as TR from './train.js';
+const APP_VERSION = '17 · new Train + app notifications';
 import { EX, POSE, figSVG, YT, LINES, FOODS, COACH_MEALS, DEFAULT_SUPPS, SLOTS, CARDIO_MODES } from './data.js';
 addFoodNames(FOODS);
 
@@ -21,7 +22,7 @@ const WATER_OPTS = [3000, 3500, 4000, 4500, 5000, 5500, 6000, 6500, 7000];
 const VIEWS = ['today', 'train', 'progress', 'setup'];
 const REMINDERS = [['morning', '9:00 · Plan for the day'], ['water', 'Every 2 h, 11:00–19:00 · Water pace (only if behind)'], ['burner', '15:30 · Fat burner cutoff (only if cap 1 taken)'], ['stamina', '17:00 · Stamina session (stamina days, if not done)'], ['evening', '20:40 · What’s still missing'], ['final', '23:00 · Last hour warning (only if incomplete)'], ['meals', '45 min after each meal time · Log reminder (off by default)'], ['bedtime', '30 min before bedtime · Wind down (sleep goal)']];
 
-const fbApp = initializeApp(FIREBASE);
+const FBV = '10.14.1', fbApp = initializeApp(FIREBASE);
 const auth = getAuth(fbApp);
 let db;
 try { db = initializeFirestore(fbApp, { localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }) }); }
@@ -80,6 +81,36 @@ function dayDoc(date) {
 }
 const saveDay = date => save('days/' + date, () => dayDoc(date));
 const saveSettings = () => save('settings/main', () => S.settings);
+/* ---------- app notifications (Firebase Cloud Messaging, free) ---------- */
+const VAPID = 'BGGjjx6TLhuJ1YCGlLJHamFrFtJvMVXL9TkFoMqtu578tH3NupkdLUHZ_P05tUa9KGr995u_RZF5zEDkdjMxKmI';
+const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent), standalone = matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+function pushState() {
+  if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) return isIOS && !standalone ? 'install' : 'none';
+  if (Notification.permission === 'denied') return 'blocked';
+  let mine = null; try { mine = localStorage.getItem('lk-push'); } catch (e) { }
+  return Notification.permission === 'granted' && mine && ((S.settings.push || {}).tokens || []).includes(mine) ? 'on' : 'off';
+}
+async function pushOn() {
+  try {
+    const perm = await Notification.requestPermission();
+    if (perm !== 'granted') { toast('Notifications weren’t allowed.'); return draw(); }
+    const reg = await navigator.serviceWorker.ready;
+    const { getMessaging, getToken } = await import(`https://www.gstatic.com/firebasejs/${FBV}/firebase-messaging.js`);
+    const token = await getToken(getMessaging(fbApp), { vapidKey: VAPID, serviceWorkerRegistration: reg });
+    if (!token) throw new Error('no token');
+    const p = S.settings.push = S.settings.push || {}; p.tokens = [...new Set([...(p.tokens || []), token])].slice(-5);
+    try { localStorage.setItem('lk-push', token); } catch (e) { }
+    saveSettings(); toast('Notifications are on for this phone.'); draw();
+  } catch (e) { console.warn(e); toast('Couldn’t turn on notifications. Check your internet and try again.'); }
+}
+function pushOff() {
+  let mine = null; try { mine = localStorage.getItem('lk-push'); localStorage.removeItem('lk-push'); } catch (e) { }
+  const p = S.settings.push || {}; p.tokens = (p.tokens || []).filter(t => t !== mine); S.settings.push = p; saveSettings(); toast('Notifications off on this phone.'); draw();
+}
+async function pushTest() {
+  const reg = await navigator.serviceWorker.ready;
+  reg.showNotification('Lock In 90', { body: 'This is how reminders will look. Real ones come from the reminder job.', icon: 'icons/icon-192.png', badge: 'icons/favicon.png', tag: 'test' });
+}
 // the plan editor works on the normal plan or the Ramadan plan
 const editingRamadan = () => S.planEdit === 'ramadan';
 function planMeals() { const st = S.settings; if (editingRamadan()) return st.ramadanMeals || (st.ramadanMeals = clone(C.RAMADAN_MEALS)); return st.meals || (st.meals = []); }
@@ -564,7 +595,7 @@ function meHTML(R) {
   const byTitle = Object.fromEntries(parts.map(p => [title(p), p]));
   if (S.meSec && byTitle[S.meSec]) return `<header class="ph sub2"><button class="back" data-act="mesec" data-v="" aria-label="Back to Me">‹</button><h1>${esc(S.meSec)}</h1></header>` + byTitle[S.meSec];
   const st = S.settings, w = curWeight();
-  const sum = { 'Meal plan': `${kc(C.sumItems((st.meals || []).flatMap(m => m.items || [])).k)} kcal · ${(st.meals || []).length} meals`, 'Supplements': `${(st.supps || []).filter(s => s.req).length} core`, 'Ramadan mode': st.ramadan && st.ramadan.on ? 'On' : 'Off', 'If-then plans': `${(st.ifthen || []).length} saved`, 'Coach link': st.coach ? 'Sharing' : 'Off', 'Reminders': st.ntfyTopic ? 'On' : 'Not set up', 'Stamina track': (st.stamina || {}).on === false ? 'Off' : 'On', 'Weekly training': '' };
+  const sum = { 'Meal plan': `${kc(C.sumItems((st.meals || []).flatMap(m => m.items || [])).k)} kcal · ${(st.meals || []).length} meals`, 'Supplements': `${(st.supps || []).filter(s => s.req).length} core`, 'Ramadan mode': st.ramadan && st.ramadan.on ? 'On' : 'Off', 'If-then plans': `${(st.ifthen || []).length} saved`, 'Coach link': st.coach ? 'Sharing' : 'Off', 'Reminders': pushState() === 'on' ? 'App notifications on' : st.ntfyTopic ? 'ntfy' : 'Not set up', 'Stamina track': (st.stamina || {}).on === false ? 'Off' : 'On', 'Weekly training': '' };
   let h = `<header class="ph"><h1>Me</h1><span class="hero-chips">${syncDot()}${flameChip(R)}</span></header>
   <section class="card me-card"><div class="me-top"><span class="avatar">${esc((boardName() || '?').slice(0, 1).toUpperCase())}</span><span><b>${esc(boardName())}</b><small>Day ${Math.min(R.dayNum, 90)} of 90 · attempt ${R.attemptNo}</small></span></div>
   <div class="me-stats"><span><b class="num">${w ? C.round(w, 1) : '—'}</b><small>kg now</small></span><span><b class="num">${st.goalWeight || '—'}</b><small>kg goal</small></span><span><b class="num">${L(st.waterGoal || 3500)}</b><small>L water</small></span></div>
@@ -724,7 +755,7 @@ function upNextHTML(R, d, date, P) {
   if (due) return mealCard(due);
   const expected = P.goal * C.waterPace(S.settings, date, mins), behind = expected - P.w;
   if (behind >= 500) return card(`Water: ${L(Math.round(behind / 250) * 250)} L behind pace`, `${L(P.w)} of ${L(P.goal)} L so far. Aim for about ${L(Math.round(expected / 250) * 250)} L by now.`, `<button class="btn wat" data-act="water" data-n="500">+ 500 ml</button><button class="btn" data-act="water" data-n="250">+ 250 ml</button>`);
-  const trainCard = () => P.tt === 'cali' ? card(C.TT.cali.label, 'Your no-bar session. Log your sets in Train.', `<button class="btn primary" data-act="tab" data-v="train">Open Train</button>`) : card(C.TT[P.tt].label, C.TT[P.tt].sub, `<button class="btn primary" data-act="train">Mark done</button><button class="btn ghost" data-act="sport">Played a sport instead?</button>`);
+  const trainCard = () => { const tl = (P.tt === 'gym' || P.tt === 'cali') && TR.todayLine(); return tl ? card(esc(tl.live ? `${tl.name}: in progress` : `${tl.name} workout`), tl.live ? 'Pick up where you left off.' : `${tl.n} exercises. Start it in Train and tick each set.`, `<button class="btn primary" data-act="tab" data-v="train">${tl.live ? 'Back to workout' : 'Start workout'}</button><button class="btn ghost" data-act="sport">Played a sport instead?</button>`) : P.tt === 'cali' && !S.settings.train ? card(C.TT.cali.label, 'Set up your plan in Train, then start it from there.', `<button class="btn primary" data-act="tab" data-v="train">Open Train</button>`) : card(C.TT[P.tt].label, C.TT[P.tt].sub, `<button class="btn primary" data-act="train">Mark done</button><button class="btn ghost" data-act="sport">Played a sport instead?</button>`); };
   if (!P.trained && mins >= 17 * 60) return trainCard();
   const left = P.req.filter(s => !(d.supps || {})[s.id]);
   if (left.length && mins >= 12 * 60) return card(`Supplements: ${left.length} left`, esc(left.map(s => s.name).join(', ')), `<button class="btn primary" data-act="suppall">I took them</button>`);
@@ -751,7 +782,7 @@ function todayHTML(R) {
   const pills = [
     { k: 'meals', name: 'Meals', ok: P.mealsOk, bad: mealsBad, val: mealsBad ? 'Off-plan' : `${P.clean} / ${P.pm.length}` },
     { k: 'water', name: 'Water', ok: P.w >= P.goal, val: `${L(P.w)} / ${L(P.goal)} L` },
-    { k: 'train', name: P.tt === 'gym' ? 'Gym' : P.tt === 'cali' ? 'Calisthenics' : P.tt === 'recovery' ? 'Mobility' : 'Rest', ok: P.trained, val: P.tt === 'rest' ? 'Rest day' : P.trained ? 'Done' : 'To do' },
+    { k: 'train', name: P.tt === 'gym' ? 'Gym' : P.tt === 'cali' ? 'Home workout' : P.tt === 'cardio' ? 'Cardio' : P.tt === 'recovery' ? 'Mobility' : 'Rest', ok: P.trained, val: P.tt === 'rest' ? 'Rest day' : P.trained ? 'Done' : 'To do' },
     { k: 'supps', name: 'Supps', ok: P.sDone === P.req.length, val: !P.req.length ? 'None' : `${P.sDone} / ${P.req.length}` }
   ];
   const dayNo = Math.min(R.dayNum, 90);
@@ -876,7 +907,7 @@ function trainCardHTML(date, d, P) {
   const acts = actsOn(date);
   let h = `<section class="card" id="sec-train"><div class="card-h"><h2>Training</h2>${pill(P.trained ? 'done' : 'todo', P.tt === 'rest' ? 'Rest' : P.trained ? (d.trainingSource === 'strava' ? 'Done · Strava' : 'Done') : 'Not yet')}</div>`;
   if (P.tt === 'rest') h += `<p class="hint">${C.TT.rest.sub}. Change your weekly plan in Me.</p>`;
-  else h += `<button class="check" data-act="train" aria-pressed="${!!d.trainingDone}"><span class="box"></span><span><b>${C.TT[P.tt].label}</b><span>${C.TT[P.tt].sub}</span></span></button>${P.tt === 'cali' ? `<button class="btn primary block" data-act="tab" data-v="train">Open today’s session</button>` : ''}`;
+  else h += `<button class="check" data-act="train" aria-pressed="${!!d.trainingDone}"><span class="box"></span><span><b>${C.TT[P.tt].label}</b><span>${C.TT[P.tt].sub}</span></span></button>${(P.tt === 'gym' || P.tt === 'cali') ? (() => { const tl = TR.todayLine(); return tl ? `<button class="btn ${tl.done ? '' : 'primary'} block" data-act="tab" data-v="train">${esc(tl.done ? `${tl.name} done · see summary` : tl.live ? `Back to ${tl.name}` : `Start ${tl.name}`)}</button>` : `<button class="btn primary block" data-act="tab" data-v="train">Set up your training plan</button>`; })() : ''}`;
   if (acts.length) h += `<div class="acts">${acts.map(a => `<div class="act"><span><b>${esc(a.name || a.type)}</b> · from Strava</span><span class="num">${a.min} min${a.dist ? ' · ' + C.round(a.dist / 1000, 2) + ' km' : ''}</span></div>`).join('')}</div>`;
   h += sportsListHTML(date, d);
   h += `<div class="spread"><span class="hint">Gym time today</span><div class="seg" role="group" aria-label="Gym time"><button data-act="gymtime" data-v="am" aria-pressed="${gym === 'am'}">Morning</button><button data-act="gymtime" data-v="pm" aria-pressed="${gym === 'pm'}">Night</button></div></div></section>`;
@@ -922,10 +953,7 @@ function framesHTML(e) {
   if (e.fr.length === 1) return `<div class="frames one"><div class="frame">${figSVG(POSE[e.fr[0]], e.pr, e.name)}<em>${esc(e.lb[0])}</em></div></div>`;
   return `<div class="frames"><div class="frame">${figSVG(POSE[e.fr[0]], e.pr, e.name + ' start')}<em>${esc(e.lb[0])}</em></div><svg class="arrow" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12h15M14 7l5 5-5 5"/></svg><div class="frame">${figSVG(POSE[e.fr[1]], e.pr, e.name + ' finish')}<em>${esc(e.lb[1])}</em></div></div>`;
 }
-function trainHTML(R) {
-  let h = `<div class="seg wide" role="group" aria-label="Training type"><button data-act="traintab" data-v="cali" aria-pressed="${S.trainTab === 'cali'}">Calisthenics</button><button data-act="traintab" data-v="stamina" aria-pressed="${S.trainTab === 'stamina'}">Stamina</button></div>`;
-  return h + (S.trainTab === 'stamina' ? staminaHTML() : caliHTML());
-}
+function trainHTML(R) { return TR.trainHTML(); }
 function caliHTML() {
   const date = editDate(), ph = S.phase || suggestedPhase(), d = S.days[date] || {}, cali = d.cali || {}, tt = C.trainType(S.settings, date);
   let h = `<section class="card"><div class="card-h"><h2>Calisthenics</h2>${pill(d.trainingDone ? 'done' : 'todo', d.trainingDone ? 'Session done' : fmt(date))}</div>
@@ -1184,7 +1212,7 @@ function setupHTML(R) {
   h += ifThenSetupHTML(st);
   h += coachSetupHTML(st);
   // weekly plan
-  h += `<section class="card"><div class="card-h"><h2>Weekly training</h2></div><p class="hint">What counts as training each day. Tick gym days on Today after you log the workout in Lyfta.</p>
+  h += `<section class="card"><div class="card-h"><h2>Weekly training</h2></div><p class="hint">What counts as training each day. Gym and home days use the workouts in Train. Finishing one ticks the day.</p>
   ${[6, 0, 1, 2, 3, 4, 5].map(i => `<div class="setup-r"><label for="p-${i}">${C.DAYNAMES[i]}</label><select class="in" id="p-${i}" data-plan="${i}">${Object.keys(C.TT).map(k => `<option value="${k}" ${plan[i] === k ? 'selected' : ''}>${C.TT[k].label}</option>`).join('')}</select></div>`).join('')}</section>`;
   // stamina
   h += `<section class="card"><div class="card-h"><h2>Stamina track</h2>${pill('opt', 'Bonus')}</div>
@@ -1198,8 +1226,11 @@ function setupHTML(R) {
   ${(() => { const have = new Set((st.supps || []).map(s => s.name)), left = STARTER_SUPPS.filter(n => !have.has(n)); return left.length ? `<span class="sub">Quick add</span><div class="supps">${left.map(n => `<button class="supp" data-act="sstarter" data-v="${esc(n)}">+ ${esc(n)}</button>`).join('')}</div>` : ''; })()}</section>`;
   // reminders + strava
   const rm = st.reminders || {}, sv = S.meta.strava;
-  h += `<section class="card"><div class="card-h"><h2>Reminders</h2></div><p class="hint">Sent to the ntfy app on your phone. Each one checks your day first and stays quiet if there’s nothing to do. Times can run 5 to 15 minutes late.</p>
-  <div class="sup-r"><span class="sub">Your ntfy topic</span><div class="row"><input class="in grow" id="s-topic" data-topic="1" value="${esc(st.ntfyTopic || '')}" placeholder="e.g. lockin90-a1b2c3d4e5f6" autocomplete="off" spellcheck="false"><button class="btn small" data-act="gentopic">New</button></div><p class="hint">Subscribe to this exact name in the ntfy app. Treat it like a password. Leave it empty and no reminders are sent.</p></div>
+  const pushOn = pushState() === 'on';
+  h += `<section class="card"><div class="card-h"><h2>Reminders</h2>${pushOn ? pill('done', 'On this phone') : ''}</div><p class="hint">Each reminder checks your day first and stays quiet if there’s nothing to do. Times can run 5 to 15 minutes late.</p>
+  ${pushOn ? `<div class="row"><button class="btn small" data-act="pushtest">Send a test</button><button class="btn small ghost" data-act="pushoff">Turn off on this phone</button></div>` : pushState() === 'blocked' ? `<p class="safety">Notifications are blocked for this app. Allow them in your phone’s settings for Lock In 90, then come back.</p>` : pushState() === 'install' ? `<p class="hint"><b>iPhone:</b> add the app to your Home Screen first (Share → Add to Home Screen), open it from there, then turn notifications on.</p>` : pushState() === 'none' ? `<p class="hint">This browser can’t show app notifications. Use the ntfy app below instead.</p>` : `<button class="btn primary block" data-act="pushon">Turn on notifications</button>`}
+  <details${st.ntfyTopic && !pushOn ? ' open' : ''}><summary class="hint">Use the ntfy app instead</summary><p class="hint">Only used when app notifications are off on all your phones.</p>
+  <div class="sup-r"><span class="sub">Your ntfy topic</span><div class="row"><input class="in grow" id="s-topic" data-topic="1" value="${esc(st.ntfyTopic || '')}" placeholder="e.g. lockin90-a1b2c3d4e5f6" autocomplete="off" spellcheck="false"><button class="btn small" data-act="gentopic">New</button></div><p class="hint">Subscribe to this exact name in the ntfy app. Treat it like a password. Leave it empty and no reminders are sent.</p></div></details>
   ${REMINDERS.map(([k, label]) => { const on = k === 'meals' ? rm[k] === true : rm[k] !== false; return `<div class="setup-r"><span>${esc(label)}</span><div class="seg"><button data-act="remind" data-v="${k}:1" aria-pressed="${on}">On</button><button data-act="remind" data-v="${k}:0" aria-pressed="${!on}">Off</button></div></div>`; }).join('')}</section>`;
   if (sv) h += `<section class="card"><div class="card-h"><h2>Strava</h2>${sv && sv.ok ? pill('done', 'Connected') : pill('todo', 'Not connected')}</div>
   <p class="hint">${sv && sv.lastSync ? `Last sync ${new Date(sv.lastSync).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}. ${sv.count ? sv.count + ' activities synced.' : ''}` : 'Connects once the Strava step in the setup guide is done. Checks every 30 minutes.'}</p></section>`;
@@ -1231,6 +1262,7 @@ function shoppingHTML(st) {
 
 /* ---------- food sheet ---------- */
 let SH = null; // {scope, picked, results, off}
+TR.initTrain({ get S() { return S; }, esc, toast, draw: () => draw(), saveDay: d => saveDay(d), saveSettings: () => saveSettings(), dayDoc: d => dayDoc(d), editDate: () => editDate(), today: () => today(), fmt: d => fmt(d), openTimer: (m, sec, e) => openTimer(m, sec, e), buzz: p => buzz(p), staminaHTML: () => staminaHTML(), setSH: o => { if (SH && SH.iv) clearInterval(SH.iv); SH = o; }, closeSheet: () => closeSheet() });
 function openSheet(scope) {
   SH = { scope, picked: null, results: [], off: scope === 'extra', mode: 'search', usda: [], stream: null };
   $('sheet').hidden = false;
@@ -1423,6 +1455,7 @@ document.addEventListener('click', async ev => {
   const b = ev.target.closest('[data-act]'); if (!b) return;
   if (b.tagName === 'BUTTON') buzz(8);
   const act = b.dataset.act, v = b.dataset.v, D = editDate();
+  if (act.startsWith('tr-')) return TR.act(act, v, b);
   switch (act) {
     case 'signin': return signin();
     case 'signup': return emailAuth(true);
@@ -1443,6 +1476,9 @@ document.addEventListener('click', async ev => {
   if (act === 'ptab') { S.ptab = v; S.panel = null; if (S.view !== 'progress') return go('progress'); window.scrollTo(0, 0); return draw(); }
   if (act === 'mesec') { S.meSec = v || null; window.scrollTo(0, 0); return draw(); }
   if (act === 'closesheet') return closeSheet();
+  if (act === 'pushon') return pushOn();
+  if (act === 'pushoff') return pushOff();
+  if (act === 'pushtest') return pushTest();
   if (act === 'daynav' && SH && SH.scope === 'day') { SH.date = v; return drawDay(); }
   if (SH && SH.scope === 'sport') {
     if (act === 'sppick') { SH.sp = v; return drawSport(); }
@@ -1668,6 +1704,7 @@ document.addEventListener('click', async ev => {
 });
 document.addEventListener('input', ev => {
   const t = ev.target; if (!S.settings) return;
+  if (TR.input(t)) return;
   if (SH && SH.recipe && (t.id === 'rc-n' || t.id === 'rc-w' || t.id === 'rc-s' || t.dataset.rcg)) {
     const r = SH.recipe;
     if (t.id === 'rc-n') r.name = t.value; else if (t.id === 'rc-w') r.total = parseFloat(t.value) || null; else if (t.id === 'rc-s') r.serv = parseInt(t.value, 10) || null; else r.items[+t.dataset.rcg].g = Math.max(0, parseFloat(t.value) || 0);
@@ -1694,6 +1731,7 @@ document.addEventListener('input', ev => {
 });
 document.addEventListener('change', ev => {
   const t = ev.target;
+  if (S.settings && TR.change(t)) return;
   if (t.id === 'imp-file' || t.id === 'imp-file2') return importBackup(t.files[0]);
   if (SH && SH.scope === 'sport' && (t.id === 'sp-min' || t.id === 'sp-hr' || t.id === 'sp-count')) { if (t.id === 'sp-min') SH.min = Math.max(0, Math.min(600, parseInt(t.value, 10) || 0)); else if (t.id === 'sp-hr') SH.hr = parseInt(t.value, 10) || null; else SH.counts = t.checked; return drawSport(); }
   if (t.id === 'ck-photo') { const f = t.files && t.files[0], n = $('ck-photo-name'); if (n) n.textContent = f ? 'Photo ready: ' + f.name.slice(0, 28) : 'Take or choose a photo'; return; }

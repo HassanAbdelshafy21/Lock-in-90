@@ -1,4 +1,4 @@
-// Runs every 30 minutes on GitHub Actions: syncs Strava, then sends smart reminders through ntfy.
+// Runs every 30 minutes on GitHub Actions: syncs Strava, then sends smart reminders as app notifications (Firebase Cloud Messaging), or through ntfy for anyone who hasn't turned those on.
 import admin from 'firebase-admin';
 import * as C from '../core.js';
 import { trText, addFoodNames } from '../i18n.js';
@@ -13,8 +13,24 @@ const TEST = process.env.TEST === 'true';
 admin.initializeApp({ credential: admin.credential.cert(JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT)) });
 const db = admin.firestore();
 
-let CURRENT_TOPIC = null;
+let CURRENT_TOPIC = null, CURRENT_PUSH = null;
+// App notifications through Firebase Cloud Messaging (free). Each phone that tapped "Turn on notifications" has a token in settings.push.
+async function fcm(title, body, tags) {
+  const { uid, tokens } = CURRENT_PUSH; let dead = [];
+  for (const token of tokens) {
+    try {
+      await admin.messaging().send({ token, webpush: { headers: { Urgency: 'high', TTL: '3600' }, data: { title, body, url: APP_URL, tag: String(tags || 'lockin') } } });
+      console.log('push', title);
+    } catch (e) {
+      console.log('push failed', e.code || e.message);
+      if (/registration-token-not-registered|invalid-registration-token|invalid-argument/.test(e.code || '')) dead.push(token);
+    }
+  }
+  if (dead.length) { CURRENT_PUSH.tokens = tokens.filter(t => !dead.includes(t)); await db.doc(`users/${uid}/settings/main`).set({ push: { tokens: CURRENT_PUSH.tokens } }, { merge: true }); }
+  return tokens.length > dead.length;
+}
 async function ntfy(title, body, { priority = 3, tags = '' } = {}) {
+  if (CURRENT_PUSH && CURRENT_PUSH.tokens.length && await fcm(title, body, tags)) return;
   if (!CURRENT_TOPIC) { console.log('[no topic for this user]', title); return; }
   const t = /^[\x20-\x7E]*$/.test(title) ? title : `=?UTF-8?B?${Buffer.from(title, 'utf8').toString('base64')}?=`;
   const r = await fetch(`https://ntfy.sh/${encodeURIComponent(CURRENT_TOPIC)}`, { method: 'POST', body, headers: { Title: t, Click: APP_URL, Priority: String(priority), Tags: tags } });
@@ -176,6 +192,7 @@ const firstUser = all.slice().sort((a, b) => String(a.settings.created || '').lo
 for (const { id, settings } of all) {
   const u = { id };
   CURRENT_TOPIC = settings.ntfyTopic || (firstUser && firstUser.id === id ? TOPIC : null);
+  CURRENT_PUSH = { uid: id, tokens: ((settings.push || {}).tokens || []).filter(Boolean).slice(-5) };
   try { await stravaSync(u.id, settings); } catch (e) { console.log('strava error', e.message); }
   try { await reminders(u.id, settings); } catch (e) { console.log('reminder error', e.message); }
   try { await pushCheers(u.id, settings); } catch (e) { console.log('cheers error', e.message); }
