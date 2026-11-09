@@ -5,7 +5,9 @@ A personal 90-day challenge tracker that works offline and syncs through Firebas
 - **Required every day:** every planned meal on plan, water goal, that day's training, core supplements. Miss one and the counter resets to Day 1. The day after a miss is flagged "Never miss twice."
 - **Food:** your coach's meal plan (editable, 3–5+ meals), one-tap "As planned", calories and macros from a built-in library (Egyptian staples included, cooked weights), USDA search, barcode scan, custom foods. Drinks logged in meals or extras (coffee, tea, zero cola, milk, juice) count toward the water goal.
 - **Training:** calisthenics with drawn start/finish figures, hold and rest timers, personal bests; a 12-week stamina track that never affects the streak.
-- **Friends board:** create a group, share the 6-character code, and everyone in it sees each other's day count, streak and today's status (nothing else is shared).
+- **Motivation:** morning commitment, a day-complete celebration with a shareable image, a flame streak that warns after 21:00, Day 30/60/90 recaps.
+- **Insights:** weight wins (lowest, since start, this week, to goal), real calorie burn from logs + weight trend, recipe builder, copy a past meal, daily notes.
+- **Friends board:** create a group, share the 6-character code, and everyone in it sees each other's day count, streak, today's status and the group chain (days everyone locked in). Nothing else is shared.
 - **Progress:** weekly review, 90-day chain, milestones, weight with 7-day average, measurements, before/after photo slider.
 - **Cloud job (GitHub Actions, every 30 min):** sends smart reminders to the ntfy app. (Strava sync is built in but switched off; it only runs if Strava secrets are added.)
 

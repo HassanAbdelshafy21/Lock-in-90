@@ -1,5 +1,5 @@
 // Offline support: app files are served from cache and refreshed in the background.
-const VERSION = 'lockin-v8';
+const VERSION = 'lockin-v9';
 const FB = '10.14.1';
 const SHELL = ['./', './index.html', './styles.css', './app.js', './core.js', './data.js', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png'];
 const SDK = ['firebase-app', 'firebase-auth', 'firebase-firestore'].map(n => `https://www.gstatic.com/firebasejs/${FB}/${n}.js`);
