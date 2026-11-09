@@ -40,12 +40,24 @@ One screen for the day. A navy scoreboard shows four rings around the day number
 - **Import:** bring workout history over from Lyfta, Hevy or Strong (CSV export).
 - **Sports and cardio:** log football, padel, tennis and more. Calories come from the 2024 Compendium of Physical Activities, or your average heart rate. A 12-week stamina plan is included.
 
+## Calisthenics
+
+<p>
+<img src="docs/screens/cali.webp" width="200" alt="Calisthenics skill paths">
+<img src="docs/screens/cali_path.webp" width="200" alt="One skill path, step by step">
+</p>
+
+- **Skill paths:** push, pull, dip, row, legs, hinge and core, each a ladder of steps from easy to hard (incline push-up to one-arm push-up, dead hang to one-arm pull-up negative, and so on). Add skill paths for handstand, L-sit, front lever, planche and muscle-up.
+- **Placement test:** five minutes of max reps and holds places you on every path.
+- **Sessions:** built from your current step on each path, in the order of the Reddit Bodyweight Fitness "Recommended Routine": skills first, then three strength pairs (pull + dip, legs + hinge, push + row), then core.
+- **Level up:** hit the top of the range on every set and the next step unlocks; you choose to move up or stay. Steps with a photo in the library show it; the rest link to form videos.
+
 ## Progress, ranks and friends
 
 <p>
 <img src="docs/screens/progress.webp" width="200" alt="Weekly progress">
 <img src="docs/screens/muscles.webp" width="200" alt="Muscle map">
-<img src="docs/screens/rank.webp" width="200" alt="Strength rank">
+<img src="docs/screens/rank.webp" width="200" alt="Strength ranks">
 <img src="docs/screens/league.webp" width="200" alt="Weekly league with friends">
 </p>
 
@@ -55,7 +67,7 @@ One screen for the day. A navy scoreboard shows four rings around the day number
   - Body: weight trend and measurements.
   - Chain: the 90-day chain and the history of each day.
 - **Monthly report:** a shareable image on the 1st of each month.
-- **Strength rank:** seven tiers (Iron to Legend) from your best estimated 1-rep max relative to bodyweight on main lifts. Warm-ups and sets over 12 reps don't count.
+- **Strength rank:** seven ranks (Iron, Bronze, Silver, Gold, Platinum, Diamond, Legend), each with three steps, from your best estimated 1-rep max relative to bodyweight on main lifts, or reps for pull-ups, dips and push-ups. Your rank badge sits on Today, Train and Me. The ranks page lists every rank with what it takes at your bodyweight, and your friends' ranks. Warm-ups and sets over 12 reps don't count.
 - **Friends:** create a group and share the 6-letter code.
   - **Weekly league:** points come from discipline, not raw strength, so a beginner can win. A locked-in day is +10, a workout +5, a record +3.
   - **Other boards:** a strength board that compares fairly across bodyweights (DOTS), a most-improved board, and the board with cheers and nudges.
@@ -64,6 +76,8 @@ One screen for the day. A navy scoreboard shows four rings around the day number
 - **Start over your way:** a new attempt that keeps history, or clear exactly what you choose. Your group always stays, and friends can be told.
 
 <p><img src="docs/screens/me.webp" width="200" alt="Me menu"></p>
+
+_Screenshots use a demo account with made-up data._
 
 ## How it runs for free
 
@@ -76,11 +90,17 @@ One screen for the day. A navy scoreboard shows four rings around the day number
 1. **Firestore rules:** Firebase console → Firestore Database → Rules → paste `firestore.rules` → Publish. Re-publish whenever this file changes.
 2. **Authorized domain:** Authentication → Settings → Authorized domains → add `hassanabdelshafy21.github.io`.
 3. **GitHub Pages:** repo Settings → Pages → Deploy from a branch → `main` / `(root)`.
-4. **Push key:** Project settings → Cloud Messaging → Web Push certificates → Generate key pair. The public key goes in `app.js` (`VAPID`). Make sure "Firebase Cloud Messaging API (V1)" is enabled.
+4. **Push key:** Project settings → Cloud Messaging → Web Push certificates → Generate key pair. The public key goes in `app.js` (`VAPID`); it is meant to be public. Make sure "Firebase Cloud Messaging API (V1)" is enabled.
 5. **Secrets** (repo Settings → Secrets and variables → Actions → New repository secret):
    - `FIREBASE_SERVICE_ACCOUNT`: Firebase → Project settings → Service accounts → Generate new private key → paste the whole file.
    - `NTFY_TOPIC` (optional fallback): a long random name; subscribe to the same name in the ntfy app.
 6. **Test reminders:** Actions → **tick** → Run workflow → tick "Send a test notification".
+
+## Privacy and security
+
+- The repo is public, so nothing private lives in it: no keys, no personal plans, no emails. The Firebase web config and the push public key are designed to be public; access is controlled by `firestore.rules` (each person can only read and write their own data).
+- Secrets (`FIREBASE_SERVICE_ACCOUNT`, `NTFY_TOPIC`) live only in GitHub Actions secrets.
+- The friends board shares only day count, streak, today's status, league points and rank; never food, weight or photos.
 
 ## Credits
 

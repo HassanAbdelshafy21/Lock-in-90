@@ -182,24 +182,11 @@ export const foodById = id => FOODS.find(f => f.id === id);
 const it = (id, g) => { const f = foodById(id); return { fid: id, name: f.name, g, per: { ...f.per } }; };
 
 /* your coach's plan (cooked weights) — edit it in Setup */
-export const COACH_MEALS = [
-  { id: 'm1', name: 'Meal 1', time: '08:00', items: [it('chia', 5), it('yogurt_light', 170), it('cacao', 2.5)] },
-  { id: 'm2', name: 'Meal 2', time: '11:00', items: [it('egg', 150), it('salad', 150)] },
-  { id: 'm3', name: 'Meal 3', time: '14:00', items: [it('fruit_avg', 300)] },
-  { id: 'm4', name: 'Meal 4', time: '17:00', items: [it('chicken_breast', 200), it('salad', 150)] },
-  { id: 'm5', name: 'Meal 5', time: '21:00', items: [it('chia', 5), it('yogurt_light', 170), it('cacao', 2.5)] }
-];
+// The owner's coach plan lives in the owner's own (private) account data, not in this public code.
+export const COACH_MEALS = [];
 
 /* supplements with timing for morning-gym and night-gym days */
 export const SLOTS = ['Pre-gym', 'Before Meal 1', 'With Meal 1', 'Post-gym', 'Before Meal 2', 'With Meal 2', 'Evening', 'Any time'];
-export const DEFAULT_SUPPS = [
-  { id: 'creatine', name: 'Creatine', req: true, am: 'Post-gym', pm: 'Post-gym' },
-  { id: 'omega3', name: 'Omega 3', req: true, am: 'Post-gym', pm: 'With Meal 1' },
-  { id: 'multi', name: 'Multivitamin', req: true, am: 'Post-gym', pm: 'With Meal 1' },
-  { id: 'powermax', name: 'Powermax', req: true, am: 'Post-gym', pm: 'With Meal 2' },
-  { id: 'carnitine', name: 'L-Carnitine', req: false, am: 'Pre-gym', pm: 'Pre-gym' },
-  { id: 'burner', name: 'Fat burner · cap 1', req: false, am: 'Pre-gym', pm: 'Before Meal 1' },
-  { id: 'burner2', name: 'Fat burner · cap 2', req: false, am: 'Before Meal 2', pm: 'Before Meal 2' }
-];
+export const DEFAULT_SUPPS = [];
 
 export const CARDIO_MODES = ['Incline treadmill', 'Bike', 'Rower', 'Elliptical', 'Stair climber', 'Outdoor walk'];

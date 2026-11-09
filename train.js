@@ -17,14 +17,16 @@ export function loadDB() {
   }).catch(() => { dbP = null; return null; });
 }
 function loadHow() { return howP = howP || fetch('ex/howto.json').then(r => r.json()).then(j => HOW = j).catch(() => { howP = null; return null; }); }
-const ex = id => (DB && DB.by[id]) || { id, name: ((X && X.S.settings && X.S.settings.train && (X.S.settings.train.custom || {})[id]) || {}).name || String(id).replace(/^x-/, '').replace(/[_-]/g, ' '), eq: '', pm: [], sm: [], img: 0 };
-const img = (id, i) => `ex/${encodeURIComponent(id)}-${i}.webp`;
+const ex = id => { if (CX[id]) { const c = CX[id], ph = c.ph && DB && DB.by[c.ph]; return { id, name: c.name, eq: 'body only', pm: c.pm || [], sm: [], img: ph ? ph.img : 0, mech: 'compound', cat: 'strength', lv: 'i', cx: true }; } return (DB && DB.by[id]) || { id, name: ((X && X.S.settings && X.S.settings.train && (X.S.settings.train.custom || {})[id]) || {}).name || String(id).replace(/^x-/, '').replace(/[_-]/g, ' '), eq: '', pm: [], sm: [], img: 0 }; };
+const img = (id, i) => `ex/${encodeURIComponent((CX[id] && CX[id].ph) || id)}-${i}.webp`;
+const CX = {}; // calisthenics steps that have no entry of their own in the library (filled from PATHS below)
 
 export const MUSCLES = ['chest', 'shoulders', 'lats', 'middle back', 'traps', 'biceps', 'triceps', 'forearms', 'abdominals', 'quadriceps', 'hamstrings', 'glutes', 'calves', 'lower back', 'adductors', 'abductors', 'neck'];
 const MUS_L = { 'chest': 'Chest', 'shoulders': 'Shoulders', 'lats': 'Lats', 'middle back': 'Middle back', 'traps': 'Traps', 'biceps': 'Biceps', 'triceps': 'Triceps', 'forearms': 'Forearms', 'abdominals': 'Abs', 'quadriceps': 'Quads', 'hamstrings': 'Hamstrings', 'glutes': 'Glutes', 'calves': 'Calves', 'lower back': 'Lower back', 'adductors': 'Inner thighs', 'abductors': 'Outer hips', 'neck': 'Neck' };
 const EQ_L = { 'barbell': 'Barbell', 'dumbbell': 'Dumbbells', 'cable': 'Cable', 'machine': 'Machine', 'body only': 'Bodyweight', 'kettlebells': 'Kettlebell', 'bands': 'Bands', 'medicine ball': 'Medicine ball', 'exercise ball': 'Exercise ball', 'foam roll': 'Foam roller', 'e-z curl bar': 'EZ bar', 'other': 'Other', '': 'Bodyweight' };
 const musL = m => MUS_L[m] || m, eqL = e => EQ_L[e || ''] || e;
 const TIMED = new Set(['Plank', 'Side_Bridge', 'Push_Up_to_Side_Plank', 'Superman']);
+const isTimed = id => TIMED.has(id) || !!(CX[id] && CX[id].hold);
 const BW = e => !e.eq || e.eq === 'body only' || e.eq === 'other' && /Pull|Chin|Dip|Row/.test(e.id);
 
 /* ---------- movement patterns: candidates for a full gym, dumbbells + bench, and no equipment ---------- */
@@ -103,7 +105,7 @@ function buildRoutine(key, cfg) {
     const id = pool.find(x => !used.has(x)); if (!id) continue; used.add(id);
     let [sets, lo, hi, rest] = dose[kind];
     if (cfg.level === 'new') sets = Math.min(sets, kind === 'iso' ? 2 : 3); else if (cfg.level === 'exp' && kind !== 'iso') sets += 1;
-    if (TIMED.has(id)) { lo = 20; hi = 45; }
+    if (isTimed(id)) { lo = 20; hi = 45; }
     out.push({ id, sets, lo, hi, rest });
   }
   return { id: key + '-' + Math.random().toString(36).slice(2, 6), name, ex: out };
@@ -173,7 +175,7 @@ const wo = () => { const d = X.S.days[D()]; return d && d.wo; };
 const active = () => { const w = wo(); return w && !w.t1 && !w.imported ? w : null; };
 export const hasActive = () => !!(X && X.S.settings && T() && active());
 function nextRoutine() { const t = T(); if (!t || !t.routines || !t.routines.length) return null; return t.routines[(t.next || 0) % t.routines.length]; }
-const thumb = (id, cls = '') => `<img class="exthumb ${cls}" src="${img(id, 0)}" alt="" loading="lazy" decoding="async" onerror="this.style.visibility='hidden'">`;
+const thumb = (id, cls = '') => DB && !ex(id).img ? `<span class="exthumb none ${cls}" aria-hidden="true">${CX[id] ? '◇' : ''}</span>` : `<img class="exthumb ${cls}" src="${img(id, 0)}" alt="" loading="lazy" decoding="async" onerror="this.style.visibility='hidden'">`;
 const photos = id => { const x = ex(id); return x.img > 1 ? `<div class="exph" data-act="tr-flip"><img src="${img(id, 0)}" alt="${esc(x.name)}, start" decoding="async"><img class="b" src="${img(id, 1)}" alt="${esc(x.name)}, end" decoding="async"><span class="exph-l"><i></i><i></i></span></div>` : x.img ? `<div class="exph one"><img src="${img(id, 0)}" alt="${esc(x.name)}"></div>` : ''; };
 const meta = x => [...x.pm.map(musL), eqL(x.eq)].filter(Boolean).join(' · ');
 const restFor = id => { const t = T() || {}; const v = (t.restBy || {})[id]; return v != null ? v : (t.restDefault != null ? t.restDefault : 30); };
@@ -183,10 +185,12 @@ const isOwner = () => X.isOwner && X.isOwner();
 /* ---------- views ---------- */
 export function trainHTML() {
   loadDB();
-  const tab = X.S.trainTab === 'stamina' || X.S.trainTab === 'cardio' ? 'cardio' : X.S.trainTab === 'lib' ? 'lib' : 'wo';
-  let h = `<div class="seg wide trtabs" role="tablist" aria-label="Train sections"><button data-act="traintab" data-v="wo" aria-pressed="${tab === 'wo'}">Workout</button><button data-act="traintab" data-v="cardio" aria-pressed="${tab === 'cardio'}">Cardio</button><button data-act="traintab" data-v="lib" aria-pressed="${tab === 'lib'}">Exercises</button></div>`;
+  const def = !X.S.trainTab && CA() && C.trainType(X.S.settings, D()) === 'cali' && !(active() && !isCaliW(active())) ? 'cali' : 'wo';
+  const tab = X.S.trainTab === 'stamina' || X.S.trainTab === 'cardio' ? 'cardio' : X.S.trainTab === 'lib' ? 'lib' : X.S.trainTab === 'cali' ? 'cali' : X.S.trainTab ? 'wo' : def;
+  let h = `<div class="seg wide trtabs" role="tablist" aria-label="Train sections">${[['wo', 'Workout'], ['cali', 'Calisthenics'], ['cardio', 'Cardio'], ['lib', 'Exercises']].map(([k, l]) => `<button data-act="traintab" data-v="${k}" aria-pressed="${tab === k}">${l}</button>`).join('')}</div>`;
   if (tab === 'cardio') return h + X.staminaHTML();
   if (tab === 'lib') return h + libHTML();
+  if (tab === 'cali') return h + (active() ? liveHTML(active()) : caliTabHTML());
   if (!T() || !T().routines) return h + setupHTML();
   const a = active(); if (a) return h + liveHTML(a);
   return h + homeHTML();
@@ -208,7 +212,7 @@ function setupHTML() {
   <div class="row">${w.step ? `<button class="btn ghost" data-act="tr-wizback">Back</button>` : ''}${w.step < steps.length - 1 ? `<button class="btn primary grow" data-act="tr-wiznext">Next</button>` : `<button class="btn primary grow" data-act="tr-wizdone">Create my plan</button>`}</div></section>
   <p class="hint center">Exercises and photos: <a href="https://github.com/yuhonas/free-exercise-db" target="_blank" rel="noopener">free-exercise-db</a> (public domain).</p>`;
 }
-function routineList(r) { return `<div class="exlist">${r.ex.map((e, i) => { const link = e.ss && r.ex[i + 1] && r.ex[i + 1].ss === e.ss; return `<div class="exrow${e.ss ? ' ssr' : ''}">${thumb(e.id)}<span><b>${esc(exName(e))}</b><small>${e.sets} × ${e.lo === e.hi ? e.lo : e.lo + '–' + e.hi}${TIMED.has(e.id) ? ' s' : ''}${link ? ' · superset' : ''}</small></span></div>`; }).join('')}</div>`; }
+function routineList(r) { return `<div class="exlist">${r.ex.map((e, i) => { const link = e.ss && r.ex[i + 1] && r.ex[i + 1].ss === e.ss; return `<div class="exrow${e.ss ? ' ssr' : ''}">${thumb(e.id)}<span><b>${esc(exName(e))}</b><small>${e.sets} × ${e.lo === e.hi ? e.lo : e.lo + '–' + e.hi}${isTimed(e.id) ? ' s' : ''}${link ? ' · superset' : ''}</small></span></div>`; }).join('')}</div>`; }
 function homeHTML() {
   const t = T(), date = D(), tt = C.trainType(X.S.settings, date), d = X.S.days[date] || {}, r = nextRoutine(), done = d.wo && d.wo.t1 && !d.wo.imported;
   let h = lyftaCard();
@@ -218,8 +222,7 @@ function homeHTML() {
     h += `<section class="card trtoday"><span class="sub">${rest ? (tt === 'rest' ? 'Rest day · next workout' : 'Mobility day · next workout') : 'Today’s workout'}</span><div class="spread"><h3>${esc(r.name)}</h3><button class="btn small ghost" data-act="tr-pick">Change</button></div>
     ${routineList(r)}<button class="btn ${rest ? '' : 'primary'} block" data-act="tr-start" data-v="${r.id}">${rest ? 'Start anyway' : 'Start workout'}</button></section>`;
   }
-  const rk = rankOf();
-  h += `<section class="card list2"><button class="lrow" data-act="tr-rank"><span class="lic rk" style="background:${rk ? TIER_C[rk.ti] : 'var(--surface-2)'}">${rk ? '★' : '☆'}</span><span class="lt"><b>Strength rank${rk ? ': ' + rk.name : ''}</b><small>${rk ? `Score ${rk.score} · ${rk.lifts} lifts ranked` : 'Log a main lift (bench, squat, row…) to get ranked'}</small></span><span class="le">›</span></button>
+  h += `<section class="card list2">${rankRow()}
   <button class="lrow" data-act="tr-import"><span class="lic">⇩</span><span class="lt"><b>Import history</b><small>From Lyfta, Hevy or Strong</small></span><span class="le">›</span></button></section>`;
   h += `<section class="card"><div class="card-h"><h2>Your plan</h2><button class="btn small ghost" data-act="tr-redo">Change plan</button></div><p class="hint">${esc(t.split === 'lyfta' ? 'ULTIMATE PPL/UL (from Lyfta)' : (SPLITS[t.split] || {}).name || 'Custom')} · ${esc((EQUIP.find(e => e[0] === t.equip) || [, ''])[1])}. Workouts go in order. Missed one? The next one waits for you.</p>
   <div class="card list2 flat">${t.routines.map((rr, i) => `<button class="lrow" data-act="tr-edit" data-v="${rr.id}"><span class="lic${rr.id === (r && r.id) ? ' on' : ''}">${i + 1}</span><span class="lt"><b>${esc(rr.name)}</b><small>${rr.ex.length} exercises · ${esc(focusOf(rr))}</small></span><span class="le">›</span></button>`).join('')}
@@ -254,7 +257,7 @@ function liveHTML(w) {
   return h + restBarHTML();
 }
 function exCardHTML(w, i, pre, compact) {
-  const e = w.ex[i], x = ex(e.id), last = hist(e.id, D()).pop(), timed = TIMED.has(e.id), bw = BW(x), b = best(e.id, D()), tip = suggest(e, x), cs = curSet(e), note = ((T().notes || {})[e.id] || '').trim();
+  const e = w.ex[i], x = ex(e.id), last = hist(e.id, D()).pop(), timed = isTimed(e.id), bw = BW(x), b = best(e.id, D()), tip = suggest(e, x), cs = curSet(e), note = (((T() || {}).notes || {})[e.id] || '').trim();
   const running = RS && RS.ex === i && !RS.hold;
   const lastWork = last ? last.sets.filter(s => !isW(s)) : [];
   let n = 0;
@@ -264,6 +267,7 @@ function exCardHTML(w, i, pre, compact) {
   ${tip && !compact ? `<p class="tip">${esc(tip)}</p>` : ''}
   <div class="setgrid" role="table"><div class="sg-h" role="row"><span>#</span><span>Last</span><span>${bw ? '+kg' : 'kg'}</span><span>${timed ? 'sec' : 'reps'}</span><span>RPE</span><span></span></div>
   ${e.sets.map((s, j) => { const p = isW(s) ? null : lastWork[n]; if (!isW(s)) n++; const lbl = s.t === 'w' ? 'W' : s.t === 'd' ? 'D' : s.t === 'f' ? 'F' : String(n); return `<div class="sg-r${s.done ? ' done' : ''}${j === cs ? ' cur' : ''}" role="row"><button class="sn ${s.t || ''}" data-act="tr-smenu" data-v="${i}:${j}" aria-label="Set ${j + 1} options">${lbl}</button><span class="num prev">${p ? setTxt(p) : '–'}</span><input class="in num" type="number" inputmode="decimal" step="0.5" min="0" data-wo="${i}:${j}:kg" placeholder="${s.kg == null ? (p && p.kg ? C.round(p.kg, 2) : bw ? '0' : '') : ''}" value="${s.kg ?? ''}" aria-label="Set ${j + 1} weight"><input class="in num" type="number" inputmode="numeric" min="0" data-wo="${i}:${j}:r" placeholder="${p ? p.r : e.lo}" value="${s.r ?? ''}" aria-label="Set ${j + 1} ${timed ? 'seconds' : 'reps'}"><button class="rpe" data-act="tr-smenu" data-v="${i}:${j}" aria-label="Set ${j + 1} effort">${s.rpe || '–'}</button><button class="sgtick" data-act="tr-set" data-v="${i}:${j}" aria-pressed="${!!s.done}" aria-label="Set ${j + 1} done">✓</button></div>`; }).join('')}</div>
+  ${levelUpHTML(e)}
   <div class="row exbtns"><button class="btn small" data-act="tr-addset" data-v="${i}">+ Set</button>${timed ? `<button class="btn small primary" data-act="tr-hold" data-v="${i}">Hold timer</button>` : /barbell|dumbbell|machine|cable|e-z|kettle/.test(x.eq) ? `<button class="btn small" data-act="tr-warm" data-v="${i}">Warm-up</button>` : ''}<button class="btn small ghost" data-act="tr-swap" data-v="${i}">Swap</button><button class="btn small ghost" data-act="tr-exinfo" data-v="${e.id}">Info</button>${note ? '' : `<button class="btn small ghost" data-act="tr-note" data-v="${e.id}">Note</button>`}<button class="btn small ghost" data-act="tr-rmex" data-v="${i}">Remove</button></div>
   ${b && !compact ? `<p class="hint">Best: ${setTxt(b)}${b.kg ? ` (≈ ${Math.round(e1rm(b))} kg 1-rep max)` : ''}</p>` : ''}</section>`;
 }
@@ -369,16 +373,6 @@ export function rankOf(before) {
 // DOTS: compares lifters of different bodyweights (used for the friends strength board)
 export function dots(kg, bw, fem) { const c = fem ? [-57.96288, 13.6175032, -0.1126655495, 0.0005158568, -0.0000010706] : [-307.75076, 24.0900756, -0.1918759221, 0.0007391293, -0.000001093]; const x = Math.max(40, Math.min(fem ? 150 : 210, bw)); return 500 / (c[0] + c[1] * x + c[2] * x * x + c[3] * x ** 3 + c[4] * x ** 4) * kg; }
 function badgeSVG(rk, size = 96) { const col = TIER_C[rk.ti]; return `<svg class="badge" width="${size}" height="${size * 1.12}" viewBox="0 0 96 108" aria-hidden="true"><path d="M48 4l40 16v34c0 26-18 42-40 50C26 96 8 80 8 54V20z" fill="${col}"/><path d="M48 14l30 12v28c0 20-13 33-30 40-17-7-30-20-30-40V26z" fill="none" stroke="#fff" stroke-opacity=".55" stroke-width="2"/><text x="48" y="64" text-anchor="middle" font-family="Alexandria,sans-serif" font-weight="800" font-size="${rk.ti === 6 ? 15 : 24}" fill="#fff">${rk.ti === 6 ? 'LGND' : rk.name.split(' ')[1] || ''}</text></svg>`; }
-function openRank() {
-  const rk = rankOf();
-  if (!rk) return sheet(`<p class="hint">Your rank comes from your best estimated 1-rep max on main lifts (squat, bench, deadlift, rows, presses, pulldown, leg press, curls, hip thrust) relative to your bodyweight, or reps for pull-ups, dips and push-ups. Log one of them in a workout and come back.</p>`, 'Strength rank');
-  sheet(`<div class="center">${badgeSVG(rk)}<h3 style="font-size:24px">${esc(rk.name)}</h3><p class="hint">Score ${rk.score} of 1,000 · average of ${rk.lifts} lifts</p></div>
-  <div class="tiers">${TIERS.map((t, i) => `<span style="background:${TIER_C[i]}" class="${i === rk.ti ? 'on' : ''}">${esc(t.slice(0, 4))}</span>`).join('')}</div>
-  ${rk.next ? `<p class="hint center">${rk.next} points to the next step</p>` : ''}
-  <h3 class="grp">By lift</h3><div class="card list2 flat">${rk.list.map(l => `<div class="liftr"><b>${esc(l.name)}</b><span class="tag" style="background:${TIER_C[l.ti]}">${esc(tierOf(l.sc).name)}</span><span class="tb"><i style="width:${Math.min(100, l.sc / 10.5)}%;background:${TIER_C[l.ti]}"></i></span><small>${l.e1 ? `${l.e1} kg 1-rep max est. · ${l.ratio} × bodyweight` : `${l.reps} reps`} · ${esc(l.level)}</small></div>`).join('')}</div>
-  <p class="hint">Warm-ups and sets over 12 reps don't count. Bodyweight comes from your latest weigh-in. Levels follow common strength standards and are a guide, not a test.</p>`, 'Strength rank');
-}
-
 /* ---------- muscles this week ---------- */
 const MAJOR = ['chest', 'shoulders', 'lats', 'middle back', 'traps', 'biceps', 'triceps', 'forearms', 'abdominals', 'quadriceps', 'hamstrings', 'glutes', 'calves', 'lower back'];
 export function muscleSets(from, to) {
@@ -479,7 +473,8 @@ async function openExercise(id) {
   <div class="rec"><div><b class="num">${b && b.kg ? Math.round(e1rm(b)) + ' kg' : '–'}</b><span>Best est. 1-rep max</span></div><div><b class="num">${heavy && heavy.kg ? setTxt(heavy) : '–'}</b><span>Heaviest set</span></div><div><b class="num">${mostR ? setTxt(mostR) : '–'}</b><span>Most reps</span></div><div><b class="num">${bv ? Math.round(bv).toLocaleString('en') + ' kg' : '–'}</b><span>Best session volume</span></div></div>` : `<p class="hint">No sets logged yet.</p>`}
   ${rkL ? `<div class="card list2 flat"><div class="lrow static"><span class="lic" style="background:${TIER_C[rkL.ti]};color:#fff">★</span><span class="lt"><b>${esc(tierOf(rkL.sc).name)} on this lift</b><small>${rkL.e1 ? `${rkL.ratio} × bodyweight · ${esc(rkL.level)}` : `${rkL.reps} reps · ${esc(rkL.level)}`}</small></span></div></div>` : ''}
   <label class="full">Note (shows every time you do it)<textarea class="in" rows="2" maxlength="140" data-trnote="${esc(id)}" placeholder="Seat height, grip, cues…">${esc(note)}</textarea></label>
-  <details class="howd"><summary>How to do it</summary>${HOW ? `<ol class="howto">${(HOW[id] || []).map(s => `<li>${esc(s)}</li>`).join('')}</ol>` : `<p class="hint">Loading steps…</p>`}</details>
+  ${CX[id] ? '' : `<details class="howd"><summary>How to do it</summary>${HOW ? `<ol class="howto">${(HOW[id] || []).map(s => `<li>${esc(s)}</li>`).join('')}</ol>` : `<p class="hint">Loading steps…</p>`}</details>`}
+  <a class="btn block" href="${ytURL(x.name)}" target="_blank" rel="noopener">▶ Watch form videos</a>
   ${H.length ? `<h3 class="grp">History</h3><div class="card list2 flat">${H.slice(-8).reverse().map(s => `<div class="lrow static"><span class="lic">•</span><span class="lt"><b class="num">${s.sets.map(z => (isW(z) ? 'W ' : '') + setTxt(z)).join(', ')}</b><small>${X.fmt(s.date)}</small></span></div>`).join('')}</div>` : ''}
   ${active() ? `<button class="btn primary block" data-act="tr-pickex" data-v="${id}">Add to this workout</button>` : ''}`;
   sheet(body(), x.name);
@@ -660,9 +655,9 @@ function finishWorkout() {
   const date = D(), d = X.dayDoc(date), w = d.wo; if (!w) return;
   if (!w.ex.some(e => e.sets.some(s => s.done))) { if (!confirm('No sets ticked. End this workout without saving it?')) return; delete d.wo; X.saveDay(date); RS = null; saveRS(); notifyClear(); return X.draw(); }
   w.t1 = Date.now(); w.ex.forEach(e => e.sets = e.sets.filter(s => s.done || s.kg || s.r)); w.ex = w.ex.filter(e => e.sets.length);
-  const t = T(), idx = t.routines.findIndex(r => r.id === w.rid); if (idx >= 0) { t.next = (idx + 1) % t.routines.length; X.saveSettings(); }
+  const t = T() || {}, idx = t.routines ? t.routines.findIndex(r => r.id === w.rid) : -1; if (idx >= 0) { t.next = (idx + 1) % t.routines.length; X.saveSettings(); }
   if (!d.trainingDone) { d.trainingDone = true; d.trainingSource = 'workout'; }
-  RS = null; overT = null; saveRS(); notifyClear();
+  RS = null; overT = null; saveRS(); notifyClear(); RKC = null;
   X.saveDay(date); X.buzz([30, 40, 80]); X.draw(); openSummary(date);
 }
 function tickSet(i, j, fromNotif) {
@@ -739,7 +734,7 @@ export async function act(a, v, b) {
     case 'tr-eadd': return openLibPick('edit');
     case 'tr-pickex': {
       if (S.trImpFix) { S.trImp.names[S.trImpFix] = { id: v, sc: 1 }; S.trImpFix = null; S.trPick = null; return drawImport(); }
-      if (S.trPick === 'edit' && S.trEdit) { const x = ex(v), iso = x.mech === 'isolation'; S.trEdit.ex.push({ id: v, sets: 3, lo: TIMED.has(v) ? 20 : iso ? 10 : 8, hi: TIMED.has(v) ? 45 : iso ? 15 : 12 }); S.trPick = null; return drawEdit(); }
+      if (S.trPick === 'edit' && S.trEdit) { const x = ex(v), iso = x.mech === 'isolation'; S.trEdit.ex.push({ id: v, sets: 3, lo: isTimed(v) ? 20 : iso ? 10 : 8, hi: isTimed(v) ? 45 : iso ? 15 : 12 }); S.trPick = null; return drawEdit(); }
       const w = active(); if (!w) return X.closeSheet();
       const x = ex(v), iso = x.mech === 'isolation'; w.ex.push({ id: v, lo: iso ? 10 : 8, hi: iso ? 15 : 12, sets: [{}, {}, {}] }); w.cur = w.ex.length - 1; S.trPick = null; X.saveDay(D()); X.closeSheet(); return X.draw();
     }
@@ -801,7 +796,7 @@ export function change(el) {
   if (el.dataset.trc) { const t = T(), k = el.dataset.trc; t.cardio[k] = k === 'min' ? +el.value : el.value; X.saveSettings(); return true; }
   return false;
 }
-export function todayLine() { const t = T(), d = X.S.days[D()] || {}; if (!t || !t.routines) return null; if (d.wo && d.wo.t1 && !d.wo.imported) return { done: true, name: d.wo.name }; if (active()) return { live: true, name: active().name }; const r = nextRoutine(); return r ? { name: r.name, n: r.ex.length } : null; }
+export function todayLine() { const t = T(), d = X.S.days[D()] || {}; if (CA() && C.trainType(X.S.settings, D()) === 'cali') { if (d.wo && d.wo.t1 && isCaliW(d.wo)) return { done: true, name: 'Calisthenics' }; if (active()) return { live: true, name: active().name }; return { name: 'Calisthenics', n: caliSession().length, cali: true }; } if (!t || !t.routines) return null; if (d.wo && d.wo.t1 && !d.wo.imported) return { done: true, name: d.wo.name }; if (active()) return { live: true, name: active().name }; const r = nextRoutine(); return r ? { name: r.name, n: r.ex.length } : null; }
 // month stats for the monthly report
 export function monthStats(from, to) {
   let wos = 0, vol = 0, recs = [], cmin = 0;
@@ -812,3 +807,155 @@ export function monthStats(from, to) {
   return { wos, vol, recs: recs.length, best3: best3.map(r => `${r.name} ${setTxt(r.s)}`), cmin, most: major.slice(0, 3).filter(m => m[1]).map(m => musL(m[0])), least: major.slice(-2).map(m => musL(m[0])) };
 }
 export { ex as exInfo, MUS_L, EQ_L, TIER_C };
+
+/* =====================================================================
+   Calisthenics: skill paths, a Recommended-Routine style session, level-ups, placement test
+   ===================================================================== */
+const S_ = (id, sets, lo, hi, extra = {}) => ({ id, sets, lo, hi, ...extra });
+const cx = (id, name, ph, pm, hold) => { CX[id] = { name, ph, pm, hold: !!hold }; return id; };
+export const PATHS = {
+  pull: { name: 'Pull', kind: 's', steps: [S_(cx('cx-hang', 'Dead hang + scap pulls', 'Scapular_Pull-Up', ['lats'], 1), 3, 20, 40), S_(cx('cx-negpull', 'Negative pull-up (5 s down)', 'Pullups', ['lats', 'biceps']), 3, 3, 5), S_('Band_Assisted_Pull-Up', 3, 5, 8), S_('Pullups', 3, 5, 8), S_(cx('cx-lpull', 'L-sit pull-up', null, ['lats', 'abdominals']), 3, 5, 8), S_(cx('cx-archpull', 'Archer pull-up', null, ['lats']), 3, 3, 5), S_(cx('cx-oapneg', 'One-arm pull-up negative', null, ['lats', 'biceps']), 3, 1, 3)] },
+  dip: { name: 'Dip', kind: 's', steps: [S_('Bench_Dips', 3, 8, 12), S_(cx('cx-negdip', 'Negative dip (5 s down)', 'Parallel_Bar_Dip', ['chest', 'triceps']), 3, 3, 5), S_('Parallel_Bar_Dip', 3, 5, 8), S_('Ring_Dips', 3, 5, 8), S_(cx('cx-wdip', 'Weighted dip', 'Dips_-_Chest_Version', ['chest', 'triceps']), 3, 5, 8)] },
+  legs: { name: 'Legs', kind: 's', steps: [S_('Bodyweight_Squat', 3, 10, 20), S_('Split_Squats', 3, 8, 12), S_(cx('cx-bss', 'Bulgarian split squat', 'Split_Squats', ['quadriceps', 'glutes']), 3, 8, 12), S_('Freehand_Jump_Squat', 3, 8, 12), S_(cx('cx-shrimp', 'Shrimp squat', null, ['quadriceps', 'glutes']), 3, 5, 8), S_(cx('cx-pistol', 'Pistol squat', null, ['quadriceps', 'glutes']), 3, 5, 8)] },
+  hinge: { name: 'Hinge', kind: 's', steps: [S_(cx('cx-bridge', 'Glute bridge', 'Butt_Lift_Bridge', ['glutes', 'hamstrings']), 3, 10, 15), S_('Single_Leg_Glute_Bridge', 3, 8, 12), S_('Hyperextensions_With_No_Hyperextension_Bench', 3, 8, 12), S_(cx('cx-nordneg', 'Nordic curl negative', null, ['hamstrings']), 3, 3, 5), S_(cx('cx-nordic', 'Nordic curl', null, ['hamstrings']), 3, 3, 5)] },
+  push: { name: 'Push', kind: 's', steps: [S_('Incline_Push-Up', 3, 8, 12), S_('Pushups', 3, 8, 12), S_(cx('cx-diamond', 'Diamond push-up', 'Push-Ups_-_Close_Triceps_Position', ['chest', 'triceps']), 3, 5, 8), S_('Decline_Push-Up', 3, 5, 8), S_(cx('cx-ppp', 'Pseudo planche push-up', null, ['chest', 'shoulders']), 3, 5, 8), S_(cx('cx-archpush', 'Archer push-up (each side)', null, ['chest']), 3, 4, 6), S_(cx('cx-oap', 'One-arm push-up', null, ['chest', 'triceps']), 3, 1, 5)] },
+  row: { name: 'Row', kind: 's', steps: [S_(cx('cx-incrow', 'Incline row (high bar)', 'Inverted_Row', ['middle back', 'lats']), 3, 8, 12), S_('Inverted_Row', 3, 8, 12), S_(cx('cx-ringrow', 'Ring row', 'Inverted_Row_with_Straps', ['middle back', 'lats']), 3, 8, 12), S_(cx('cx-archrow', 'Archer row (each side)', null, ['middle back', 'lats']), 3, 4, 6), S_(cx('cx-tflrow', 'Tuck front lever row', null, ['lats', 'middle back']), 3, 3, 5)] },
+  core: { name: 'Core', kind: 's', steps: [S_('Plank', 3, 30, 60), S_('Side_Bridge', 3, 20, 40), S_(cx('cx-hollow', 'Hollow body hold', null, ['abdominals'], 1), 3, 15, 30), S_(cx('cx-hkr', 'Hanging knee raise', 'Hanging_Leg_Raise', ['abdominals']), 3, 8, 12), S_('Hanging_Leg_Raise', 3, 5, 10), S_(cx('cx-dflag', 'Dragon flag negative', null, ['abdominals']), 3, 3, 5)] },
+  handstand: { name: 'Handstand', kind: 'k', steps: [S_(cx('cx-wallplank', 'Wall plank (feet on wall)', null, ['shoulders'], 1), 3, 20, 40), S_(cx('cx-c2w', 'Chest-to-wall handstand', null, ['shoulders'], 1), 3, 20, 45), S_(cx('cx-kick', 'Kick-up to freestanding (attempts)', null, ['shoulders']), 3, 5, 10), S_(cx('cx-free', 'Freestanding handstand', null, ['shoulders'], 1), 3, 10, 30), S_(cx('cx-hspu', 'Wall handstand push-up', 'Handstand_Push-Ups', ['shoulders', 'triceps']), 3, 3, 5)] },
+  lsit: { name: 'L-sit', kind: 'k', steps: [S_(cx('cx-supl', 'Foot-supported L-sit', null, ['abdominals'], 1), 3, 10, 20), S_(cx('cx-tuckl', 'Tuck L-sit', null, ['abdominals'], 1), 3, 10, 20), S_(cx('cx-onel', 'One-leg L-sit', null, ['abdominals'], 1), 3, 10, 20), S_(cx('cx-lsit', 'L-sit', null, ['abdominals'], 1), 3, 10, 20), S_(cx('cx-vsit', 'V-sit', null, ['abdominals'], 1), 3, 5, 10)] },
+  flever: { name: 'Front lever', kind: 'k', steps: [S_(cx('cx-tfl', 'Tuck front lever', null, ['lats'], 1), 3, 8, 15), S_(cx('cx-atfl', 'Advanced tuck front lever', null, ['lats'], 1), 3, 8, 15), S_(cx('cx-olfl', 'One-leg front lever', null, ['lats'], 1), 3, 6, 12), S_(cx('cx-sfl', 'Straddle front lever', null, ['lats'], 1), 3, 5, 10), S_(cx('cx-ffl', 'Front lever', null, ['lats'], 1), 3, 3, 8)] },
+  planche: { name: 'Planche', kind: 'k', steps: [S_(cx('cx-plean', 'Planche lean', null, ['shoulders'], 1), 3, 15, 30), S_(cx('cx-frog', 'Frog stand', null, ['shoulders'], 1), 3, 15, 30), S_(cx('cx-tpl', 'Tuck planche', null, ['shoulders'], 1), 3, 8, 15), S_(cx('cx-atpl', 'Advanced tuck planche', null, ['shoulders'], 1), 3, 8, 15), S_(cx('cx-spl', 'Straddle planche', null, ['shoulders'], 1), 3, 5, 10)] },
+  muscleup: { name: 'Muscle-up', kind: 'k', steps: [S_(cx('cx-hipull', 'Explosive high pull-up', 'Pullups', ['lats']), 3, 3, 5), S_(cx('cx-c2b', 'Chest-to-bar pull-up', 'Pullups', ['lats']), 3, 3, 5), S_(cx('cx-muneg', 'Muscle-up negative', 'Muscle_Up', ['lats', 'triceps']), 3, 2, 3), S_('Kipping_Muscle_Up', 3, 1, 3), S_(cx('cx-mu', 'Strict muscle-up', 'Muscle_Up', ['lats', 'triceps']), 3, 1, 3)] }
+};
+const STRENGTH_P = ['pull', 'dip', 'legs', 'hinge', 'push', 'row', 'core'], SKILL_P = ['handstand', 'lsit', 'flever', 'planche', 'muscleup'];
+const PAIRS = [['pull', 'dip'], ['legs', 'hinge'], ['push', 'row']];
+const CA = () => X.S.settings.cali;
+const atStep = p => Math.min((CA().at || {})[p] || 0, PATHS[p].steps.length - 1);
+const ytURL = name => `https://www.youtube.com/results?search_query=${encodeURIComponent(name + ' calisthenics tutorial form')}`;
+const stepName = st => ex(st.id).name;
+const targetTxt = st => `${st.sets} × ${st.lo === st.hi ? st.lo : st.lo + '–' + st.hi}${isTimed(st.id) ? ' s' : ''}`;
+const isCaliW = w => w && w.rid === 'cali';
+function stepBest(st) { const b = hist(st.id).flatMap(h => h.sets.filter(s => !isW(s))).reduce((a, s) => Math.max(a, s.r || 0), 0); return b || null; }
+function nodesHTML(p) {
+  const n = PATHS[p].steps.length, at = atStep(p);
+  return `<div class="nodes">${PATHS[p].steps.map((s, i) => `${i ? `<span class="ln${i <= at ? ' ok' : ''}"></span>` : ''}<span class="nd${i < at ? ' ok' : i === at ? ' cur' : ''}">${i + 1}</span>`).join('')}</div>`;
+}
+function caliTabHTML() {
+  const S = X.S;
+  if (!CA()) return `<section class="card trsetup"><span class="sub">Calisthenics</span><h3>Skill paths with your bodyweight</h3><p class="hint">Push, pull, legs and core, each as a path of steps from easy to hard, plus skills like handstand, L-sit, front lever, planche and muscle-up. You move up a step when you hit the top of the range on every set.</p>
+  <button class="btn primary block" data-act="ca-test">Take the 5-minute placement test</button><button class="btn block" data-act="ca-start1">Start everything at step 1</button></section>`;
+  const sess = caliSession(), mins = 10 + sess.length * 5;
+  let h = `<section class="cahero"><span class="sub">${esc(X.today() === D() ? 'Today' : 'Yesterday')}</span><h3>Calisthenics session · about ${mins} min</h3><div class="chipr">${PAIRS.map(([a, b]) => `<span>${esc(PATHS[a].name)} + ${esc(PATHS[b].name)}</span>`).join('')}<span>Core</span>${(CA().skills || []).map(k => `<span>${esc(PATHS[k].name)}</span>`).join('')}</div><button class="btn block gold" data-act="ca-go">Start session</button></section>`;
+  h += `<section class="card"><div class="spread"><h2 style="margin:0">Your skill paths</h2><button class="btn small ghost" data-act="ca-test">Retest</button></div>
+  ${[...STRENGTH_P, ...(CA().skills || [])].map(p => { const st = PATHS[p].steps[atStep(p)]; return `<button class="path" data-act="ca-path" data-v="${p}"><span class="ph2"><b>${esc(PATHS[p].name)}</b><small>step ${atStep(p) + 1} of ${PATHS[p].steps.length}${PATHS[p].kind === 'k' ? ' · skill' : ''}</small></span>${nodesHTML(p)}<span class="curname">Now: <b>${esc(stepName(st))}</b> · ${targetTxt(st)}</span></button>`; }).join('')}
+  ${SKILL_P.filter(k => !(CA().skills || []).includes(k)).length ? `<p class="hint" style="margin-top:10px">Add a skill path</p><div class="chips">${SKILL_P.filter(k => !(CA().skills || []).includes(k)).map(k => `<button data-act="ca-addskill" data-v="${k}">+ ${esc(PATHS[k].name)}</button>`).join('')}</div>` : ''}</section>`;
+  return h;
+}
+function caliSession() {
+  const out = [], push = (p, ss) => { const i = atStep(p), st = PATHS[p].steps[i]; out.push({ id: st.id, sets: st.sets, lo: st.lo, hi: st.hi, cp: p, cs: i, ...(ss ? { ss } : {}) }); };
+  (CA().skills || []).forEach(k => push(k));
+  PAIRS.forEach(([a, b], gi) => { push(a, 'P' + gi); push(b, 'P' + gi); });
+  push('core');
+  return out;
+}
+function startCali() {
+  if (!X.S.settings.train) { X.S.settings.train = { routines: null, cardio: cardioDefault('fit') }; X.saveSettings(); }
+  const d = X.dayDoc(D()), list = caliSession();
+  d.wo = { rid: 'cali', name: 'Calisthenics', t0: Date.now(), cur: 0, ex: list.map(e => ({ id: e.id, lo: e.lo, hi: e.hi, cp: e.cp, cs: e.cs, ...(e.ss ? { ss: e.ss } : {}), sets: Array.from({ length: e.sets }, () => ({})) })) };
+  X.saveDay(D()); X.toast('Calisthenics session started. Warm up for 5 minutes first: joint circles, scap shrugs, hollow rocks.'); X.draw(); window.scrollTo(0, 0); notifyWorking();
+}
+// shown inside the exercise card when a path step was beaten
+function levelUpHTML(e) {
+  if (!e.cp || !CA()) return '';
+  const work = e.sets.filter(s => !isW(s)); if (!work.length || !work.every(s => s.done && (s.r || 0) >= e.hi)) return '';
+  const P = PATHS[e.cp], at = atStep(e.cp);
+  if (at !== e.cs) return at > e.cs ? `<div class="lvup"><b>⬆ Moved up to step ${at + 1}</b><small>${esc(stepName(P.steps[at]))} from next session.</small></div>` : '';
+  if (e.cs >= P.steps.length - 1) return `<div class="lvup"><b>🏆 ${esc(P.name)} path complete</b><small>You hit the final step. Add reps or a harder variation.</small></div>`;
+  const nx = P.steps[e.cs + 1];
+  return `<div class="lvup"><b>⬆ Step ${e.cs + 2} unlocked: ${esc(stepName(nx))}</b><small>You hit ${targetTxt({ ...nx, sets: work.length, lo: e.hi, hi: e.hi, id: e.id })}. Move up for next session, or keep this step a little longer.</small><div class="row"><button class="btn small white" data-act="ca-up" data-v="${e.cp}:${e.cs + 1}">Move up</button><button class="btn small clear" data-act="ca-stay">Stay for now</button></div></div>`;
+}
+function openPath(p) {
+  const P = PATHS[p], at = atStep(p);
+  sheet(`<p class="hint">${P.kind === 'k' ? 'A skill path. Practise it at the start of the session while you are fresh.' : 'Unlock each step by hitting the top of the range on every set.'}</p>
+  <div class="card list2 flat steps">${P.steps.map((st, i) => { const x = ex(st.id), b = stepBest(st); return `<div class="step${i === at ? ' cur' : ''}"><span class="nd${i < at ? ' ok' : i === at ? ' cur' : ''}">${i + 1}</span>${x.img ? `<span class="sph${i > at ? ' lock' : ''}">${thumb(st.id)}</span>` : `<span class="sph none">no photo</span>`}<span class="lt"><b>${esc(x.name)}</b><small>${targetTxt(st)}${b ? ` · best ${b}${isTimed(st.id) ? ' s' : ''}` : ''}${i < at ? ' · done' : ''}</small><span class="row">${x.img ? `<button class="link" data-act="tr-exinfo" data-v="${st.id}">How to</button>` : ''}<a class="link" href="${ytURL(x.name)}" target="_blank" rel="noopener">▶ Form video</a>${i !== at ? `<button class="link" data-act="ca-set" data-v="${p}:${i}">Make this my step</button>` : ''}</span></span></div>`; }).join('')}</div>
+  ${P.kind === 'k' ? `<button class="btn block ghost danger" data-act="ca-rmskill" data-v="${p}">Remove this path</button>` : ''}`, `${P.name} path`);
+}
+function openTest() {
+  const f = (id, l, ph) => `<label class="tst"><span><b>${l}</b><small>${ph}</small></span><input class="in num" id="${id}" type="number" inputmode="numeric" min="0" placeholder="0"></label>`;
+  sheet(`<p class="hint">Do each one once, as many good reps as you can (or hold as long as you can), resting 2 minutes between. Leave a box empty if you can't do it.</p>
+  ${f('ct-push', 'Push-ups', 'max reps, chest to fist height')}${f('ct-pull', 'Pull-ups', 'max reps, chin over bar')}${f('ct-row', 'Inverted rows', 'only if you got 0 pull-ups')}${f('ct-dip', 'Dips', 'max reps on bars or chairs')}${f('ct-squat', 'Squats', 'max reps, thighs parallel')}${f('ct-plank', 'Plank', 'max seconds')}${f('ct-hang', 'Dead hang', 'max seconds')}
+  <button class="btn primary block" data-act="ca-place">Place me on every path</button>`, 'Placement test');
+}
+function place() {
+  const v = id => parseInt(($(id) || {}).value, 10) || 0, pu = v('ct-push'), pl = v('ct-pull'), rw = v('ct-row'), dp = v('ct-dip'), sq = v('ct-squat'), pk = v('ct-plank'), hg = v('ct-hang');
+  const at = {
+    push: pu === 0 ? 0 : pu < 10 ? 1 : pu < 20 ? 2 : pu < 30 ? 3 : 4,
+    pull: pl === 0 ? (hg < 20 ? 0 : rw >= 8 ? 2 : 1) : pl < 5 ? 3 : pl < 10 ? 3 : pl < 15 ? 4 : 5,
+    dip: dp === 0 ? 0 : dp < 5 ? 1 : dp < 12 ? 2 : 3,
+    row: pl >= 5 ? 2 : rw >= 8 || pl > 0 ? 1 : 0,
+    legs: sq < 20 ? 0 : sq < 40 ? 1 : 2,
+    hinge: sq >= 40 ? 1 : 0,
+    core: pk < 30 ? 0 : pk < 60 ? 1 : 2
+  };
+  X.S.settings.cali = { ...(CA() || {}), at, skills: (CA() && CA().skills) || [], placed: X.today() };
+  X.saveSettings(); X.closeSheet(); X.toast('Placed on every path. Your first session is ready.'); X.draw();
+}
+export async function caliAct(a, v) {
+  const S = X.S;
+  switch (a) {
+    case 'ca-test': return openTest();
+    case 'ca-place': return place();
+    case 'ca-start1': S.settings.cali = { at: {}, skills: [], placed: X.today() }; X.saveSettings(); return X.draw();
+    case 'ca-go': { await loadDB(); if (active() && !confirm(`Finish or end “${active().name}” first? This replaces it.`)) return; return startCali(); }
+    case 'ca-path': return openPath(v);
+    case 'ca-set': { const [p, i] = v.split(':'); CA().at = { ...(CA().at || {}), [p]: +i }; X.saveSettings(); X.toast(`${PATHS[p].name}: step ${+i + 1}.`); openPath(p); return X.draw(); }
+    case 'ca-addskill': CA().skills = [...new Set([...(CA().skills || []), v])]; X.saveSettings(); X.toast(`${PATHS[v].name} added. It goes at the start of each session.`); return X.draw();
+    case 'ca-rmskill': CA().skills = (CA().skills || []).filter(k => k !== v); X.saveSettings(); X.closeSheet(); return X.draw();
+    case 'ca-up': { const [p, i] = v.split(':'); CA().at = { ...(CA().at || {}), [p]: +i }; X.saveSettings(); X.buzz([30, 40, 80]); X.toast(`Step ${+i + 1}: ${stepName(PATHS[p].steps[+i])}. Next session uses it.`); return X.draw(); }
+    case 'ca-stay': X.toast('Staying on this step. Aim for clean reps.'); return;
+  }
+}
+
+/* =====================================================================
+   Ranks page: every rank, what it takes at your bodyweight, friends
+   ===================================================================== */
+const TSTART = [0, 150, 300, 450, 600, 750, 900], TRANGE = ['0–149', '150–299', '300–449', '450–599', '600–749', '750–899', '900+'];
+const TDESC = ['Just started. Log any main lift.', 'Beginner. Usually the first months of training.', 'Novice. Consistent training for a while.', 'Intermediate. Usually 1–2 years of steady training.', 'Advanced-intermediate. Usually 2–4 years of steady training.', 'Advanced. Years of focused training.', 'Elite. Competitive-level strength.'];
+function ratioAt(score, lv) { const A = [0, ...ANCH], R = [0, ...lv]; if (score >= 950) return lv[4] * (1 + 0.15 * (score - 950) / 100); for (let k = 1; k < A.length; k++) if (score <= A[k]) return R[k - 1] + (R[k] - R[k - 1]) * (score - A[k - 1]) / (A[k] - A[k - 1]); return lv[4]; }
+let RKC = null;
+const rankNow = () => { if (!RKC || Date.now() - RKC.t > 1500) RKC = { t: Date.now(), r: rankOf() }; return RKC.r; };
+export function rankChip() { const rk = X && X.S.settings && rankNow(); return rk ? `<button class="rkchip" data-act="tr-rank" style="--tc:${TIER_C[rk.ti]}" aria-label="Strength rank ${esc(rk.name)}">${miniShield(rk.ti)}<span>${esc(rk.name)}</span></button>` : ''; }
+export function rankRow() { const rk = rankNow(); return `<button class="lrow" data-act="tr-rank"><span class="lic rk" style="background:${rk ? TIER_C[rk.ti] : 'var(--surface-2)'}">${miniShield(rk ? rk.ti : 0, 16)}</span><span class="lt"><b>Strength rank${rk ? ': ' + esc(rk.name) : ''}</b><small>${rk ? (rk.next ? `${rk.next} points to the next step · ${rk.lifts} lifts ranked` : 'Top rank') : 'Log a main lift to get ranked'}</small></span><span class="le">›</span></button>`; }
+const miniShield = (ti, s = 15) => `<svg width="${s}" height="${s * 1.12}" viewBox="0 0 96 108" aria-hidden="true"><path d="M48 4l40 16v34c0 26-18 42-40 50C26 96 8 80 8 54V20z" fill="${ti == null ? '#C5CDDB' : TIER_C[ti]}" stroke="#fff" stroke-width="6"/></svg>`;
+function needsFor(ti) {
+  const bwKg = X.curWeight() || X.S.settings.startWeight || 80, fem = X.S.settings.sex === 'f', rk = rankNow(), mine = {};
+  (rk ? rk.list : []).forEach(l => mine[l.k] = l);
+  const sc = TSTART[ti] || 1;
+  return ['bench', 'squat', 'dead', 'ohp', 'row', 'pulldown', 'legpress', 'dbbench', 'dbsp', 'pullup', 'dips', 'pushup'].map(k => { const [name, , m, f, reps] = STD[k], r = ratioAt(sc, fem ? f : m), need = reps ? Math.max(1, Math.round(r)) : Math.round(r * bwKg / 2.5) * 2.5, me = mine[k], you = me ? (reps ? me.reps : me.e1) : null; return { name, need, reps, you, ok: you != null && you >= need }; });
+}
+function openRank(tab, tier) {
+  const S = X.S; S.rkTab = tab || S.rkTab || 'all';
+  const rk = rankNow(), t = S.rkTab;
+  if (tier != null) {
+    const bw = X.curWeight() || S.settings.startWeight || 80;
+    return sheet(`<div class="tierhd">${badgeSVG({ ti: tier, name: TIERS[tier] }, 58)}<div><p class="hint">Score ${TRANGE[tier]} · ${esc(TDESC[tier])}</p></div></div>
+    <p class="hint" style="margin:12px 0 4px;font-weight:700;color:var(--ink)">What ${esc(TIERS[tier])} needs at ${C.round(bw, 1)} kg bodyweight</p>
+    <div class="needs">${needsFor(tier).map(n => `<div class="need"><span>${esc(n.name)}</span><span class="sub">${n.you != null ? `you ${n.you}` : '—'}</span><b class="${n.ok ? 'up' : n.you != null ? 'dn' : ''}">${n.ok ? '✓ ' : ''}${n.need}${n.reps ? ' reps' : ' kg'}</b></div>`).join('')}</div>
+    <p class="hint" style="margin-top:10px">Weights are estimated 1-rep maxes. Your overall rank is the average of the lifts you have logged, so adding lifts you are good at counts too.</p>
+    <button class="btn block" data-act="rk-tab" data-v="all">‹ All ranks</button>`, TIERS[tier]);
+  }
+  const head = rk ? `<div class="rkhead">${badgeSVG(rk, 74)}<h3>${esc(rk.name)}</h3><p class="hint">Score ${rk.score} of 1,000 · average of ${rk.lifts} lift${rk.lifts > 1 ? 's' : ''}</p><div class="rkbar"><i style="width:${Math.min(100, (rk.score - TSTART[rk.ti]) / 150 * 100)}%;background:${TIER_C[rk.ti]}"></i></div><p class="hint">${rk.next ? `${rk.next} points to the next step${rk.ti < 6 ? ` · ${TSTART[rk.ti + 1] - rk.score} to ${TIERS[rk.ti + 1]}` : ''}` : 'Top rank'}</p></div>` : `<div class="rkhead"><p class="hint">Log a main lift (bench, squat, deadlift, rows, presses, pull-ups, dips or push-ups) in a workout to get your rank.</p></div>`;
+  const tabs = `<div class="seg wide">${[['all', 'All ranks'], ['mine', 'My lifts'], ['friends', 'Friends']].map(([k, l]) => `<button data-act="rk-tab" data-v="${k}" aria-pressed="${t === k}">${l}</button>`).join('')}</div>`;
+  let body = '';
+  if (t === 'all') {
+    const fr = (X.friends ? X.friends() : []).filter(m => !m.me && m.rk), bw = X.curWeight() || S.settings.startWeight || 80, fem = S.settings.sex === 'f';
+    body = `<div class="card list2 flat">${[6, 5, 4, 3, 2, 1, 0].map(i => { const ex3 = i ? ['bench', 'squat', 'dead'].map(k => `${STD[k][0].split(' ')[0]} ${Math.round(ratioAt(TSTART[i], fem ? STD[k][3] : STD[k][2]) * bw / 2.5) * 2.5}`).join(' · ') + ' kg' : 'Any logged main lift'; const here = rk && rk.ti === i, fs = fr.filter(m => m.rk.ti === i); return `<button class="lad${here ? ' me' : ''}" data-act="rk-tier" data-v="${i}">${badgeSVG({ ti: i, name: TIERS[i] }, 34)}<span class="lt"><b>${TIERS[i]} <em>${TRANGE[i]}</em></b><small>${esc(ex3)}</small></span><span class="lade">${here ? `<span class="here">You · ${esc(rk.name.split(' ')[1] || '')}</span>` : ''}${fs.map(m => `<span class="av">${esc((m.name || '?')[0].toUpperCase())}</span>`).join('')}${!here && !fs.length ? '›' : ''}</span></button>`; }).join('')}</div><p class="hint">Example weights are estimated 1-rep maxes at your bodyweight. Tap a rank for every lift.</p>`;
+  } else if (t === 'mine') {
+    body = rk ? `<div class="card list2 flat">${rk.list.map(l => `<div class="liftr"><b>${esc(l.name)}</b><span class="tag" style="background:${TIER_C[l.ti]}">${esc(tierOf(l.sc).name)}</span><span class="tb"><i style="width:${Math.min(100, l.sc / 10.5)}%;background:${TIER_C[l.ti]}"></i></span><small>${l.e1 ? `${l.e1} kg 1-rep max est. · ${l.ratio} × bodyweight` : `${l.reps} reps`} · ${esc(l.level)}</small></div>`).join('')}</div><p class="hint">Warm-ups and sets over 12 reps don't count. Bodyweight comes from your latest weigh-in. Levels follow common strength standards and are a guide, not a test.</p>` : '';
+  } else {
+    const fr = (X.friends ? X.friends() : []).filter(m => m.rk).sort((a, b) => b.rk.score - a.rk.score);
+    body = !X.S.settings.group ? `<p class="hint">Join or create a group in Progress → Friends to compare ranks.</p>` : fr.length ? `<div class="card list2 flat">${fr.map(m => `<div class="lad static${m.me ? ' me' : ''}">${badgeSVG({ ti: m.rk.ti, name: m.rk.name }, 34)}<span class="lt"><b>${esc(m.name)}${m.me ? ' (you)' : ''}</b><small>${m.rk.best ? 'Best: ' + esc(m.rk.best) : ''}</small></span><b class="num">${esc(m.rk.name)} · ${m.rk.score}</b></div>`).join('')}</div>` : `<p class="hint">No one in your group has a rank yet.</p>`;
+  }
+  sheet(head + tabs + body, 'Strength rank', 'rank');
+}
+export function rankAct(a, v) { if (a === 'rk-tab') return openRank(v); if (a === 'rk-tier') return openRank(null, +v); }

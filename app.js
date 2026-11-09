@@ -4,7 +4,7 @@ import { initializeFirestore, getFirestore, persistentLocalCache, persistentMult
 import * as C from './core.js';
 import { trText, addFoodNames } from './i18n.js';
 import * as TR from './train.js';
-const APP_VERSION = '18 · rest timer, ranks, league';
+const APP_VERSION = '19 · calisthenics, ranks page';
 import { EX, POSE, figSVG, YT, LINES, FOODS, COACH_MEALS, DEFAULT_SUPPS, SLOTS, CARDIO_MODES } from './data.js';
 addFoodNames(FOODS);
 
@@ -32,7 +32,7 @@ catch (e) { db = getFirestore(fbApp); }
 const S = {
   user: null, authReady: false, settings: null, days: {}, checkins: {}, foods: {}, acts: {}, photos: {}, meta: {},
   got: { settings: false, days: false }, pend: { s: false, d: false }, online: navigator.onLine,
-  view: 'today', trainTab: 'cali', phase: null, editDate: null, openMeal: null, confirm: null, deferred: false, unsub: [], photosOn: false, cut: 50, board: {}, boardCode: null, boardUnsub: null, boardLast: null
+  view: 'today', trainTab: null, phase: null, editDate: null, openMeal: null, confirm: null, deferred: false, unsub: [], photosOn: false, cut: 50, board: {}, boardCode: null, boardUnsub: null, boardLast: null
 };
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -236,8 +236,10 @@ function welcomeHTML() {
   <input id="imp-file" type="file" accept="application/json,.json" hidden></section>`;
 }
 /* The coach's meal plan and supplement stack are Hassan's. Everyone else starts blank and builds their own. */
-const OWNER = 'hassan.abdelshafy14@gmail.com';
-const isOwner = () => !!(S.user && String(S.user.email || '').toLowerCase() === OWNER);
+// the owner is recognised by a hash of their email, so the address never appears in this public code
+const OWNER_H = '25bbdd0985a3bd037c694f00ed3a9ee8b2d6536e26a917f230affc7600ec1f2e';
+const isOwner = () => !!(S.user && S.ownerFor === S.user.uid && S.ownerOk);
+async function checkOwner(u) { S.ownerFor = u ? u.uid : null; S.ownerOk = false; if (!u || !u.email || !crypto.subtle) return; try { const b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(u.email.trim().toLowerCase())); S.ownerOk = [...new Uint8Array(b)].map(x => x.toString(16).padStart(2, '0')).join('') === OWNER_H; if (S.ownerOk) draw(); } catch (e) { } }
 const BLANK_MEALS = () => { const ar = LANG() === 'ar'; return [{ id: 'b', name: ar ? 'الفطار' : 'Breakfast', time: '09:00', items: [] }, { id: 'l', name: ar ? 'الغدا' : 'Lunch', time: '14:00', items: [] }, { id: 'd', name: ar ? 'العشا' : 'Dinner', time: '20:00', items: [] }]; };
 const STARTER_SUPPS = ['Creatine', 'Omega 3', 'Multivitamin', 'Vitamin D', 'Whey protein', 'Magnesium'];
 const mealSig = ms => JSON.stringify((ms || []).map(m => [m.id, (m.items || []).map(i => `${i.fid}:${i.g}`)]));
@@ -246,6 +248,7 @@ const COACH_SIG = mealSig(COACH_MEALS);
 function privacyMigrate() {
   const st = S.settings;
   if (isOwner() || !st || st.privMig || !S.got.days) return;
+  if (!COACH_MEALS.length) { st.privMig = 1; saveSettings(); return; }
   const strip = ms => ms.map(m => ({ ...m, items: [] }));
   if (mealSig(st.meals) === COACH_SIG) st.meals = strip(st.meals);
   Object.keys(st.planLog || {}).forEach(k => { if (mealSig(st.planLog[k]) === COACH_SIG) st.planLog[k] = strip(st.planLog[k]); });
@@ -261,7 +264,7 @@ function newSettings(o = {}) {
   return {
     startDate: o.startDate || today(), waterGoal: o.waterGoal || 4000, startWeight: o.startWeight || null, goalWeight: o.goalWeight || null,
     plan: { ...C.DEFAULT_PLAN }, gymTime: 'am',
-    meals: isOwner() ? clone(COACH_MEALS) : BLANK_MEALS(), planLog: { [o.startDate || today()]: isOwner() ? clone(COACH_MEALS) : BLANK_MEALS() }, supps: isOwner() ? clone(DEFAULT_SUPPS) : [], stamina: { on: true, days: [1, 3, 5] }, privMig: 1,
+    meals: isOwner() && COACH_MEALS.length ? clone(COACH_MEALS) : BLANK_MEALS(), planLog: { [o.startDate || today()]: isOwner() && COACH_MEALS.length ? clone(COACH_MEALS) : BLANK_MEALS() }, supps: isOwner() ? clone(DEFAULT_SUPPS) : [], stamina: { on: true, days: [1, 3, 5] }, privMig: 1,
     reminders: Object.fromEntries(REMINDERS.map(r => [r[0], r[0] !== 'meals'])), created: new Date().toISOString(), lang: LANG()
   };
 }
@@ -410,6 +413,7 @@ async function startOverAct(act, v) {
       S.days[k] = nd; writes.push(['days/' + k, nd]);
     });
   }
+  if (o.wo) { Object.keys(S.acts || {}).forEach(k => { deleteDoc(doc(db, up('activities/' + k))).catch(() => { }); delete S.acts[k]; }); }
   if (o.body) { Object.keys(S.checkins || {}).forEach(k => { writes.push(['checkins/' + k, { deleted: true }]); delete S.checkins[k]; }); Object.keys(S.photos || {}).forEach(k => { writes.push(['photos/' + k, { deleted: true }]); delete S.photos[k]; }); }
   if (o.plans) { st.meals = []; st.supps = []; st.train = null; st.ifthen = []; st.focus = {}; st.planNoted = false; }
   st.attemptBase = (st.attemptBase || 0) + R.attemptNo; st.startDate = t; delete st.attemptStart;
@@ -588,7 +592,7 @@ const weekStart = d => C.addDays(d, -((C.weekday(d) + 1) % 7));
 function chalNow() { const ws = weekStart(today()), i = Math.floor(C.diffDays('2026-01-03', ws) / 7) % CHAL.length; return { ws, c: CHAL[(i + CHAL.length) % CHAL.length] }; }
 function myWeekStats() {
   const ws = weekStart(today()); let water = 0, active = 0, locked = 0, sl = 0, sn = 0;
-  for (let dt = ws; dt <= today(); dt = C.addDays(dt, 1)) { const d = S.days[dt] || {}; water += C.waterTotal(d); active += (d.sports || []).reduce((s, x) => s + (x.min || 0), 0) + (d.stamina || []).reduce((s, x) => s + (x.min || 0), 0); if (C.evalDay(S.settings, d, dt).complete) locked++; if (d.sleep) { sl += d.sleep; sn++; } }
+  for (let dt = ws > S.settings.startDate ? ws : S.settings.startDate; dt <= today(); dt = C.addDays(dt, 1)) { const d = S.days[dt] || {}; water += C.waterTotal(d); active += (d.sports || []).reduce((s, x) => s + (x.min || 0), 0) + (d.stamina || []).reduce((s, x) => s + (x.min || 0), 0); if (C.evalDay(S.settings, d, dt).complete) locked++; if (d.sleep) { sl += d.sleep; sn++; } }
   return { k: ws, water: Math.round(water / 500) / 2, active, locked, sleep: sn ? Math.round(sl / sn * 2) / 2 : 0 };
 }
 function challengeHTML() {
@@ -656,7 +660,7 @@ function ramadanHTML(date) {
 }
 
 /* ---------- page shells ---------- */
-const pageHead = (title, R) => `<header class="ph"><h1>${esc(title)}</h1><span class="hero-chips">${syncDot()}${flameChip(R)}</span></header>`;
+const pageHead = (title, R) => `<header class="ph"><h1>${esc(title)}</h1><span class="hero-chips">${syncDot()}${TR.rankChip()}${flameChip(R)}</span></header>`;
 const PTABS = [['week', 'Week'], ['muscles', 'Muscles'], ['body', 'Body'], ['chain', 'Chain'], ['friends', 'Friends']];
 function progressShell(G) {
   const tab = PTABS.some(p => p[0] === S.ptab) ? S.ptab : 'week';
@@ -675,10 +679,10 @@ function meHTML(R) {
   if (S.meSec && byTitle[S.meSec]) return `<header class="ph sub2"><button class="back" data-act="mesec" data-v="" aria-label="Back to Me">‹</button><h1>${esc(S.meSec)}</h1></header>` + byTitle[S.meSec];
   const st = S.settings, w = curWeight();
   const sum = { 'Meal plan': `${kc(C.sumItems((st.meals || []).flatMap(m => m.items || [])).k)} kcal · ${(st.meals || []).length} meals`, 'Supplements': `${(st.supps || []).filter(s => s.req).length} core`, 'Ramadan mode': st.ramadan && st.ramadan.on ? 'On' : 'Off', 'If-then plans': `${(st.ifthen || []).length} saved`, 'Coach link': st.coach ? 'Sharing' : 'Off', 'Reminders': pushState() === 'on' ? 'App notifications on' : st.ntfyTopic ? 'ntfy' : 'Not set up', 'Stamina track': (st.stamina || {}).on === false ? 'Off' : 'On', 'Weekly training': '' };
-  let h = `<header class="ph"><h1>Me</h1><span class="hero-chips">${syncDot()}${flameChip(R)}</span></header>
+  let h = `<header class="ph"><h1>Me</h1><span class="hero-chips">${syncDot()}${TR.rankChip()}${flameChip(R)}</span></header>
   <section class="card me-card"><div class="me-top"><span class="avatar">${esc((boardName() || '?').slice(0, 1).toUpperCase())}</span><span><b>${esc(boardName())}</b><small>Day ${Math.min(R.dayNum, 90)} of 90 · attempt ${R.attemptNo}</small></span></div>
   <div class="me-stats"><span><b class="num">${w ? C.round(w, 1) : '—'}</b><small>kg now</small></span><span><b class="num">${st.goalWeight || '—'}</b><small>kg goal</small></span><span><b class="num">${L(st.waterGoal || 3500)}</b><small>L water</small></span></div>
-  <button class="btn block" data-act="mesec" data-v="Challenge">Edit goals and body</button></section>`;
+  <button class="btn block" data-act="mesec" data-v="Challenge">Edit goals and body</button><div class="card list2 flat">${TR.rankRow()}</div></section>`;
   ME_GROUPS.forEach(([g, items]) => { const its = items.filter(([k]) => byTitle[k]); if (!its.length) return; h += `<h3 class="grp">${g}</h3><section class="card list2">${its.map(([k, ic]) => `<button class="lrow" data-act="mesec" data-v="${esc(k)}"><span class="lic">${ic}</span><span class="lt"><b>${esc(k)}</b>${sum[k] ? `<small>${esc(sum[k])}</small>` : ''}</span><span class="le">›</span></button>`).join('')}</section>`; });
   return h + `<p class="hint center">Signed in as ${esc(S.user.email || '')} · <button class="link" data-act="signout">Sign out</button><br><span class="num">App version ${APP_VERSION}</span></p>`;
 }
@@ -746,8 +750,9 @@ function sportsListHTML(date, d) {
 }
 function activityWeek() {
   const t = today(); let min = 0, kcal = 0, mod = 0, n = 0;
-  for (let i = 0; i < 7; i++) { const d = S.days[C.addDays(t, -i)]; (d && d.sports || []).forEach(s => { n++; min += s.min || 0; kcal += s.kcal || 0; mod += C.sportModMin(s); }); }
-  const from = C.addDays(t, -6);
+  // only the current attempt counts, so a fresh start begins at 0
+  const st0 = S.settings.startDate || t, from = C.addDays(t, -6) > st0 ? C.addDays(t, -6) : st0;
+  for (let i = 0; i < 7; i++) { const dt = C.addDays(t, -i); if (dt < from) break; const d = S.days[dt]; (d && d.sports || []).forEach(s => { n++; min += s.min || 0; kcal += s.kcal || 0; mod += C.sportModMin(s); }); }
   stamSessions(from, t).forEach(s => { min += s.min || 0; mod += (s.min || 0) * (s.kind === 'intervals' ? 2 : 1); });
   return { n, min, kcal, mod };
 }
@@ -866,7 +871,7 @@ function todayHTML(R) {
   ];
   const dayNo = Math.min(R.dayNum, 90);
   let h = `<section class="hero${ev.complete ? ' locked' : ''}">
-  <div class="hero-top"><span>${esc(C.DAYNAMES[C.weekday(date)])}, ${fmt(date)}</span><span class="hero-chips">${syncDot()}${flameChip(R)}</span></div>
+  <div class="hero-top"><span>${esc(C.DAYNAMES[C.weekday(date)])}, ${fmt(date)}</span><span class="hero-chips">${syncDot()}${TR.rankChip()}${flameChip(R)}</span></div>
   ${grace ? `<div class="hero-seg" role="group" aria-label="Day being edited"><button data-act="editdate" data-v="${grace}" aria-pressed="${date === grace}">Yesterday</button><button data-act="editdate" data-v="${t}" aria-pressed="${date === t}">Today</button></div>` : ''}
   <div class="hero-row"><div class="rings" role="img" aria-label="Day ${dayNo} of 90, ${pills.filter(p => p.ok).length} of 4 pillars done">${ringsSVG(parts, mealsBad)}<div class="rings-c"><b class="num">${dayNo}</b><span>of 90</span></div></div>
   <div class="pills">${pills.map(p => `<button class="pill2 ${p.k}${p.ok ? ' ok' : ''}${p.bad ? ' bad' : ''}" data-act="panel" data-v="${p.k}"><i aria-hidden="true"></i><span>${esc(p.name)}</span><em class="num">${p.ok ? '✓ ' : ''}${esc(p.val)}</em></button>`).join('')}</div></div>
@@ -1108,7 +1113,7 @@ function weekReview() {
     const tot = C.dayTotals(st, day); if (tot.k > 0) { const tg = C.planTargets(st, day, d); kS += tot.k; pS += tot.p; tkS += tg.k; tpS += tg.p; nN++; }
     if (day.sleep) { sl += day.sleep; slN++; if (day.sleep >= (st.sleepGoal || 7.5)) slG++; }
   });
-  const cardio = stamSessions(days[0], t).reduce((s, x) => s + (x.min || 0), 0);
+  const cardio = stamSessions(days[0] > st.startDate ? days[0] : st.startDate, t).reduce((s, x) => s + (x.min || 0), 0);
   const worst = Object.entries(miss).sort((a, b) => b[1] - a[1])[0];
   const wAvg = (end) => { const v = []; for (let i = 0; i < 7; i++) { const dd = S.days[C.addDays(end, -i)]; if (dd && dd.weight) v.push(dd.weight); } return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null; };
   const wNow = wAvg(t), wPrev = wAvg(C.addDays(t, -7));
@@ -1342,7 +1347,7 @@ function shoppingHTML(st) {
 
 /* ---------- food sheet ---------- */
 let SH = null; // {scope, picked, results, off}
-TR.initTrain({ get S() { return S; }, esc, toast, draw: () => draw(), saveDay: d => saveDay(d), saveSettings: () => saveSettings(), dayDoc: d => dayDoc(d), editDate: () => editDate(), today: () => today(), fmt: d => fmt(d), openTimer: (m, sec, e) => openTimer(m, sec, e), buzz: p => buzz(p), staminaHTML: () => staminaHTML(), beep: n => beep(n), curWeight: d => curWeight(d), isOwner: () => !!(S.user && (S.user.email || '').toLowerCase() === OWNER), focusHit: f => focusHit(f), setSH: o => { if (SH && SH.iv) clearInterval(SH.iv); SH = o; }, closeSheet: () => closeSheet() });
+TR.initTrain({ get S() { return S; }, esc, toast, draw: () => draw(), saveDay: d => saveDay(d), saveSettings: () => saveSettings(), dayDoc: d => dayDoc(d), editDate: () => editDate(), today: () => today(), fmt: d => fmt(d), openTimer: (m, sec, e) => openTimer(m, sec, e), buzz: p => buzz(p), staminaHTML: () => staminaHTML(), beep: n => beep(n), curWeight: d => curWeight(d), isOwner: () => !!(S.user && isOwner()), focusHit: f => focusHit(f), friends: () => friendRows(), setSH: o => { if (SH && SH.iv) clearInterval(SH.iv); SH = o; }, closeSheet: () => closeSheet() });
 function openSheet(scope) {
   SH = { scope, picked: null, results: [], off: scope === 'extra', mode: 'search', usda: [], stream: null };
   $('sheet').hidden = false;
@@ -1536,6 +1541,8 @@ document.addEventListener('click', async ev => {
   if (b.tagName === 'BUTTON') buzz(8);
   const act = b.dataset.act, v = b.dataset.v, D = editDate();
   if (act.startsWith('tr-')) return TR.act(act, v, b);
+  if (act.startsWith('ca-')) return TR.caliAct(act, v);
+  if (act.startsWith('rk-')) return TR.rankAct(act, v);
   switch (act) {
     case 'signin': return signin();
     case 'signup': return emailAuth(true);
@@ -2025,7 +2032,7 @@ function leagueSummary(R) {
   lgh[from] = lg.pts;
   const rk = TR.rankOf(), ms = today().slice(0, 8) + '01', rk0 = TR.rankOf(ms), dt = {};
   if (rk) rk.list.forEach(l => { if (['bench', 'squat', 'dead'].includes(l.k)) dt[l.k] = { d: l.dots, ...(st.showKg ? { kg: l.e1 } : {}) }; });
-  return { lg, lgh, rk: rk ? { score: rk.score, name: rk.name, ti: rk.ti } : null, dt, imp: rk && rk0 && rk0.score ? Math.round((rk.score - rk0.score) / rk0.score * 100) : rk && !rk0 ? null : 0, reset: st.resetNote || null };
+  return { lg, lgh, rk: rk ? { score: rk.score, name: rk.name, ti: rk.ti, best: rk.list[0] && rk.list[0].name } : null, dt, imp: rk && rk0 && rk0.score ? Math.round((rk.score - rk0.score) / rk0.score * 100) : rk && !rk0 ? null : 0, reset: st.resetNote || null };
 }
 const FTABS = [['league', 'League'], ['strength', 'Strength'], ['improved', 'Improved'], ['board', 'Board']];
 function friendsTabsHTML() {
@@ -2097,7 +2104,7 @@ if (pendingWo) history.replaceState(null, '', location.pathname + location.hash)
 if ('serviceWorker' in navigator) navigator.serviceWorker.addEventListener('message', e => { if (e.data && e.data.wo) { if (S.settings && S.got.days) TR.notifAction(e.data.wo); else pendingWo = e.data.wo; } });
 setInterval(() => { if (pendingWo && S.settings && S.got.days) { const a = pendingWo; pendingWo = null; TR.notifAction(a); } }, 500);
 onAuthStateChanged(auth, u => {
-  S.user = u; S.authReady = true;
+  S.user = u; S.authReady = true; checkOwner(u);
   if (u) subscribe(); else { S.settings = null; S.days = {}; S.got = { settings: false, days: false }; }
   draw();
 });
