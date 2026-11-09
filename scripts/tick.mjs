@@ -1,6 +1,9 @@
 // Runs every 30 minutes on GitHub Actions: syncs Strava, then sends smart reminders through ntfy.
 import admin from 'firebase-admin';
 import * as C from '../core.js';
+import { trText, addFoodNames } from '../i18n.js';
+import { FOODS } from '../data.js';
+addFoodNames(FOODS);
 
 const TZ = 'Africa/Cairo';
 const APP_URL = process.env.APP_URL || 'https://hassanabdelshafy21.github.io/Lock-in-90/';
@@ -13,7 +16,8 @@ const db = admin.firestore();
 let CURRENT_TOPIC = null;
 async function ntfy(title, body, { priority = 3, tags = '' } = {}) {
   if (!CURRENT_TOPIC) { console.log('[no topic for this user]', title); return; }
-  const r = await fetch(`https://ntfy.sh/${encodeURIComponent(CURRENT_TOPIC)}`, { method: 'POST', body, headers: { Title: title, Click: APP_URL, Priority: String(priority), Tags: tags } });
+  const t = /^[\x20-\x7E]*$/.test(title) ? title : `=?UTF-8?B?${Buffer.from(title, 'utf8').toString('base64')}?=`;
+  const r = await fetch(`https://ntfy.sh/${encodeURIComponent(CURRENT_TOPIC)}`, { method: 'POST', body, headers: { Title: t, Click: APP_URL, Priority: String(priority), Tags: tags } });
   console.log('ntfy', title, r.status);
 }
 
@@ -53,7 +57,7 @@ async function stravaSync(uid, settings) {
   for (const date of gymDates) {
     const ref = db.doc(`users/${uid}/days/${date}`);
     const snap = await ref.get();
-    if (!snap.exists || !snap.data().trainingDone) await ref.set({ date, trainingDone: true, trainingSource: 'strava' }, { merge: true });
+    if (!snap.exists || !snap.data().trainingDone) await ref.set({ date, trainingDone: true, trainingSource: 'strava', u: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
   }
   const count = (await db.collection(`users/${uid}/activities`).count().get()).data().count;
   await db.doc(`users/${uid}/meta/strava`).set({ ok: true, lastSync: new Date().toISOString(), count }, { merge: true });
@@ -87,8 +91,9 @@ async function reminders(uid, settings) {
   const rm = settings.reminders || {};
   const logRef = logRef0, sent = [...sent0];
   const L = ml => String(C.round(ml / 1000, 2));
+  const ar = settings.lang === 'ar', A = (en, a) => ar ? a : en, trl = s => ar ? (trText(s) ?? s) : s;
 
-  if (TEST) await ntfy('Lock In 90 test', `Notifications work. Day ${Math.min(R.dayNum, 90)} of 90, streak ${R.done}.`, { tags: 'white_check_mark' });
+  if (TEST) await ntfy(A('Lock In 90 test', 'تجربة Lock In 90'), A(`Notifications work. Day ${Math.min(R.dayNum, 90)} of 90, streak ${R.done}.`, `التنبيهات تعمل. اليوم ${Math.min(R.dayNum, 90)} من 90، السلسلة ${R.done}.`), { tags: 'white_check_mark' });
 
   // meal log reminders (opt-in): 45 min after each planned meal time if it isn't logged
   if (rm.meals === true) {
@@ -98,23 +103,28 @@ async function reminders(uid, settings) {
       const due = hh * 60 + (mm || 0) + 45, id = 'meal_' + m.id;
       if (sent.includes(id) || nowMin < due || nowMin > due + 150) continue;
       sent.push(id);
-      if (!(day.meals && day.meals[m.id] && day.meals[m.id].status)) await ntfy(`Log ${m.name}`, `${m.name} (${m.time}) isn't logged yet. One tap: As planned.`, { tags: 'fork_and_knife' });
+      if (!(day.meals && day.meals[m.id] && day.meals[m.id].status)) await ntfy(A(`Log ${m.name}`, `سجّل ${trl(m.name)}`), A(`${m.name} (${m.time}) isn't logged yet. One tap: As planned.`, `${trl(m.name)} (${m.time}) لم تُسجَّل بعد. نقرة واحدة: حسب الخطة.`), { tags: 'fork_and_knife' });
     }
   }
-  for (const r of LIST) {
+  const ram = C.inRamadan(settings, date);
+  const list = ram ? LIST.filter(r => r.key !== 'water' && r.key !== 'burner').concat([{ id: 'w20', key: 'water', t: at(20, 0) }, { id: 'w22', key: 'water', t: at(22, 0) }]) : LIST;
+  for (const r of list) {
     if (rm[r.key] === false || sent.includes(r.id)) continue;
     if (nowMin < r.t || nowMin > r.t + 150) continue;
     let msg = null;
     if (r.key === 'morning') {
       const tt = C.trainType(settings, date);
-      msg = [`Day ${Math.min(R.dayNum, 90)} of 90`, `${C.DAYNAMES[C.weekday(date)]}: ${C.TT[tt].label}. Water goal ${L(settings.waterGoal || 3500)} L.`, R.critical ? 'Yesterday broke the chain. Never miss twice.' : `Streak ${R.done}.`, { tags: 'sunrise' }];
+      const dn = Math.min(R.dayNum, 90), wg = L(settings.waterGoal || 3500);
+      msg = [A(`Day ${dn} of 90${ram ? ' · Ramadan Kareem' : ''}`, `اليوم ${dn} من 90${ram ? ' · رمضان كريم' : ''}`),
+        A(`${C.DAYNAMES[C.weekday(date)]}: ${C.TT[tt].label}. Water goal ${wg} L.\n${R.critical ? 'Yesterday broke the chain. Never miss twice.' : `Streak ${R.done}.`}`,
+          `${trl(C.DAYNAMES[C.weekday(date)])}: ${trl(C.TT[tt].label)}. هدف المياه ${wg} لتر.\n${R.critical ? 'أمس انكسرت السلسلة. لا تفوّت مرتين.' : `السلسلة ${R.done}.`}`), { tags: 'sunrise' }];
     } else if (r.key === 'water') {
       const goal = settings.waterGoal || 3500, w = C.waterTotal(day);
-      const expected = goal * Math.min(1, Math.max(0, (nowMin - at(8, 0)) / (at(22, 0) - at(8, 0))));
-      if (w < expected - 500) msg = ['Water check', `${L(w)} L so far. Aim for about ${L(Math.round(expected / 250) * 250)} L by now.`, { tags: 'droplet' }];
+      const expected = goal * C.waterPace(settings, date, nowMin);
+      if (w < expected - 500) msg = [A('Water check', 'تذكير المياه'), A(`${L(w)} L so far. Aim for about ${L(Math.round(expected / 250) * 250)} L by now.`, `${L(w)} لتر حتى الآن. الهدف حوالي ${L(Math.round(expected / 250) * 250)} لتر الآن.`), { tags: 'droplet' }];
     } else if (r.key === 'burner') {
       const sp = day.supps || {};
-      if (sp.burner && !sp.burner2 && (settings.supps || []).some(s => s.id === 'burner2')) msg = ['Fat burner cutoff', 'Last window for cap 2 today. Nothing within 5 hours of bed.', { tags: 'hourglass' }];
+      if (sp.burner && !sp.burner2 && (settings.supps || []).some(s => s.id === 'burner2')) msg = [A('Fat burner cutoff', 'آخر موعد لحارق الدهون'), A('Last window for cap 2 today. Nothing within 5 hours of bed.', 'آخر فرصة للكبسولة 2 اليوم. لا شيء قبل النوم بـ5 ساعات.'), { tags: 'hourglass' }];
     } else if (r.key === 'stamina') {
       const st = settings.stamina || {};
       if (st.on !== false && (st.days || []).includes(C.weekday(date))) {
@@ -122,14 +132,14 @@ async function reminders(uid, settings) {
         const cardio = actsSnap.docs.some(d => C.CARDIO_TYPES.includes(d.data().type));
         if (!cardio && !(day.stamina || []).length) {
           const week = Math.floor(C.diffDays(settings.startDate, date) / 7) + 1, wk = C.staminaWeek(Math.min(week, 12));
-          msg = ['Stamina today', `${wk.phase} week ${week}: ${wk.sessions[0].text} on a machine after lifting. Optional, but it adds up.`, { tags: 'runner' }];
+          msg = [A('Stamina today', 'التحمل اليوم'), A(`${wk.phase} week ${week}: ${wk.sessions[0].text} on a machine after lifting. Optional, but it adds up.`, `الأسبوع ${week}: ${trl(wk.sessions[0].text)} على جهاز بعد الحديد. اختياري، لكنه يفرق.`), { tags: 'runner' }];
         }
       }
     } else if (r.key === 'evening') {
-      msg = ev.complete ? ['Locked in', `Day ${Math.min(R.dayNum, 90)} is done. Streak ${R.done}.`, { tags: 'lock' }]
-        : [`${ev.missing.length} thing${ev.missing.length === 1 ? '' : 's'} left today`, ev.missing.join('\n'), { tags: 'warning', priority: 4 }];
+      msg = ev.complete ? [A('Locked in', 'مكتمل'), A(`Day ${Math.min(R.dayNum, 90)} is done. Streak ${R.done}.`, `اليوم ${Math.min(R.dayNum, 90)} اكتمل. السلسلة ${R.done}.`), { tags: 'lock' }]
+        : [A(`${ev.missing.length} thing${ev.missing.length === 1 ? '' : 's'} left today`, `متبقٍ ${ev.missing.length} اليوم`), ev.missing.map(trl).join('\n'), { tags: 'warning', priority: 4 }];
     } else if (r.key === 'final') {
-      if (!ev.complete) msg = ['1 hour left', `Missing: ${ev.missing.join(', ')}`, { tags: 'rotating_light', priority: 5 }];
+      if (!ev.complete) msg = [A('1 hour left', 'باقي ساعة'), A(`Missing: ${ev.missing.join(', ')}`, `ناقص: ${ev.missing.map(trl).join('، ')}`), { tags: 'rotating_light', priority: 5 }];
     }
     sent.push(r.id);
     if (msg) await ntfy(msg[0], msg[1], msg[2]);

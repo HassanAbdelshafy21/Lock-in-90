@@ -9,8 +9,12 @@ A personal 90-day challenge tracker that works offline and syncs through Firebas
 - **Insights:** weight wins (lowest, since start, this week, to goal), real calorie burn from logs + weight trend, recipe builder, copy a past meal, daily notes.
 - **Home screen:** four pillar rings, an “Up next” card with the one thing to do now, and a + button for quick adds.
 - **Sports:** log football, padel, tennis and 13 more with duration and intensity; calories from the 2024 Compendium of Physical Activities (or your average heart rate and age), a sweat top-up hint, and WHO weekly activity minutes.
-- **Friends board:** create a group, share the 6-character code, and everyone in it sees each other's day count, streak, today's status and the group chain (days everyone locked in). Nothing else is shared.
+- **Ramadan mode:** a Suhoor / Iftar / after-Taraweeh plan, water paced from iftar to fajr, evening water reminders, and an iftar countdown (default dates 8 Feb – 8 Mar 2027, editable).
+- **History and insights:** tap any day in the chain to see what was logged; patterns from your own data; measurement trends; a weekly coach report as an image.
+- **Arabic:** full right-to-left Arabic interface and notifications (Setup → Language).
+- **Friends board:** create a group, share the 6-character code, and everyone in it sees each other's day count, streak, today's status and the group chain (days everyone locked in), and can send each other cheers and nudges. Nothing else is shared.
 - **Progress:** weekly review, 90-day chain, milestones, weight with 7-day average, measurements, before/after photo slider.
+- **Low reads:** each synced collection loads from the phone's cache and only fetches documents changed since the last sync, so the free Firebase plan covers about 60 people.
 - **Cloud job (GitHub Actions, every 30 min):** sends smart reminders to the ntfy app. (Strava sync is built in but switched off; it only runs if Strava secrets are added.)
 
 ## Setup

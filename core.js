@@ -38,8 +38,30 @@ export function sumItems(items) {
   (items || []).forEach(it => { const m = itemMacros(it); t.k += m.k; t.p += m.p; t.c += m.c; t.f += m.f; });
   return t;
 }
+/* Ramadan mode: its own meal plan (Suhoor, Iftar, after Taraweeh) and a water window from iftar to fajr.
+   Default dates: 1 Ramadan 1448 expected Mon 8 Feb 2027 (NRIAG, Egypt); edit them in Setup once confirmed. */
+export const RAMADAN_DEFAULT = { on: false, from: '2027-02-08', to: '2027-03-08', iftar: '17:30', fajr: '04:45' };
+export const RAMADAN_MEALS = [{ id: 'r1', name: 'Suhoor', time: '03:45', items: [] }, { id: 'r2', name: 'Iftar', time: '17:30', items: [] }, { id: 'r3', name: 'After Taraweeh', time: '21:30', items: [] }];
+export const ramadanOf = settings => ({ ...RAMADAN_DEFAULT, ...((settings && settings.ramadan) || {}) });
+// only from the day it was switched on, and not after it was switched off, so toggling never rewrites past days
+export const inRamadan = (settings, date) => {
+  const r = settings && settings.ramadan;
+  if (!r || !date || !(r.on || r.offFrom) || !r.onSince) return false;
+  return date >= (r.from || RAMADAN_DEFAULT.from) && date <= (r.to || RAMADAN_DEFAULT.to) && date >= r.onSince && (!r.offFrom || date < r.offFrom);
+};
+const hm = s => { const [a, b] = String(s || '').split(':').map(Number); return isNaN(a) ? null : a * 60 + (b || 0); };
+// share of today's drinking window that has passed, for water pace (normal: 08:00-22:00; Ramadan: midnight-fajr and iftar-midnight)
+export function waterPace(settings, date, mins) {
+  if (!inRamadan(settings, date)) return Math.min(1, Math.max(0, (mins - 480) / 840));
+  const r = ramadanOf(settings), fajr = hm(r.fajr) ?? 285, iftar = hm(r.iftar) ?? 1050, total = fajr + (1440 - iftar);
+  return Math.min(1, (Math.min(mins, fajr) + Math.max(0, mins - iftar)) / total);
+}
 /* the meal plan changes over time: settings.planLog keeps a copy per change date, so each day uses the plan that was active then */
 export function mealsOn(settings, date) {
+  if (inRamadan(settings, date)) {
+    const rl = settings.ramadanLog || {}, rk = Object.keys(rl).sort().filter(k => k <= date);
+    return rk.length ? rl[rk[rk.length - 1]] || [] : settings.ramadanMeals || RAMADAN_MEALS;
+  }
   const log = settings.planLog || {};
   const keys = Object.keys(log).sort();
   if (!keys.length) return settings.meals || [];

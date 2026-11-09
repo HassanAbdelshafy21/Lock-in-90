@@ -1,9 +1,11 @@
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js';
 import { getAuth, GoogleAuthProvider, signInWithPopup, getRedirectResult, onAuthStateChanged, signOut, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js';
-import { initializeFirestore, getFirestore, persistentLocalCache, persistentMultipleTabManager, doc, collection, onSnapshot, setDoc, getDoc, deleteDoc, writeBatch } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
+import { initializeFirestore, getFirestore, persistentLocalCache, persistentMultipleTabManager, doc, collection, onSnapshot, setDoc, getDoc, deleteDoc, writeBatch, query, where, getDocsFromCache, serverTimestamp, Timestamp } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
 import * as C from './core.js';
-const APP_VERSION = '11 · your own meal plan';
+import { trText, addFoodNames } from './i18n.js';
+const APP_VERSION = '12 · Ramadan, Arabic, history, cheers';
 import { EX, POSE, figSVG, YT, LINES, FOODS, COACH_MEALS, DEFAULT_SUPPS, SLOTS, CARDIO_MODES } from './data.js';
+addFoodNames(FOODS);
 
 /* ---------- config ---------- */
 const FIREBASE = {
@@ -37,7 +39,21 @@ const clone = o => JSON.parse(JSON.stringify(o ?? {}));
 const L = ml => String(C.round(ml / 1000, 2));
 const now = () => C.nowIn();
 const today = () => now().date;
-const fmt = s => C.parse(s).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+const fmt = s => C.parse(s).toLocaleDateString(LANG() === 'ar' ? 'ar-EG-u-nu-latn' : 'en-GB', { day: 'numeric', month: LANG() === 'ar' ? 'long' : 'short' });
+/* language: Arabic is applied by translating rendered text, so every screen and message is covered without two copies of the UI */
+const LANG = () => (S.settings && S.settings.lang) || (() => { try { return localStorage.getItem('lk-lang'); } catch (e) { return null; } })() || 'en';
+function trNode(n) {
+  if (n.nodeType === 3) { const v = n.nodeValue, core = v.trim(); if (core && /[A-Za-z]/.test(core)) { const r = trText(core); if (r != null) n.nodeValue = v.replace(core, r); } return; }
+  if (n.nodeType !== 1 || n.matches('script,style,svg,canvas')) return;
+  ['placeholder', 'aria-label', 'title'].forEach(a => { const v = n.getAttribute(a); if (v && /[A-Za-z]/.test(v)) { const r = trText(v.trim()); if (r != null) n.setAttribute(a, r); } });
+  for (const c of n.childNodes) trNode(c);
+}
+function applyLang() {
+  const ar = LANG() === 'ar';
+  document.documentElement.lang = ar ? 'ar' : 'en'; document.documentElement.dir = ar ? 'rtl' : 'ltr';
+  if (ar) trNode(document.body);
+}
+new MutationObserver(ms => { if (LANG() !== 'ar') return; ms.forEach(m => m.addedNodes.forEach(trNode)); }).observe(document.body, { childList: true, subtree: true });
 const editDate = () => { const g = now().hour < 3 ? C.addDays(today(), -1) : null; return S.editDate && S.editDate === g ? g : today(); };
 const uid = () => S.user && S.user.uid;
 const up = p => `users/${uid()}/${p}`;
@@ -51,10 +67,12 @@ function save(path, get, delay = 400) {
   clearTimeout(timers[path]);
   timers[path] = setTimeout(() => {
     delete timers[path];
-    setDoc(doc(db, up(path)), clone(get())).catch(e => toast(e && e.code === 'permission-denied' ? 'Saving was refused. Check the Firestore rules.' : 'Couldn’t save that change.'));
+    setDoc(doc(db, up(path)), stamp(path, clone(get()))).catch(e => toast(e && e.code === 'permission-denied' ? 'Saving was refused. Check the Firestore rules.' : 'Couldn’t save that change.'));
   }, delay);
 }
 const busy = path => !!timers[path];
+const SYNCED = ['days/', 'checkins/', 'foods/', 'photos/'];
+const stamp = (path, data) => SYNCED.some(p => path.startsWith(p)) ? { ...data, u: serverTimestamp() } : data;
 function dayDoc(date) {
   const d = S.days[date] || (S.days[date] = { date });
   d.meals = d.meals || {}; d.skip = d.skip || {}; d.extras = d.extras || []; d.supps = d.supps || {}; d.cali = d.cali || {}; d.stamina = d.stamina || []; d.water = d.water || 0;
@@ -62,7 +80,16 @@ function dayDoc(date) {
 }
 const saveDay = date => save('days/' + date, () => dayDoc(date));
 const saveSettings = () => save('settings/main', () => S.settings);
-function savePlan() { S.settings.planLog = S.settings.planLog || {}; S.settings.planLog[today()] = clone(S.settings.meals); saveSettings(); }
+// the plan editor works on the normal plan or the Ramadan plan
+const editingRamadan = () => S.planEdit === 'ramadan';
+function planMeals() { const st = S.settings; if (editingRamadan()) return st.ramadanMeals || (st.ramadanMeals = clone(C.RAMADAN_MEALS)); return st.meals || (st.meals = []); }
+function setPlanMeals(ms) { if (editingRamadan()) S.settings.ramadanMeals = ms; else S.settings.meals = ms; }
+function savePlan() {
+  const st = S.settings;
+  if (editingRamadan()) { st.ramadanLog = st.ramadanLog || {}; st.ramadanLog[today()] = clone(st.ramadanMeals); }
+  else { st.planLog = st.planLog || {}; st.planLog[today()] = clone(st.meals); }
+  saveSettings();
+}
 function planHistoryHTML(st) {
   const keys = Object.keys(st.planLog || {}).sort();
   if (keys.length < 2) return '';
@@ -97,6 +124,7 @@ document.addEventListener('focusout', () => setTimeout(() => { if (S.deferred) {
 
 /* ---------- top-level draw ---------- */
 function draw() {
+  if (document.documentElement.lang !== (LANG() === 'ar' ? 'ar' : 'en')) applyLang();
   document.querySelectorAll('.tabs button').forEach(b => b.setAttribute('aria-current', b.dataset.v === S.view ? 'page' : 'false'));
   $('tabs').hidden = !S.user || !S.settings;
   const m = $('main');
@@ -152,7 +180,7 @@ function bannersHTML(R) {
 
 /* ---------- sign-in and welcome ---------- */
 function signinHTML() {
-  return `<section class="signin"><img class="signin-logo" src="icons/logo.svg" alt=""><h1>LOCK<br><span>IN 90</span></h1><p class="hint">Sign in once. After that the app works offline and syncs when you’re back online.</p>
+  return `<section class="signin"><button class="langbtn" data-act="lang" data-v="${LANG() === 'ar' ? 'en' : 'ar'}">${LANG() === 'ar' ? 'English' : 'العربية'}</button><img class="signin-logo" src="icons/logo.svg" alt=""><h1>LOCK<br><span>IN 90</span></h1><p class="hint">Sign in once. After that the app works offline and syncs when you’re back online.</p>
   <button class="btn primary block" data-act="signin">Sign in with Google</button>
   <span class="sub">or with email (works in every browser, best on iPhone)</span>
   <form class="form" id="email-form" style="text-align:left"><label class="full">Email<input class="in" id="si-email" type="email" autocomplete="email" required></label>
@@ -162,7 +190,7 @@ function signinHTML() {
 }
 function waterSelect(id, attr, val) { return `<select class="in" id="${id}" ${attr}>${WATER_OPTS.map(v => `<option value="${v}" ${v === val ? 'selected' : ''}>${L(v)} L</option>`).join('')}</select>`; }
 function welcomeHTML() {
-  return `<section class="card"><div class="card-h"><h2>Start your 90 days</h2></div>
+  return `<section class="card"><div class="card-h"><h2>Start your 90 days</h2><button class="langbtn" data-act="lang" data-v="${LANG() === 'ar' ? 'en' : 'ar'}">${LANG() === 'ar' ? 'English' : 'العربية'}</button></div>
   <p class="hint">Every day needs every planned meal on plan, your water goal, that day’s training and your core supplements. Miss any of them and the counter goes back to Day 1. ${isOwner() ? 'Your coach’s meal plan is already loaded; edit it in Setup.' : 'You start with Breakfast, Lunch and Dinner. Add your own meal plan and supplements in Setup, or just log what you eat and the app counts the calories.'}</p>
   <div class="form"><label>Start date<input class="in" id="w-start" type="date" value="${today()}" max="${today()}"></label>
   <label>Water goal${waterSelect('w-water', '', 4000)}</label>
@@ -177,7 +205,7 @@ function welcomeHTML() {
 /* The coach's meal plan and supplement stack are Hassan's. Everyone else starts blank and builds their own. */
 const OWNER = 'hassan.abdelshafy14@gmail.com';
 const isOwner = () => !!(S.user && String(S.user.email || '').toLowerCase() === OWNER);
-const BLANK_MEALS = () => [{ id: 'b', name: 'Breakfast', time: '09:00', items: [] }, { id: 'l', name: 'Lunch', time: '14:00', items: [] }, { id: 'd', name: 'Dinner', time: '20:00', items: [] }];
+const BLANK_MEALS = () => { const ar = LANG() === 'ar'; return [{ id: 'b', name: ar ? 'الفطار' : 'Breakfast', time: '09:00', items: [] }, { id: 'l', name: ar ? 'الغدا' : 'Lunch', time: '14:00', items: [] }, { id: 'd', name: ar ? 'العشا' : 'Dinner', time: '20:00', items: [] }]; };
 const STARTER_SUPPS = ['Creatine', 'Omega 3', 'Multivitamin', 'Vitamin D', 'Whey protein', 'Magnesium'];
 const mealSig = ms => JSON.stringify((ms || []).map(m => [m.id, (m.items || []).map(i => `${i.fid}:${i.g}`)]));
 const COACH_SIG = mealSig(COACH_MEALS);
@@ -201,8 +229,127 @@ function newSettings(o = {}) {
     startDate: o.startDate || today(), waterGoal: o.waterGoal || 4000, startWeight: o.startWeight || null, goalWeight: o.goalWeight || null,
     plan: { ...C.DEFAULT_PLAN }, gymTime: 'am',
     meals: isOwner() ? clone(COACH_MEALS) : BLANK_MEALS(), planLog: { [o.startDate || today()]: isOwner() ? clone(COACH_MEALS) : BLANK_MEALS() }, supps: isOwner() ? clone(DEFAULT_SUPPS) : [], stamina: { on: true, days: [1, 3, 5] }, privMig: 1,
-    reminders: Object.fromEntries(REMINDERS.map(r => [r[0], r[0] !== 'meals'])), created: new Date().toISOString()
+    reminders: Object.fromEntries(REMINDERS.map(r => [r[0], r[0] !== 'meals'])), created: new Date().toISOString(), lang: LANG()
   };
+}
+
+/* ---------- insights: patterns from your own history ---------- */
+function insightsHTML() {
+  const st = S.settings, t = today(), from = C.addDays(t, -60) > st.startDate ? C.addDays(t, -60) : st.startDate, days = [];
+  for (let dt = from; dt < t; dt = C.addDays(dt, 1)) { const d = S.days[dt] || {}, ev = C.evalDay(st, d, dt); days.push({ dt, d, ev, ok: ev.complete }); }
+  const pct = a => a.length ? Math.round(a.filter(x => x.ok).length / a.length * 100) : 0, out = [];
+  if (days.length < 10) return `<section class="card"><div class="card-h"><h2>Insights</h2></div><p class="hint">Patterns from your own data appear after about 2 weeks. Log sleep and energy in Body &amp; notes to unlock the sleep ones.</p></section>`;
+  // sleep vs locking in
+  const sl = days.filter(x => x.d.sleep), hi = sl.filter(x => x.d.sleep >= 7), lo = sl.filter(x => x.d.sleep < 7);
+  if (hi.length >= 3 && lo.length >= 3 && Math.abs(pct(hi) - pct(lo)) >= 10) out.push(['😴', `After 7+ hours of sleep you lock in ${pct(hi)}% of days, vs ${pct(lo)}% after less.`]);
+  const en = a => { const v = a.filter(x => x.d.energy); return v.length ? v.reduce((s, x) => s + x.d.energy, 0) / v.length : null; }, eh = en(hi), el = en(lo);
+  if (eh && el && eh - el >= 0.5) out.push(['⚡', `Your energy averages ${C.round(eh, 1)}/5 after 7+ hours of sleep and ${C.round(el, 1)}/5 after less.`]);
+  // commitment
+  const cm = days.filter(x => x.d.commit), nc = days.filter(x => !x.d.commit);
+  if (cm.length >= 3 && nc.length >= 3 && pct(cm) - pct(nc) >= 10) out.push(['🤝', `Days you tap “Commit”: ${pct(cm)}% locked in, vs ${pct(nc)}% when you skip it.`]);
+  // what breaks days
+  const miss = { Meals: 0, Water: 0, Training: 0, Supplements: 0 }, bad = days.filter(x => !x.ok);
+  bad.forEach(x => { const P = x.ev.P; if (!P.mealsOk) miss.Meals++; if (P.w < P.goal) miss.Water++; if (!P.trained) miss.Training++; if (P.sDone < P.req.length) miss.Supplements++; });
+  const worst = Object.entries(miss).sort((a, b) => b[1] - a[1])[0];
+  if (bad.length >= 2 && worst[1]) out.push(['🎯', `${worst[0]} is what breaks most of your days (${worst[1]} of ${bad.length} missed days).`]);
+  // hardest weekday
+  if (days.length >= 14) {
+    const by = Array.from({ length: 7 }, () => []); days.forEach(x => by[C.weekday(x.dt)].push(x));
+    const all = pct(days), w = by.map((a, i) => [i, a]).filter(([, a]) => a.length >= 2).sort((a, b) => pct(a[1]) - pct(b[1]))[0];
+    if (w && pct(w[1]) <= all - 15) out.push(['📅', `${C.DAYNAMES[w[0]]}s are your hardest day: ${w[1].filter(x => x.ok).length} of ${w[1].length} locked in. Plan them the night before.`]);
+  }
+  // protein target
+  const pt = days.filter(x => { const tg = C.planTargets(st, x.d, x.dt).p; return tg > 0 && C.dayTotals(st, x.d).k > 0; });
+  if (pt.length >= 7) { const hit = pt.filter(x => C.dayTotals(st, x.d).p >= C.planTargets(st, x.d, x.dt).p * 0.95).length; out.push(['🥩', `You hit your protein target on ${hit} of ${pt.length} logged days.`]); }
+  // weekend calories (Fri/Sat)
+  const kd = days.filter(x => C.dayTotals(st, x.d).k > 0), we = kd.filter(x => [5, 6].includes(C.weekday(x.dt))), wd = kd.filter(x => ![5, 6].includes(C.weekday(x.dt)));
+  const avg = a => a.reduce((s, x) => s + C.dayTotals(st, x.d).k, 0) / a.length;
+  if (we.length >= 2 && wd.length >= 4 && Math.abs(avg(we) - avg(wd)) >= 150) out.push(['🍽️', `You eat about ${kc(Math.abs(avg(we) - avg(wd)))} kcal ${avg(we) > avg(wd) ? 'more' : 'less'} on Fri/Sat than on other days.`]);
+  // sports and next-day weight? keep to what the data supports
+  return `<section class="card"><div class="card-h"><h2>Insights</h2><span class="hint">Last ${days.length} days</span></div>${out.length ? `<div class="insights">${out.slice(0, 5).map(([i, s]) => `<div class="ins"><span>${i}</span><p>${esc(s)}</p></div>`).join('')}</div>` : '<p class="hint">No strong patterns yet. Keep logging sleep and energy; insights show up when the difference is real.</p>'}</section>`;
+}
+function measuresHTML(cks) {
+  const keys = [['waist', 'Waist'], ['chest', 'Chest'], ['arm', 'Arm'], ['hips', 'Hips']];
+  const rows = keys.map(([k, lbl]) => {
+    const pts = cks.filter(c => c[k] > 0).map(c => [c.date, c[k]]); if (pts.length < 2) return '';
+    const vs = pts.map(p => p[1]), lo = Math.min(...vs), hi = Math.max(...vs), W = 120, H = 32, x = i => 4 + i / (pts.length - 1) * (W - 8), y = v => hi === lo ? H / 2 : 4 + (hi - v) / (hi - lo) * (H - 8);
+    const dl = vs[vs.length - 1] - vs[0], tone = k === 'waist' || k === 'hips' ? (dl <= 0 ? 'up' : 'down') : k === 'arm' && dl > 0 ? 'up' : '';
+    return `<div class="meas"><b>${lbl}</b><svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" aria-hidden="true"><path d="${pts.map((p, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(p[1]).toFixed(1)}`).join(' ')}" fill="none" stroke="var(--accent-strong)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/><circle cx="${x(pts.length - 1)}" cy="${y(vs[vs.length - 1])}" r="3" fill="var(--spark)"/></svg><span class="num">${vs[0]} → ${vs[vs.length - 1]} cm</span><span class="num ${tone}">${dl > 0 ? '+' : dl < 0 ? '−' : ''}${C.round(Math.abs(dl), 1)}</span></div>`;
+  }).join('');
+  return rows ? `<div class="measures"><span class="sub">Measurements since ${fmt(cks[0].date)}</span>${rows}</div>` : '';
+}
+async function shareWeekImage() {
+  const rv = weekReview(), aw = activityWeek(), t = today(), st = S.settings, hit = k => rv.past - rv.miss[k];
+  const W = 1080, H = 1350, cv = document.createElement('canvas'); cv.width = W; cv.height = H; const g = cv.getContext('2d');
+  try { await document.fonts.ready; } catch (e) { }
+  const NAVY = '#1C2638', NAVY2 = '#2C3B57', SPARK = '#E8AE4F', GOOD = '#5DBB8A', CREAM = '#F5F2EB', MUTE = '#9FB0C8', DISP = '"Barlow Condensed","Arial Narrow",sans-serif', MONO = '"IBM Plex Mono",monospace', BODY = '"IBM Plex Sans",sans-serif';
+  const grd = g.createLinearGradient(0, 0, 0, H); grd.addColorStop(0, NAVY2); grd.addColorStop(1, NAVY); g.fillStyle = grd; g.fillRect(0, 0, W, H);
+  g.fillStyle = MUTE; g.font = `500 30px ${MONO}`; g.fillText('LOCK IN 90 · WEEKLY REPORT', 80, 110);
+  g.fillStyle = CREAM; let fs = 64; const head = `${boardName().toUpperCase()} · WEEK ENDING ${fmt(t).toUpperCase()}`; do { g.font = `700 ${fs}px ${DISP}`; fs -= 2; } while (g.measureText(head).width > W - 160 && fs > 30); g.fillText(head, 80, 190);
+  g.fillStyle = SPARK; g.font = `800 230px ${DISP}`; g.fillText(`${rv.locked}/${rv.n}`, 72, 420);
+  g.fillStyle = CREAM; g.font = `700 52px ${DISP}`; g.fillText('DAYS FULLY ON PLAN', 80, 490);
+  for (let i = 6; i >= 0; i--) { const dt = C.addDays(t, -i), ok = C.evalDay(st, S.days[dt], dt).complete, x = 80 + (6 - i) * 132; g.fillStyle = ok ? GOOD : dt === t ? 'rgba(232,174,79,.35)' : 'rgba(255,255,255,.12)'; rr(g, x, 530, 112, 112, 22); g.fill(); g.fillStyle = ok ? '#0E2A1B' : MUTE; g.font = `600 28px ${MONO}`; g.textAlign = 'center'; g.fillText(C.DAYNAMES[C.weekday(dt)].slice(0, 3).toUpperCase(), x + 56, 596); g.textAlign = 'left'; }
+  const sg = v => (v > 0 ? '+' : v < 0 ? '−' : '') + C.round(Math.abs(v), 1);
+  const cells = [
+    ['WEIGHT (7-DAY AVG)', rv.wNow ? `${C.round(rv.wNow, 1)} kg` : '—', rv.wDelta != null ? `${sg(rv.wDelta)} kg vs last week` : ''],
+    ['AVG CALORIES', rv.kcal ? `${kc(rv.kcal)}` : '—', rv.tk ? `plan ${kc(rv.tk)}` : ''],
+    ['AVG PROTEIN', rv.prot ? `${kc(rv.prot)} g` : '—', rv.tp ? `plan ${kc(rv.tp)} g` : ''],
+    ['PILLARS HIT', rv.past ? `${hit('Meals')}·${hit('Water')}·${hit('Training')}·${hit('Supplements')}` : '—', rv.past ? `meals·water·train·supps of ${rv.past}` : ''],
+    ['ACTIVITY', aw.min ? `${aw.min} min` : '—', aw.kcal ? `sports ≈ ${kc(aw.kcal)} kcal` : rv.cardio ? `${rv.cardio} min cardio` : 'no sports or cardio logged'],
+    ['AVG SLEEP', rv.sleep ? `${C.round(rv.sleep, 1)} h` : '—', '']
+  ];
+  cells.forEach(([k, v, s], i) => { const x = 80 + (i % 2) * 470, y = 720 + Math.floor(i / 2) * 190; g.fillStyle = 'rgba(255,255,255,.07)'; rr(g, x, y, 450, 170, 22); g.fill(); g.fillStyle = MUTE; g.font = `500 24px ${MONO}`; g.fillText(k, x + 28, y + 46); g.fillStyle = CREAM; g.font = `700 64px ${DISP}`; g.fillText(v, x + 28, y + 116); g.fillStyle = MUTE; g.font = `400 24px ${BODY}`; g.fillText(s, x + 28, y + 152); });
+  const blob = await new Promise(r => cv.toBlob(r, 'image/png')), file = new File([blob], `lock-in-week-${t}.png`, { type: 'image/png' });
+  try { if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], text: `Week ending ${fmt(t)}` }); return; } } catch (e) { if (e && e.name === 'AbortError') return; }
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = file.name; document.body.appendChild(a); a.click(); a.remove(); toast('Image saved. Send it from your gallery.');
+}
+
+/* ---------- Ramadan ---------- */
+function ramadanSetupHTML(st) {
+  const r = C.ramadanOf(st), on = !!(st.ramadan && st.ramadan.on);
+  return `<section class="card" id="sec-ramadan"><div class="card-h"><h2>Ramadan mode</h2>${pill(on ? 'done' : 'opt', on ? 'On' : 'Off')}</div>
+  <p class="hint">During Ramadan the app switches to your Ramadan meal plan (Suhoor, Iftar, after Taraweeh), paces water between iftar and fajr, and moves the water reminders to the evening. Expected dates: 8 Feb – 8 Mar 2027 (astronomical estimate; change them once confirmed).</p>
+  <div class="setup-r"><span>Ramadan mode</span><div class="seg"><button data-act="ramon" data-v="1" aria-pressed="${on}">On</button><button data-act="ramon" data-v="0" aria-pressed="${!on}">Off</button></div></div>
+  <div class="form"><label>First day<input class="in" type="date" data-ram="from" value="${r.from}"></label><label>Last day<input class="in" type="date" data-ram="to" value="${r.to}"></label>
+  <label>Iftar (Maghrib)<input class="in" type="time" data-ram="iftar" value="${r.iftar}"></label><label>Fajr (fast starts)<input class="in" type="time" data-ram="fajr" value="${r.fajr}"></label></div>
+  <p class="hint">Iftar moves from about 17:25 to 17:50 in Cairo over the month; update it weekly so the countdown and water pace stay right.</p>
+  ${on ? `<button class="btn small" data-act="planedit" data-v="ramadan">Edit the Ramadan meal plan</button>` : ''}</section>`;
+}
+function ramadanHTML(date) {
+  const st = S.settings, t = today(), r = C.ramadanOf(st), n = now(), mins = n.hour * 60 + n.minute;
+  const hm = s => { const [a, b] = String(s).split(':').map(Number); return a * 60 + (b || 0); };
+  if (C.inRamadan(st, date) && date === t) {
+    const day = C.diffDays(r.from, date) + 1, ift = hm(r.iftar), fj = hm(r.fajr);
+    const fasting = mins >= fj && mins < ift, left = ift - mins;
+    return `<section class="card ramadan"><span class="sub">Ramadan · day ${day}</span><h3>${fasting ? `Iftar in ${Math.floor(left / 60)} h ${left % 60} min` : mins < fj ? `Suhoor: fast starts at ${esc(r.fajr)}` : 'Iftar time. Ramadan Kareem'}</h3><p class="hint">${fasting ? 'Fasting now. Water and meals start counting again at iftar.' : 'Drinking window: spread your water from iftar to suhoor, about 250 ml every 30–45 minutes.'}${C.trainType(st, date) === 'gym' ? ' Best gym time: 60–90 minutes before iftar (light) or 1–2 hours after it (heavy).' : ''}</p></section>`;
+  }
+  const until = C.diffDays(t, r.from);
+  if (!(st.ramadan && st.ramadan.on) && until > 0 && until <= 14) return `<section class="card ramadan"><span class="sub">Ramadan in ${until} day${until === 1 ? '' : 's'}</span><h3>Set up Ramadan mode</h3><p class="hint">Switch to a Suhoor / Iftar meal plan and evening water reminders for the month, without breaking your streak.</p><div class="row"><button class="btn primary" data-act="ramsetup">Set it up</button></div></section>`;
+  return '';
+}
+
+/* ---------- day history (read-only) ---------- */
+function openDay(date) { SH = { scope: 'day', date }; $('sheet').hidden = false; drawDay(); }
+function drawDay() {
+  const date = SH.date, st = S.settings, d = S.days[date] || {}, ev = C.evalDay(st, d, date), P = ev.P, tot = C.dayTotals(st, d), tgt = C.planTargets(st, d, date);
+  const R = C.computeRun(st, S.days, now()), dayNo = C.diffDays(R.attemptStart, date) + 1, t = today();
+  const meals = C.mealsOn(st, date).map(m => {
+    const md = (d.meals || {})[m.id] || {}, skip = (d.skip || {})[m.id], s = C.sumItems(md.items || []);
+    const lbl = skip ? 'Not part of the plan' : !md.status ? 'Not logged' : md.status === 'plan' ? 'As planned' : md.status === 'swap' ? 'Changed' : 'Off-plan';
+    return `<li><span><b>${esc(m.name)}</b> <span class="mstat ${md.status || ''}">${lbl}</span>${(md.items || []).length && md.status !== 'plan' ? `<small>${esc(md.items.map(x => `${x.name.split(',')[0]} ${C.round(x.g)}${C.isDrink(x) ? ' ml' : ' g'}`).join(', '))}</small>` : ''}</span><span class="num">${md.status ? kc(s.k) + ' kcal' : ''}</span></li>`;
+  }).join('');
+  const ex = (d.extras || []).map(x => `<li><span>${esc(x.name)}${x.off ? ' <span class="mstat off">off-plan</span>' : ''}</span><span class="num">${C.round(x.g)} ${C.isDrink(x) ? 'ml' : 'g'} · ${kc(C.itemMacros(x).k)} kcal</span></li>`).join('');
+  const sp = (d.sports || []).map(s => `${C.sportById(s.sport).ic} ${C.sportById(s.sport).name} ${s.min} min (${kc(s.kcal)} kcal)`).join(', ');
+  const cali = Object.entries(d.cali || {}).filter(([, a]) => Array.isArray(a) && a.some(v => v > 0)).map(([id, a]) => { const e = EX.find(x => x.id === id); return `${e ? e.name : id}: ${a.filter(v => v > 0).join(' · ')}`; }).join('; ');
+  const prev = C.addDays(date, -1), next = C.addDays(date, 1);
+  $('sheet').innerHTML = `<div class="sheet" role="dialog" aria-modal="true" aria-label="Day ${fmt(date)}"><div class="spread"><h2>${dayNo >= 1 && dayNo <= 90 ? `Day ${dayNo} · ` : ''}${fmt(date)}</h2><button class="x" data-act="closesheet" aria-label="Close">×</button></div>
+  <div class="row dnav"><button class="btn small" data-act="daynav" data-v="${prev}" ${prev < st.startDate ? 'disabled' : ''}>‹ Previous</button><span class="state ${ev.complete ? 's-done' : date === t ? 's-todo' : 's-bad'}">${ev.complete ? 'Locked in' : date === t ? 'In progress' : 'Missed'}</span><button class="btn small" data-act="daynav" data-v="${next}" ${next > t ? 'disabled' : ''}>Next ›</button></div>
+  ${!ev.complete && ev.missing.length ? `<ul class="missing">${ev.missing.map(x => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}
+  <div class="review"><div><b class="num">${kc(tot.k)}${tgt.k ? `<small> / ${kc(tgt.k)}</small>` : ''}</b><span>Calories</span></div><div><b class="num">${kc(tot.p)} g</b><span>Protein</span></div><div><b class="num">${L(P.w)} L</b><span>Water${P.wDrinks ? ` · ${L(P.wDrinks)} L from drinks` : ''}</span></div><div><b>${P.tt === 'rest' ? 'Rest' : d.trainingDone ? 'Done' : 'Not done'}</b><span>${esc(C.TT[P.tt].label)}</span></div></div>
+  <span class="sub">Meals</span><ul class="list">${meals}${ex}</ul>
+  ${sp ? `<p class="hint"><b>Sports:</b> ${esc(sp)}</p>` : ''}${cali ? `<p class="hint"><b>Calisthenics:</b> ${esc(cali)}</p>` : ''}
+  <p class="hint"><b>Supplements:</b> ${P.req.length ? `${P.sDone} of ${P.req.length} core` : 'none required'}${d.weight ? ` · <b>Weight:</b> ${d.weight} kg` : ''}${d.sleep ? ` · <b>Sleep:</b> ${d.sleep} h` : ''}${d.energy ? ` · <b>Energy:</b> ${d.energy}/5` : ''}${d.commit ? ` · committed ${esc(d.commit)}` : ''}</p>
+  ${d.note ? `<div class="daynote">“${esc(d.note)}”</div>` : ''}</div>`;
 }
 
 /* ---------- sports ---------- */
@@ -331,7 +478,7 @@ function upNextHTML(R, d, date, P) {
   const due = open.filter(m => tm(m) != null && tm(m) <= mins).sort((a, b) => tm(a) - tm(b))[0];
   const mealCard = (m, early) => { if (!(m.items || []).length) return card(`${esc(m.name)} · ${esc(m.time || '')}${early ? ' (coming up)' : ''}`, 'No foods planned for this meal yet. Log what you ate and the app works out the calories.', `<button class="btn good" data-act="meal" data-id="${m.id}" data-v="swap">Log what I ate</button><button class="btn ghost" data-act="planset">Set up my plan</button>`); const s = C.sumItems(m.items); return card(`${esc(m.name)} · ${esc(m.time || '')}${early ? ' (coming up)' : ''}`, `${esc(m.items.map(x => x.name.split(',')[0]).join(', '))} · ${kc(s.k)} kcal · ${C.round(s.p, 1)} g protein`, `<button class="btn good" data-act="meal" data-id="${m.id}" data-v="plan">Ate it as planned</button><button class="btn" data-act="meal" data-id="${m.id}" data-v="swap">Changed</button>`); };
   if (due) return mealCard(due);
-  const expected = P.goal * Math.min(1, Math.max(0, (mins - 480) / 840)), behind = expected - P.w;
+  const expected = P.goal * C.waterPace(S.settings, date, mins), behind = expected - P.w;
   if (behind >= 500) return card(`Water: ${L(Math.round(behind / 250) * 250)} L behind pace`, `${L(P.w)} of ${L(P.goal)} L so far. Aim for about ${L(Math.round(expected / 250) * 250)} L by now.`, `<button class="btn wat" data-act="water" data-n="500">+ 500 ml</button><button class="btn" data-act="water" data-n="250">+ 250 ml</button>`);
   const trainCard = () => P.tt === 'cali' ? card(C.TT.cali.label, 'Your no-bar session. Log your sets in Train.', `<button class="btn primary" data-act="tab" data-v="train">Open Train</button>`) : card(C.TT[P.tt].label, C.TT[P.tt].sub, `<button class="btn primary" data-act="train">Mark done</button><button class="btn ghost" data-act="sport">Played a sport instead?</button>`);
   if (!P.trained && mins >= 17 * 60) return trainCard();
@@ -371,8 +518,10 @@ function todayHTML(R) {
   h += `<section class="card hero2${ev.complete ? ' locked' : ''}"><div class="hero2-in"><div class="rings">${ringsSVG(parts, mealsBad)}<div class="rings-c"><b class="num">${pdone}</b><span>of 4</span></div></div>
   <div class="prows">${rows.map(r => `<button class="prow ${r.k}${r.ok ? ' ok' : ''}${r.bad ? ' bad' : ''}" data-act="jump" data-v="${r.jump}"><i aria-hidden="true">${r.ok ? '✓' : ''}</i><span><b>${r.name}</b><small class="num">${esc(r.val)}</small></span></button>`).join('')}</div></div>
   <div class="hero2-f"><span class="sub">${esc(C.DAYNAMES[C.weekday(date)])} · ${fmt(date)}${d.commit ? ` · <span class="committed">committed ${esc(d.commit)}</span>` : ''}</span><p class="quote">${esc(line)}</p></div></section>`;
-  if (!st.planNoted && P.pm.length && P.pm.every(m => !(m.items || []).length)) h += `<section class="card setupnudge"><span class="sub">Make it yours</span><h3>Add your meal plan</h3><p class="hint">Put in your coach’s plan, or your own, in Setup → Meal plan, with the foods and grams for each meal. Then one tap logs a meal and your calorie and protein targets appear. No plan? Just log what you eat in each meal.</p><div class="row"><button class="btn primary" data-act="planset">Set up my plan</button><button class="btn ghost" data-act="plannoted">I’ll log as I go</button></div></section>`;
+  if (!st.planNoted && P.pm.length && P.pm.every(m => !(m.items || []).length)) h += `<section class="card setupnudge"><span class="sub">Make it yours</span><h3>Add your ${C.inRamadan(st, date) ? 'Ramadan ' : ''}meal plan</h3><p class="hint">Put in your coach’s plan, or your own, in Setup → Meal plan, with the foods and grams for each meal. Then one tap logs a meal and your calorie and protein targets appear. No plan? Just log what you eat in each meal.</p><div class="row"><button class="btn primary" data-act="planset">Set up my plan</button><button class="btn ghost" data-act="plannoted">I’ll log as I go</button></div></section>`;
+  h += ramadanHTML(date);
   h += upNextHTML(R, d, date, P);
+  h += cheersHTML();
   h += friendsLineHTML();
   // time-aware order: weigh-in first in the morning, missing pillars first in the evening
   const body = { ok: true, opt: true, html: () => bodyHTML(date, d) };
@@ -589,10 +738,10 @@ function progressHTML(R) {
   <div><b class="num">${rv.sleep ? C.round(rv.sleep, 1) + ' h' : '—'}</b><span>Avg sleep</span></div>
   <div><b class="num">${rv.wDelta == null ? '—' : (rv.wDelta > 0 ? '+' : '') + C.round(rv.wDelta, 1) + ' kg'}</b><span>Weight trend (7-day avg)</span></div></div>
   ${(() => { const aw = activityWeek(), pct = Math.min(100, aw.mod / 150 * 100); return `<div class="actweek"><div class="spread"><span><b>Activity</b> · ${aw.min} min${aw.n ? ` · ${aw.n} sport session${aw.n === 1 ? '' : 's'} · ≈ ${kc(aw.kcal)} kcal` : ''}</span><span class="num">${kc(aw.mod)} / 150</span></div><div class="mbar"><i style="width:${pct}%"></i></div><p class="hint">Sports and cardio, as moderate-effort minutes (hard minutes count double). The WHO recommends 150–300 a week on top of strength training.</p></div>`; })()}
-  <button class="btn" data-act="share">Share this week with my coach</button></section>`;
+  <div class="row"><button class="btn primary" data-act="shareweekimg">Send coach report (image)</button><button class="btn" data-act="share">As text</button></div></section>` + insightsHTML();
   h += `<div class="stats"><div class="stat feature"><div class="big num">${R.done}</div><span>Days locked in</span></div><div class="stat"><div class="big num">${Math.min(R.dayNum, 90)}</div><span>Day now</span></div><div class="stat"><div class="big num">${R.best}</div><span>Best streak</span></div><div class="stat"><div class="big num">${Math.floor(R.done / 7)}</div><span>Perfect weeks</span></div></div>`;
   const ms = C.MILES.map(m => m[0]);
-  h += `<section class="card"><div class="card-h"><h2>The chain</h2><span class="hint">Since ${fmt(R.attemptStart)}</span></div><div class="grid90">${Array.from({ length: 90 }, (_, i) => { const dt = C.addDays(R.attemptStart, i); let c = ''; if (dt <= t && C.evalDay(st, S.days[dt], dt).complete) c = 'done'; else if (dt === t) c = 'today'; else if (dt === R.grace) c = 'open'; if (ms.includes(i + 1)) c += ' m'; return `<i class="${c}" title="Day ${i + 1} · ${fmt(dt)}">${i + 1}</i>`; }).join('')}</div></section>`;
+  h += `<section class="card"><div class="card-h"><h2>The chain</h2><span class="hint">Tap a day to see it</span></div><div class="grid90">${Array.from({ length: 90 }, (_, i) => { const dt = C.addDays(R.attemptStart, i); let c = ''; if (dt <= t && C.evalDay(st, S.days[dt], dt).complete) c = 'done'; else if (dt === t) c = 'today'; else if (dt === R.grace) c = 'open'; if (ms.includes(i + 1)) c += ' m'; return dt <= t ? `<button class="${c}" data-act="dayview" data-v="${dt}" aria-label="Day ${i + 1}, ${fmt(dt)}">${i + 1}</button>` : `<i class="${c}" title="Day ${i + 1} · ${fmt(dt)}">${i + 1}</i>`; }).join('')}</div></section>`;
   h += `<section class="card"><div class="card-h"><h2>Milestones</h2>${pill('todo', `${C.MILES.filter(m => R.done >= m[0]).length} / ${C.MILES.length}`)}</div><div class="miles">${C.MILES.map(m => `<div class="mile ${R.done >= m[0] ? 'got' : ''}"><b class="num">${m[0]}</b><span>${m[1]}</span></div>`).join('')}</div></section>`;
   if (R.attempts.length) h += `<section class="card"><div class="card-h"><h2>Attempts</h2></div><ul class="list">${R.attempts.map((a, i) => `<li><span>Attempt ${i + 1}</span><span class="num">${a.len} day${a.len === 1 ? '' : 's'} · broke ${fmt(a.fail)}</span></li>`).join('')}<li><span>Attempt ${R.attemptNo}</span><span class="num">${R.done} days and counting</span></li></ul></section>`;
   // weight
@@ -620,6 +769,7 @@ function progressHTML(R) {
     h += `<div class="compare" style="--cut:${S.cut}%"><img src="${b.data}" alt="Latest photo ${fmt(b.date)}"><img class="top-img" src="${a.data}" alt="First photo ${fmt(a.date)}"><span class="bar-line"></span><span class="lbl" style="left:8px">${fmt(a.date)}</span><span class="lbl" style="right:8px">${fmt(b.date)}</span></div>
     <input class="range" type="range" min="0" max="100" value="${S.cut}" id="cut" aria-label="Compare photos">`;
   } else if (ph.length === 1) h += `<img src="${ph[0].data}" alt="First photo" style="border-radius:12px"><p class="hint">Add next week’s photo to unlock the before/after slider.</p>`;
+  h += measuresHTML(cks);
   if (cks.length) h += `<ul class="list">${cks.slice().reverse().map(c => `<li><span>${fmt(c.date)}</span><span class="num">${[c.weight && c.weight + ' kg', c.waist && 'waist ' + c.waist, c.chest && 'chest ' + c.chest, c.arm && 'arm ' + c.arm, c.hips && 'hips ' + c.hips].filter(Boolean).join(' · ') || 'photo'}</span></li>`).join('')}</ul>`;
   return h + `</section>`;
 }
@@ -733,16 +883,18 @@ function setupHTML(R) {
   <div class="setup-r"><span>Calorie formula</span><div class="seg" role="group" aria-label="Sex for calorie formula"><button data-act="sex" data-v="m" aria-pressed="${st.sex !== 'f'}">Male</button><button data-act="sex" data-v="f" aria-pressed="${st.sex === 'f'}">Female</button></div></div>
   <div class="setup-r"><span>Usual gym time</span><div class="seg"><button data-act="defgym" data-v="am" aria-pressed="${(st.gymTime || 'am') === 'am'}">Morning</button><button data-act="defgym" data-v="pm" aria-pressed="${st.gymTime === 'pm'}">Night</button></div></div></section>`;
   // meal plan
-  const planTot = C.sumItems((st.meals || []).flatMap(m => m.items || []));
-  h += `<section class="card" id="sec-plan"><div class="card-h"><h2>Meal plan</h2>${pill('todo', `${kc(planTot.k)} kcal · ${kc(planTot.p)} g protein`)}</div><p class="hint">${isOwner() ? 'Your coach’s plan' : 'Your meal plan (from your coach, or your own)'}, in cooked weights. Add the foods and grams for each meal; the totals become your daily calorie and protein targets. When your coach changes it, edit it here: the change applies from today, and earlier days keep the plan they had.</p>${planHistoryHTML(st)}`;
-  (st.meals || []).forEach((m, i) => {
+  const PM = planMeals(), planTot = C.sumItems(PM.flatMap(m => m.items || []));
+  h += `<section class="card" id="sec-plan"><div class="card-h"><h2>Meal plan</h2>${pill('todo', `${kc(planTot.k)} kcal · ${kc(planTot.p)} g protein`)}</div>
+  ${(st.ramadan && st.ramadan.on) || editingRamadan() ? `<div class="seg wide" role="group" aria-label="Which plan"><button data-act="planedit" data-v="normal" aria-pressed="${!editingRamadan()}">Normal days</button><button data-act="planedit" data-v="ramadan" aria-pressed="${editingRamadan()}">Ramadan</button></div>` : ''}<p class="hint">${isOwner() ? 'Your coach’s plan' : 'Your meal plan (from your coach, or your own)'}, in cooked weights. Add the foods and grams for each meal; the totals become your daily calorie and protein targets. When your coach changes it, edit it here: the change applies from today, and earlier days keep the plan they had.</p>${planHistoryHTML(st)}`;
+  PM.forEach((m, i) => {
     const s = C.sumItems(m.items);
     h += `<div class="planmeal"><div class="row"><input class="in grow" id="pm-n-${m.id}" data-mealname="${m.id}" value="${esc(m.name)}" aria-label="Meal name"><input class="in sm" id="pm-t-${m.id}" type="time" data-mealtime="${m.id}" value="${esc(m.time || '')}" aria-label="Time" style="width:110px"></div>
     <span class="hint num">${kc(s.k)} kcal · ${C.round(s.p, 1)} g protein · ${C.round(s.c, 1)} g carbs · ${C.round(s.f, 1)} g fat</span>
     ${itemsEditor(m.items || [], 'plan:' + m.id)}
-    <div class="row"><button class="btn small" data-act="mealup" data-v="${m.id}" ${i === 0 ? 'disabled' : ''}>Move up</button><button class="btn small" data-act="mealdown" data-v="${m.id}" ${i === st.meals.length - 1 ? 'disabled' : ''}>Move down</button><button class="btn small danger" data-act="mealdel" data-v="${m.id}">Delete meal</button></div></div>`;
+    <div class="row"><button class="btn small" data-act="mealup" data-v="${m.id}" ${i === 0 ? 'disabled' : ''}>Move up</button><button class="btn small" data-act="mealdown" data-v="${m.id}" ${i === PM.length - 1 ? 'disabled' : ''}>Move down</button><button class="btn small danger" data-act="mealdel" data-v="${m.id}">Delete meal</button></div></div>`;
   });
-  h += `<button class="btn" data-act="mealadd">+ Add a meal</button>${shoppingHTML(st)}</section>`;
+  h += `<button class="btn" data-act="mealadd">+ Add a meal</button>${shoppingHTML({ meals: PM })}</section>`;
+  h += ramadanSetupHTML(st);
   // weekly plan
   h += `<section class="card"><div class="card-h"><h2>Weekly training</h2></div><p class="hint">What counts as training each day. Tick gym days on Today after you log the workout in Lyfta.</p>
   ${[6, 0, 1, 2, 3, 4, 5].map(i => `<div class="setup-r"><label for="p-${i}">${C.DAYNAMES[i]}</label><select class="in" id="p-${i}" data-plan="${i}">${Object.keys(C.TT).map(k => `<option value="${k}" ${plan[i] === k ? 'selected' : ''}>${C.TT[k].label}</option>`).join('')}</select></div>`).join('')}</section>`;
@@ -766,6 +918,7 @@ function setupHTML(R) {
   // account and data
   h += `<section class="card"><div class="card-h"><h2>Data</h2></div>
   <div class="row"><button class="btn" data-act="export">Export backup</button><label class="btn" for="imp-file2">Import backup</label><input id="imp-file2" type="file" accept="application/json,.json" hidden></div>
+  <div class="setup-r"><span>Language</span><div class="seg" role="group" aria-label="Language"><button data-act="lang" data-v="en" aria-pressed="${LANG() !== 'ar'}">English</button><button data-act="lang" data-v="ar" aria-pressed="${LANG() === 'ar'}">العربية</button></div></div>
   <div class="setup-r"><span>Vibration on taps</span><div class="seg" role="group" aria-label="Vibration"><button data-act="haptics" data-v="1" aria-pressed="${st.haptics !== false}">On</button><button data-act="haptics" data-v="0" aria-pressed="${st.haptics === false}">Off</button></div></div>
   <p class="hint">Signed in as ${esc(S.user.email || '')}. <button class="link" data-act="signout">Sign out</button></p><p class="hint num">App version ${APP_VERSION}</p></section>`;
   h += `<section class="card"><div class="card-h"><h2>Restart</h2></div><p class="hint">Starts a fresh 90 days from today and clears the attempt history. Logged days stay saved.</p>
@@ -931,13 +1084,13 @@ function customForm() {
 }
 function addItemTo(scope, item) {
   const [kind, id] = scope.split(':');
-  if (kind === 'plan') { const m = S.settings.meals.find(x => x.id === id); m.items.push(item); savePlan(); }
+  if (kind === 'plan') { const m = planMeals().find(x => x.id === id); m.items.push(item); savePlan(); }
   else if (kind === 'meal') { const d = dayDoc(editDate()); const md = d.meals[id] || (d.meals[id] = { status: 'swap', items: [] }); md.items = md.items || []; md.items.push(item); saveDay(editDate()); }
   else if (kind === 'extra') { const d = dayDoc(editDate()); d.extras.push(item); saveDay(editDate()); }
 }
 function itemList(scope) {
   const [kind, id] = scope.split(':');
-  if (kind === 'plan') return S.settings.meals.find(x => x.id === id).items;
+  if (kind === 'plan') return planMeals().find(x => x.id === id).items;
   if (kind === 'meal') return dayDoc(editDate()).meals[id].items;
   return dayDoc(editDate()).extras;
 }
@@ -995,7 +1148,9 @@ document.addEventListener('click', async ev => {
       saveSettings(); toast('Day 1 starts now.'); return draw();
     }
   }
+  if (act === 'lang') { const was = LANG(); try { localStorage.setItem('lk-lang', v); } catch (e) { } if (S.settings) { S.settings.lang = v; saveSettings(); } if (was === 'ar' && v !== 'ar') { setTimeout(() => location.reload(), 500); return; } applyLang(); return draw(); }
   if (act === 'closesheet') return closeSheet();
+  if (act === 'daynav' && SH && SH.scope === 'day') { SH.date = v; return drawDay(); }
   if (SH && SH.scope === 'sport') {
     if (act === 'sppick') { SH.sp = v; return drawSport(); }
     if (act === 'spmin') { SH.min = +v; return drawSport(); }
@@ -1040,14 +1195,14 @@ document.addEventListener('click', async ev => {
     if (!W) return toast('Enter the finished dish weight.');
     const units = []; if (r.serv > 1) units.push(['serving', C.round(W / r.serv)]); units.push(['whole dish', C.round(W)]);
     const f = { id: 'c' + Date.now().toString(36), name: name.slice(0, 60), per: { k: tot.k / W * 100, p: tot.p / W * 100, c: tot.c / W * 100, f: tot.f / W * 100 }, units, src: 'custom', recipe: r.items.map(it => ({ name: it.name, g: it.g })), drink: false };
-    S.foods[f.id] = f; setDoc(doc(db, up('foods/' + f.id)), clone(f)).catch(() => { });
+    S.foods[f.id] = f; setDoc(doc(db, up('foods/' + f.id)), stamp('foods/', clone(f))).catch(() => { });
     SH.recipe = null; SH.recipeAdd = false; SH.picked = f; SH.drink = false; SH.g = r.serv > 1 ? units[0][1] : 100; toast('Recipe saved to your foods.'); return drawPicked();
   }
   if (act === 'cfsave') {
     const n = $('cf-n').value.trim(); if (!n) return toast('Give the food a name.');
     const num = id => parseFloat($(id).value) || 0, um = ($('cf-u').value || '').match(/^(.+?)\s*=\s*([\d.]+)/);
     const f = { id: 'c' + Date.now().toString(36), name: n.slice(0, 60), per: { k: num('cf-k'), p: num('cf-p'), c: num('cf-c'), f: num('cf-f') }, units: um ? [[um[1].trim(), +um[2]]] : [], src: 'custom', drink: $('cf-drink').checked };
-    S.foods[f.id] = f; setDoc(doc(db, up('foods/' + f.id)), clone(f)).catch(() => { });
+    S.foods[f.id] = f; setDoc(doc(db, up('foods/' + f.id)), stamp('foods/', clone(f))).catch(() => { });
     SH.picked = f; SH.drink = !!f.drink; SH.g = f.units[0] ? f.units[0][1] : 100; return drawPicked();
   }
   if (act === 'pick') { const [src, i] = v.split(':'); SH.picked = (src === 'usda' ? SH.usda : SH.results)[+i]; SH.drink = !!SH.picked.drink; if (SH.scope === 'extra') SH.off = !(SH.drink && (SH.picked.per.k || 0) < 5); SH.g = SH.picked.units && SH.picked.units[0] ? SH.picked.units[0][1] : 100; if (SH.picked.lastG) SH.g = SH.picked.lastG; return drawPicked(); }
@@ -1059,7 +1214,7 @@ document.addEventListener('click', async ev => {
   }
   if (act === 'unit') { SH.g = +v; return drawPicked(); }
   if (act === 'extraoff') { SH.off = v === '1'; return drawPicked(); }
-  if (act === 'savefood') { const f = { ...SH.picked, drink: !!SH.drink, id: 'c' + Date.now().toString(36), src: 'custom' }; S.foods[f.id] = f; setDoc(doc(db, up('foods/' + f.id)), clone(f)).catch(() => { }); return toast('Saved to your foods.'); }
+  if (act === 'savefood') { const f = { ...SH.picked, drink: !!SH.drink, id: 'c' + Date.now().toString(36), src: 'custom' }; S.foods[f.id] = f; setDoc(doc(db, up('foods/' + f.id)), stamp('foods/', clone(f))).catch(() => { }); return toast('Saved to your foods.'); }
   if (act === 'addpicked' && SH.recipe && SH.recipeAdd) {
     const f = SH.picked; SH.recipe.items.push({ fid: f.id, name: f.name, g: C.round(SH.g, 1), per: { ...f.per } });
     SH.picked = null; SH.recipeAdd = false; $('fs-q').value = ''; return drawRecipe();
@@ -1134,7 +1289,14 @@ document.addEventListener('click', async ev => {
     case 'train': { const dd = d(); dd.trainingDone = !dd.trainingDone; dd.trainingSource = dd.trainingDone ? 'manual' : null; saveDay(D); break; }
     case 'gymtime': d().gymTime = v; saveDay(D); break;
     case 'sport': return openSport();
-    case 'planset': go('setup'); setTimeout(() => { const el = $('sec-plan'); if (el) el.scrollIntoView({ block: 'start' }); }, 60); return;
+    case 'shareweekimg': return shareWeekImage();
+    case 'cheer': { const [to, kind] = v.split(':'); return sendCheer(to, kind); }
+    case 'cheersok': { const code = S.settings.group; Object.keys(S.cheers || {}).forEach(id => deleteDoc(doc(db, `groups/${code}/members/${uid()}/cheers/${id}`)).catch(() => { })); S.cheers = {}; break; }
+    case 'planedit': S.planEdit = v; if (v === 'ramadan') setTimeout(() => { const el = $('sec-plan'); if (el) el.scrollIntoView({ block: 'start' }); }, 60); break;
+    case 'ramon': { const r0 = C.ramadanOf(S.settings); S.settings.ramadan = v === '1' ? { ...r0, on: true, onSince: r0.onSince && !r0.offFrom ? r0.onSince : today(), offFrom: null } : { ...r0, on: false, offFrom: today() }; } if (v === '1' && !S.settings.ramadanMeals) S.settings.ramadanMeals = clone(C.RAMADAN_MEALS); saveSettings(); toast(v === '1' ? 'Ramadan mode on. Add your Ramadan meal plan below.' : 'Ramadan mode off.'); break;
+    case 'ramsetup': go('setup'); setTimeout(() => { const el = $('sec-ramadan'); if (el) el.scrollIntoView({ block: 'start' }); }, 60); return;
+    case 'dayview': return openDay(v);
+    case 'planset': S.planEdit = C.inRamadan(S.settings, editDate()) ? 'ramadan' : 'normal'; go('setup'); setTimeout(() => { const el = $('sec-plan'); if (el) el.scrollIntoView({ block: 'start' }); }, 60); return;
     case 'plannoted': S.settings.planNoted = true; saveSettings(); break;
     case 'sstarter': if (!S.settings.supps.some(s => s.name === v)) { S.settings.supps.push({ id: 's' + Date.now().toString(36), name: v, req: true, am: 'Any time', pm: 'Any time' }); saveSettings(); toast(`${v} added as a core supplement. Tap “core” to make it optional.`); } break;
     case 'quick': return openQuick();
@@ -1158,9 +1320,9 @@ document.addEventListener('click', async ev => {
     case 'stamdel': { const [dt, i] = v.split(':'); const dd = dayDoc(dt); dd.stamina.splice(+i, 1); saveDay(dt); break; }
     case 'checkin': return saveCheckin();
     case 'defgym': S.settings.gymTime = v; saveSettings(); break;
-    case 'mealup': case 'mealdown': { const ms = S.settings.meals, i = ms.findIndex(x => x.id === v), j = act === 'mealup' ? i - 1 : i + 1; if (j >= 0 && j < ms.length) { [ms[i], ms[j]] = [ms[j], ms[i]]; savePlan(); } break; }
-    case 'mealdel': if (S.confirm === 'meal:' + v) { S.settings.meals = S.settings.meals.filter(x => x.id !== v); S.confirm = null; savePlan(); } else { S.confirm = 'meal:' + v; b.textContent = 'Tap again to delete'; return; } break;
-    case 'mealadd': { const ms = S.settings.meals; ms.push({ id: 'm' + Date.now().toString(36), name: `Meal ${ms.length + 1}`, time: '', items: [] }); savePlan(); break; }
+    case 'mealup': case 'mealdown': { const ms = planMeals(), i = ms.findIndex(x => x.id === v), j = act === 'mealup' ? i - 1 : i + 1; if (j >= 0 && j < ms.length) { [ms[i], ms[j]] = [ms[j], ms[i]]; savePlan(); } break; }
+    case 'mealdel': if (S.confirm === 'meal:' + v) { setPlanMeals(planMeals().filter(x => x.id !== v)); S.confirm = null; savePlan(); } else { S.confirm = 'meal:' + v; b.textContent = 'Tap again to delete'; return; } break;
+    case 'mealadd': { const ms = planMeals(); ms.push({ id: 'm' + Date.now().toString(36), name: `Meal ${ms.length + 1}`, time: '', items: [] }); savePlan(); break; }
     case 'stamon': S.settings.stamina = { ...(S.settings.stamina || { days: [] }), on: v === '1' }; saveSettings(); break;
     case 'stamday': { const st = S.settings.stamina = S.settings.stamina || { on: true, days: [] }; const i = +v; st.days = st.days.includes(i) ? st.days.filter(x => x !== i) : [...st.days, i]; saveSettings(); break; }
     case 'sreq': { const s = S.settings.supps.find(x => x.id === b.dataset.id); s.req = !s.req; saveSettings(); break; }
@@ -1200,7 +1362,7 @@ document.addEventListener('input', ev => {
     clearTimeout(t._pb); if (prev && val > prev) t._pb = setTimeout(() => { buzz([30, 40, 70]); toast(`New record on ${e.name}: ${val}${e.unit === 's' ? ' s' : ''} (was ${prev})`); }, 900);
     return;
   }
-  if (t.dataset.mealname) { S.settings.meals.find(x => x.id === t.dataset.mealname).name = t.value.slice(0, 40); savePlan(); return; }
+  if (t.dataset.mealname) { planMeals().find(x => x.id === t.dataset.mealname).name = t.value.slice(0, 40); savePlan(); return; }
 });
 document.addEventListener('change', ev => {
   const t = ev.target;
@@ -1224,7 +1386,8 @@ document.addEventListener('change', ev => {
   if (t.id === 'fb-name') { S.settings.boardName = t.value.trim().slice(0, 24) || null; saveSettings(); S.boardLast = null; return draw(); }
   if (t.dataset.topic) { S.settings.ntfyTopic = t.value.trim().replace(/[^A-Za-z0-9_-]/g, '').slice(0, 64); saveSettings(); return; }
   if (t.dataset.target) { const v = parseFloat(t.value); S.settings.targets = { ...(S.settings.targets || {}), [t.dataset.target]: isNaN(v) ? null : v }; saveSettings(); return; }
-  if (t.dataset.mealtime) { S.settings.meals.find(x => x.id === t.dataset.mealtime).time = t.value; savePlan(); return; }
+  if (t.dataset.ram) { S.settings.ramadan = { ...C.ramadanOf(S.settings), [t.dataset.ram]: t.value }; saveSettings(); return; }
+  if (t.dataset.mealtime) { planMeals().find(x => x.id === t.dataset.mealtime).time = t.value; savePlan(); return; }
   if (t.dataset.stime) { const [id, k] = t.dataset.stime.split(':'); S.settings.supps.find(x => x.id === id)[k] = t.value; saveSettings(); return; }
 });
 
@@ -1243,9 +1406,9 @@ async function saveCheckin() {
   const c = { date, weight: num('ck-weight') ?? prev.weight ?? null, waist: num('ck-waist') ?? prev.waist ?? null, chest: num('ck-chest') ?? prev.chest ?? null, arm: num('ck-arm') ?? prev.arm ?? null, hips: num('ck-hips') ?? prev.hips ?? null };
   const f = $('ck-photo').files[0];
   if (!f && !c.weight && !c.waist && !c.chest && !c.arm && !c.hips) return toast('Add a measurement or a photo first.');
-  S.checkins[date] = c; setDoc(doc(db, up('checkins/' + date)), clone(c)).catch(() => toast('Couldn’t save the check-in.'));
+  S.checkins[date] = c; setDoc(doc(db, up('checkins/' + date)), stamp('checkins/', clone(c))).catch(() => toast('Couldn’t save the check-in.'));
   if (f) {
-    try { const data = await compress(f); if (data.length > 900000) return toast('That photo is too large even after shrinking. Try another.'); S.photos[date] = { date, data }; setDoc(doc(db, up('photos/' + date)), { date, data }).catch(() => toast('Couldn’t save the photo.')); }
+    try { const data = await compress(f); if (data.length > 900000) return toast('That photo is too large even after shrinking. Try another.'); S.photos[date] = { date, data }; setDoc(doc(db, up('photos/' + date)), stamp('photos/', { date, data })).catch(() => toast('Couldn’t save the photo.')); }
     catch (e) { return toast('Couldn’t read that photo. Try a JPG or PNG.'); }
   }
   toast('Check-in saved.'); draw();
@@ -1263,7 +1426,7 @@ async function importBackup(file) {
     const j = JSON.parse(await file.text());
     if (j.app !== 'lock-in-90' || !j.settings) return toast('That file isn’t a Lock In 90 backup.');
     const writes = [['settings/main', j.settings], ...Object.entries(j.days || {}).map(([k, v]) => ['days/' + k, v]), ...Object.entries(j.checkins || {}).map(([k, v]) => ['checkins/' + k, v]), ...Object.entries(j.foods || {}).map(([k, v]) => ['foods/' + k, v]), ...Object.entries(j.photos || {}).map(([k, v]) => ['photos/' + k, v])];
-    for (let i = 0; i < writes.length; i += 400) { const b = writeBatch(db); writes.slice(i, i + 400).forEach(([p, v]) => b.set(doc(db, up(p)), clone(v))); b.commit().catch(() => toast('Part of the import didn’t save.')); }
+    for (let i = 0; i < writes.length; i += 400) { const b = writeBatch(db); writes.slice(i, i + 400).forEach(([p, v]) => b.set(doc(db, up(p)), stamp(p, clone(v)))); b.commit().catch(() => toast('Part of the import didn’t save.')); }
     S.settings = clone(j.settings); Object.assign(S.days, clone(j.days || {})); Object.assign(S.checkins, clone(j.checkins || {}));
     toast(`Imported ${Object.keys(j.days || {}).length} days.`); draw();
   } catch (e) { toast('Couldn’t read that file.'); }
@@ -1289,6 +1452,26 @@ async function emailAuth(create) {
 }
 document.addEventListener('submit', e => { if (e.target.id === 'email-form') { e.preventDefault(); emailAuth(false); } });
 getRedirectResult(auth).catch(() => { });
+/* Firestore bills a full re-read when a listener reconnects after 30+ minutes. To keep reads low, each synced
+   collection loads from the phone's cache first, then listens only for documents changed since the last sync. */
+function syncCol(name, onDocs, meta) {
+  const key = `lk-sync:${uid()}:${name}`, col = collection(db, up(name)), opt = meta ? { includeMetadataChanges: true } : {};
+  let since = 0; try { since = +localStorage.getItem(key) || 0; } catch (e) { }
+  const handle = qs => {
+    onDocs(qs);
+    if (qs.metadata.fromCache) return;
+    let mx = since; qs.docs.forEach(x => { const u = x.data().u; const ms = u && u.toMillis ? u.toMillis() : 0; if (ms > mx) mx = ms; });
+    mx = Math.max(mx, Date.now() - 10 * 60e3); since = mx;
+    try { localStorage.setItem(key, String(mx)); } catch (e) { }
+  };
+  const full = () => S.unsub.push(onSnapshot(col, opt, handle, () => { if (meta) { S.got.days = true; render(); } }));
+  if (!since) return full();
+  getDocsFromCache(col).then(qs => {
+    if (!qs.size && name === 'days') { since = 0; return full(); } // cache was cleared: do one full load
+    onDocs(qs);
+    S.unsub.push(onSnapshot(query(col, where('u', '>', Timestamp.fromMillis(since - 10 * 60e3))), opt, handle, () => full()));
+  }).catch(() => full());
+}
 function subscribe() {
   S.unsub.forEach(u => u()); S.unsub = [];
   const opt = { includeMetadataChanges: true };
@@ -1298,12 +1481,12 @@ function subscribe() {
     if (!snap.metadata.fromCache || snap.exists()) S.got.settings = true;
     render();
   }, () => { S.got.settings = true; render(); }));
-  S.unsub.push(onSnapshot(collection(db, up('days')), opt, qs => {
+  syncCol('days', qs => {
     qs.docs.forEach(x => { if (!busy('days/' + x.id)) S.days[x.id] = x.data(); });
     S.pend.d = qs.metadata.hasPendingWrites; S.got.days = true; render();
-  }));
-  S.unsub.push(onSnapshot(collection(db, up('checkins')), qs => { qs.docs.forEach(x => S.checkins[x.id] = x.data()); render(); }));
-  S.unsub.push(onSnapshot(collection(db, up('foods')), qs => { qs.docs.forEach(x => S.foods[x.id] = x.data()); }));
+  }, true);
+  syncCol('checkins', qs => { qs.docs.forEach(x => S.checkins[x.id] = x.data()); render(); });
+  syncCol('foods', qs => { qs.docs.forEach(x => S.foods[x.id] = x.data()); });
   S.unsub.push(onSnapshot(collection(db, up('activities')), qs => { qs.docs.forEach(x => S.acts[x.id] = x.data()); render(); }));
   S.unsub.push(onSnapshot(collection(db, up('meta')), qs => { qs.docs.forEach(x => S.meta[x.id] = x.data()); render(); }));
 }
@@ -1317,7 +1500,15 @@ function boardOn() {
   if (S.boardUnsub) S.boardUnsub();
   S.boardUnsub = null; S.board = {}; S.boardCode = code || null; S.boardLast = null;
   if (!code) return;
-  S.boardUnsub = onSnapshot(collection(db, `groups/${code}/members`), qs => { S.board = {}; qs.docs.forEach(x => S.board[x.id] = x.data()); if (S.view === 'progress' || S.view === 'today') render(); }, () => { });
+  const u1 = onSnapshot(collection(db, `groups/${code}/members`), qs => { S.board = {}; qs.docs.forEach(x => S.board[x.id] = x.data()); if (S.view === 'progress' || S.view === 'today') render(); }, () => { });
+  const u2 = onSnapshot(collection(db, `groups/${code}/members/${uid()}/cheers`), qs => {
+    const before = new Set(Object.keys(S.cheers || {})); S.cheers = {};
+    qs.docs.forEach(x => S.cheers[x.id] = x.data());
+    const fresh = Object.keys(S.cheers).filter(k => !before.has(k));
+    if (fresh.length && before.size + fresh.length > 0 && S.cheersSeen) { const c = S.cheers[fresh[0]]; buzz([30, 50, 30]); toast(c.kind === 'nudge' ? `${c.name}: finish today, you’ve got this` : `${c.name} cheered you 👏`); }
+    S.cheersSeen = true; if (S.view === 'today') render();
+  }, () => { });
+  S.boardUnsub = () => { u1(); u2(); S.cheers = {}; S.cheersSeen = false; };
 }
 let boardT;
 function boardPublish(R) {
@@ -1343,6 +1534,22 @@ function friendRows() {
   const t = today();
   return Object.entries(S.board).map(([id, m]) => ({ id, ...m, me: id === uid(), fresh: m.date === t })).sort((a, b) => (b.fresh && b.done) - (a.fresh && a.done) || b.streak - a.streak || a.name.localeCompare(b.name));
 }
+const CHEER_TXT = { cheer: '👏 Keep going!', nudge: '⏰ Finish today, you’ve got this', fire: '🔥 Locked in, respect' };
+function cheersHTML() {
+  const list = Object.entries(S.cheers || {}).sort((a, b) => (b[1].at || 0) - (a[1].at || 0));
+  if (!list.length) return '';
+  return `<section class="card cheers"><span class="sub">From your friends</span>${list.slice(0, 4).map(([, c]) => `<div class="cheer"><b>${esc(c.name || 'A friend')}</b><span>${esc(CHEER_TXT[c.kind] || CHEER_TXT.cheer)}</span></div>`).join('')}<button class="btn small" data-act="cheersok">Thanks</button></section>`;
+}
+async function sendCheer(to, kind) {
+  const code = S.settings.group, key = `lk-cheer:${today()}:${to}:${kind}`;
+  try { if (localStorage.getItem(key)) return toast('Already sent today.'); } catch (e) { }
+  try {
+    await setDoc(doc(db, `groups/${code}/members/${to}/cheers/${uid()}_${today()}_${kind}`), { from: uid(), name: boardName(), kind, date: today(), at: Date.now() });
+    try { localStorage.setItem(key, '1'); } catch (e) { }
+    buzz(20); toast(kind === 'nudge' ? 'Nudge sent.' : 'Sent 👏'); draw();
+  } catch (e) { toast(e && e.code === 'permission-denied' ? 'Cheers need the updated Firestore rules (see the README).' : 'Couldn’t send that. Try again online.'); }
+}
+const cheerSent = (to, kind) => { try { return !!localStorage.getItem(`lk-cheer:${today()}:${to}:${kind}`); } catch (e) { return false; } };
 function friendsLineHTML() {
   if (!S.settings.group) return '';
   const fr = friendRows().filter(m => !m.me);
@@ -1362,7 +1569,8 @@ function friendsHTML() {
   return `<section class="card" id="sec-friends"><div class="card-h"><h2>Friends</h2><span class="state s-opt num">${esc(st.group)}</span></div>
   ${gs ? `<div class="gchain${gs.todayAll ? ' all' : ''}"><b class="num">${gs.n}</b><span>${gs.n === 1 ? 'day' : 'days'} in a row that <em>everyone</em> locked in${gs.todayAll ? ' · all of you are done today' : ''}</span></div>` : ''}
   <div class="board">${rows.length ? rows.map(m => `<div class="brow${m.me ? ' me' : ''}"><div class="bn"><b>${esc(m.name)}${m.me ? ' (you)' : ''}</b><small class="num">Day ${m.day} · streak ${m.streak}${m.attempt > 1 ? ` · attempt ${m.attempt}` : ''}</small></div>
-    ${m.victory ? pill('done', '90 days done') : !m.fresh ? `<span class="state s-todo">Last seen ${m.date ? fmt(m.date) : '—'}</span>` : m.done ? pill('done', 'Locked in') : `<span class="state s-todo num">${m.parts}/4 today</span>`}</div>`).join('') : '<p class="hint">Loading the board… (needs internet the first time)</p>'}</div>
+    <div class="bend">${m.victory ? pill('done', '90 days done') : !m.fresh ? `<span class="state s-todo">Last seen ${m.date ? fmt(m.date) : '—'}</span>` : m.done ? pill('done', 'Locked in') : `<span class="state s-todo num">${m.parts}/4 today</span>`}
+    ${m.me ? '' : `<div class="cbtns">${m.fresh && m.done ? `<button class="cb" data-act="cheer" data-v="${m.id}:fire" ${cheerSent(m.id, 'fire') ? 'disabled' : ''} aria-label="Send respect to ${esc(m.name)}">🔥</button>` : `<button class="cb" data-act="cheer" data-v="${m.id}:cheer" ${cheerSent(m.id, 'cheer') ? 'disabled' : ''} aria-label="Cheer ${esc(m.name)}">👏</button>`}${!m.done ? `<button class="cb" data-act="cheer" data-v="${m.id}:nudge" ${cheerSent(m.id, 'nudge') ? 'disabled' : ''} aria-label="Nudge ${esc(m.name)} to finish today">⏰</button>` : ''}</div>`}</div></div>`).join('') : '<p class="hint">Loading the board… (needs internet the first time)</p>'}</div>
   <div class="row"><button class="btn" data-act="grpinvite">Invite friends</button><button class="link" data-act="grpleave">Leave group</button></div>
   <div class="setup-r"><label for="fb-name">Your name on the board</label><input class="in" id="fb-name" maxlength="24" value="${esc(boardName())}"></div></section>`;
 }
@@ -1370,7 +1578,7 @@ function friendsHTML() {
 function photosOn() {
   if (S.photosOn || !S.user) return;
   S.photosOn = true;
-  S.unsub.push(onSnapshot(collection(db, up('photos')), qs => { qs.docs.forEach(x => S.photos[x.id] = x.data()); if (S.view === 'progress') render(); }));
+  syncCol('photos', qs => { qs.docs.forEach(x => S.photos[x.id] = x.data()); if (S.view === 'progress') render(); });
 }
 onAuthStateChanged(auth, u => {
   S.user = u; S.authReady = true;
