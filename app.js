@@ -3,7 +3,7 @@ import { getAuth, GoogleAuthProvider, signInWithPopup, getRedirectResult, onAuth
 import { initializeFirestore, getFirestore, persistentLocalCache, persistentMultipleTabManager, doc, collection, onSnapshot, setDoc, getDoc, deleteDoc, writeBatch, query, where, getDocsFromCache, serverTimestamp, Timestamp } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
 import * as C from './core.js';
 import { trText, addFoodNames } from './i18n.js';
-const APP_VERSION = '15 · coach link fix';
+const APP_VERSION = '16 · new design';
 import { EX, POSE, figSVG, YT, LINES, FOODS, COACH_MEALS, DEFAULT_SUPPS, SLOTS, CARDIO_MODES } from './data.js';
 addFoodNames(FOODS);
 
@@ -117,7 +117,7 @@ function mealIcon(m, i) {
 }
 function render() {
   const a = document.activeElement;
-  if (a && a.closest && a.closest('main') && a.matches('input:not([type=file]):not([type=range]),textarea,select')) { S.deferred = true; return; }
+  if (a && a.closest && a.closest('main, #panel') && a.matches('input:not([type=file]):not([type=range]),textarea,select')) { S.deferred = true; return; }
   draw();
 }
 document.addEventListener('focusout', () => setTimeout(() => { if (S.deferred) { S.deferred = false; render(); } }, 0));
@@ -128,22 +128,24 @@ function draw() {
   document.querySelectorAll('.tabs button').forEach(b => b.setAttribute('aria-current', b.dataset.v === S.view ? 'page' : 'false'));
   $('tabs').hidden = !S.user || !S.settings;
   const m = $('main');
-  if (!S.authReady) { $('top').innerHTML = topIdle(); m.innerHTML = `<div class="card hint">Loading…</div>`; return; }
-  if (!S.user) { $('top').innerHTML = topIdle(); m.innerHTML = signinHTML(); return; }
-  if (!S.got.settings) { $('top').innerHTML = topIdle(); m.innerHTML = `<div class="card hint">Loading your challenge…</div>`; return; }
-  if (!S.settings) { $('top').innerHTML = topIdle(); m.innerHTML = welcomeHTML(); return; }
+  if (!S.authReady) { $('top').innerHTML = topIdle(); $('top').parentElement.hidden = false; m.innerHTML = `<div class="card hint">Loading…</div>`; return; }
+  if (!S.user) { $('top').innerHTML = topIdle(); $('top').parentElement.hidden = false; m.innerHTML = signinHTML(); return; }
+  if (!S.got.settings) { $('top').innerHTML = topIdle(); $('top').parentElement.hidden = false; m.innerHTML = `<div class="card hint">Loading your challenge…</div>`; return; }
+  if (!S.settings) { $('top').innerHTML = topIdle(); $('top').parentElement.hidden = false; m.innerHTML = welcomeHTML(); return; }
   if (S.quickWater && S.got.days) { S.quickWater = false; const dd = dayDoc(today()); dd.water = (dd.water || 0) + 250; saveDay(today()); S.view = 'today'; history.replaceState(null, '', '#today'); toast(`+250 ml · ${L(C.waterTotal(dd))} L today`); }
   privacyMigrate();
   C.TT.gym.sub = isOwner() ? 'Your PPLUL day. Tick it after you log it in Lyfta.' : 'Tick it once your gym workout is done.';
   if (S.quickSport && S.got.days) { S.quickSport = false; S.view = 'today'; history.replaceState(null, '', '#today'); setTimeout(openSport, 50); }
   const R = C.computeRun(S.settings, S.days, now());
-  $('top').innerHTML = topHTML(R);
+  $('top').innerHTML = ''; $('top').parentElement.hidden = true;
   boardOn(); boardPublish(R); coachPublish(R);
   setTimeout(() => maybeCelebrate(R), 350);
-  if (S.view === 'progress') photosOn();
-  m.innerHTML = bannersHTML(R) + (S.view === 'train' ? trainHTML(R) : S.view === 'progress' ? progressHTML(R) : S.view === 'setup' ? setupHTML(R) : todayHTML(R));
+  if (S.view === 'progress' && S.ptab === 'body') photosOn();
+  m.innerHTML = S.view === 'train' ? pageHead('Train', R) + trainHTML(R) : S.view === 'progress' ? pageHead('Progress', R) + progressHTML(R) : S.view === 'setup' ? meHTML(R) : todayHTML(R);
+  drawPanel();
 }
 const topIdle = () => `<div class="top-row"><div class="brand"><img src="icons/logo.svg" alt=""><div><div class="daylabel">90-day challenge</div><div class="daynum">LOCK IN</div></div></div></div>`;
+function syncDot() { const s = !S.online ? 'off' : (S.pend.s || S.pend.d || Object.keys(timers).length) ? 'pend' : 'ok'; return `<span class="syncdot ${s}" title="${s === 'off' ? 'Offline · saved on phone' : s === 'pend' ? 'Syncing' : 'Synced'}" aria-label="${s === 'off' ? 'Offline, saved on phone' : s === 'pend' ? 'Syncing' : 'Synced'}"></span>`; }
 function syncChip() {
   if (!S.online) return `<span class="chip sync off">Offline · saved on phone</span>`;
   if (S.pend.s || S.pend.d || Object.keys(timers).length) return `<span class="chip sync pend">Syncing</span>`;
@@ -191,7 +193,7 @@ function signinHTML() {
 function waterSelect(id, attr, val) { return `<select class="in" id="${id}" ${attr}>${WATER_OPTS.map(v => `<option value="${v}" ${v === val ? 'selected' : ''}>${L(v)} L</option>`).join('')}</select>`; }
 function welcomeHTML() {
   return `<section class="card"><div class="card-h"><h2>Start your 90 days</h2><button class="langbtn" data-act="lang" data-v="${LANG() === 'ar' ? 'en' : 'ar'}">${LANG() === 'ar' ? 'English' : 'العربية'}</button></div>
-  <p class="hint">Every day needs every planned meal on plan, your water goal, that day’s training and your core supplements. Miss any of them and the counter goes back to Day 1. ${isOwner() ? 'Your coach’s meal plan is already loaded; edit it in Setup.' : 'You start with Breakfast, Lunch and Dinner. Add your own meal plan and supplements in Setup, or just log what you eat and the app counts the calories.'}</p>
+  <p class="hint">Every day needs every planned meal on plan, your water goal, that day’s training and your core supplements. Miss any of them and the counter goes back to Day 1. ${isOwner() ? 'Your coach’s meal plan is already loaded; edit it in Me.' : 'You start with Breakfast, Lunch and Dinner. Add your own meal plan and supplements in Me, or just log what you eat and the app counts the calories.'}</p>
   <div class="form"><label>Start date<input class="in" id="w-start" type="date" value="${today()}" max="${today()}"></label>
   <label>Water goal${waterSelect('w-water', '', 4000)}</label>
   <label>Current weight (kg)<input class="in" id="w-weight" type="number" inputmode="decimal" step="0.1"></label>
@@ -268,7 +270,7 @@ function insightsHTML() {
   // reasons for missed days and craving outcomes
   const why = {}; days.forEach(x => { if (!x.ok && x.d.missWhy && x.d.missWhy !== 'skip') why[x.d.missWhy] = (why[x.d.missWhy] || 0) + 1; });
   const tw = Object.entries(why).sort((a, b) => b[1] - a[1])[0];
-  if (tw && tw[1] >= 2) out.push(['🧭', `Your most common reason for a missed day: ${(MISS_WHY.find(m => m[0] === tw[0]) || [, tw[0]])[1]} (${tw[1]} times). Add an if-then plan for it in Setup.`]);
+  if (tw && tw[1] >= 2) out.push(['🧭', `Your most common reason for a missed day: ${(MISS_WHY.find(m => m[0] === tw[0]) || [, tw[0]])[1]} (${tw[1]} times). Add an if-then plan for it in Me.`]);
   const cr = days.flatMap(x => x.d.cravings || []);
   if (cr.length >= 3) out.push(['🌊', `You used the craving tool ${cr.length} times and it passed ${cr.filter(c => c.out === 'passed').length} times.`]);
   return `<section class="card"><div class="card-h"><h2>Insights</h2><span class="hint">Last ${days.length} days</span></div>${out.length ? `<div class="insights">${out.slice(0, 5).map(([i, s]) => `<div class="ins"><span>${i}</span><p>${esc(s)}</p></div>`).join('')}</div>` : '<p class="hint">No strong patterns yet. Keep logging sleep and energy; insights show up when the difference is real.</p>'}</section>`;
@@ -286,8 +288,8 @@ function measuresHTML(cks) {
 async function shareWeekImage() {
   const rv = weekReview(), aw = activityWeek(), t = today(), st = S.settings, hit = k => rv.past - rv.miss[k];
   const W = 1080, H = 1350, cv = document.createElement('canvas'); cv.width = W; cv.height = H; const g = cv.getContext('2d');
-  try { await document.fonts.ready; } catch (e) { }
-  const NAVY = '#1C2638', NAVY2 = '#2C3B57', SPARK = '#E8AE4F', GOOD = '#5DBB8A', CREAM = '#F5F2EB', MUTE = '#9FB0C8', DISP = '"Barlow Condensed","Arial Narrow",sans-serif', MONO = '"IBM Plex Mono",monospace', BODY = '"IBM Plex Sans",sans-serif';
+  try { await document.fonts.load('800 40px Alexandria'); await document.fonts.ready; } catch (e) { }
+  const NAVY = '#14213D', NAVY2 = '#1F2E52', SPARK = '#F2B33D', GOOD = '#4ADE9B', CREAM = '#FFFFFF', MUTE = '#9FB0D0', DISP = 'Alexandria,sans-serif', MONO = 'Alexandria,sans-serif', BODY = 'Alexandria,sans-serif';
   const grd = g.createLinearGradient(0, 0, 0, H); grd.addColorStop(0, NAVY2); grd.addColorStop(1, NAVY); g.fillStyle = grd; g.fillRect(0, 0, W, H);
   g.fillStyle = MUTE; g.font = `500 30px ${MONO}`; g.fillText('LOCK IN 90 · WEEKLY REPORT', 80, 110);
   g.fillStyle = CREAM; let fs = 64; const head = `${boardName().toUpperCase()} · WEEK ENDING ${fmt(t).toUpperCase()}`; do { g.font = `700 ${fs}px ${DISP}`; fs -= 2; } while (g.measureText(head).width > W - 160 && fs > 30); g.fillText(head, 80, 190);
@@ -419,7 +421,7 @@ function openFocusPick() {
   const fw = focusWeek(), cur = (S.settings.focus || {})[fw.key];
   SH = { scope: 'focus' }; $('sheet').hidden = false;
   $('sheet').innerHTML = `<div class="sheet" role="dialog" aria-modal="true" aria-label="Weekly focus"><div class="spread"><h2>This week’s focus</h2><button class="x" data-act="closesheet" aria-label="Close">×</button></div><p class="hint">One extra goal on top of your four pillars. It never breaks your streak.</p>
-  <div class="results">${Object.entries(FOCUS).map(([k, f]) => `<button class="res" data-act="focusset" data-v="${k}" aria-pressed="${cur && cur.id === k}"><span><b>${esc(f.name)}</b></span><span class="k num">${f.target}×</span></button>`).join('')}</div></div>`;
+  <div class="results">${(() => { const sg = focusSuggest(); return Object.entries(FOCUS).sort(([a], [b]) => (b === sg) - (a === sg)).map(([k, f]) => `<button class="res" data-act="focusset" data-v="${k}" aria-pressed="${cur && cur.id === k}"><span><b>${esc(f.name)}</b>${k === sg ? '<small>Suggested from your last 7 days</small>' : ''}</span><span class="k num">${f.target}×</span></button>`).join(''); })()}</div></div>`;
 }
 
 /* ---------- photo guide (camera with last photo as a faded overlay) ---------- */
@@ -459,7 +461,7 @@ function bodyNumbersHTML(cks) {
   const st = S.settings, h = st.height;
   const last = k => { for (let i = cks.length - 1; i >= 0; i--) if (cks[i][k] > 0) return cks[i][k]; return null; };
   const waist = last('waist'), neck = last('neck'), hips = last('hips');
-  if (!h) return `<p class="hint">Add your height in Setup (and neck in a check-in) to see your waist-to-height ratio and a body-fat estimate.</p>`;
+  if (!h) return `<p class="hint">Add your height in Me (and neck in a check-in) to see your waist-to-height ratio and a body-fat estimate.</p>`;
   if (!waist) return '';
   const r = waist / h, band = r < 0.4 ? ['low', 'Below the healthy range'] : r < 0.5 ? ['ok', 'Healthy (NICE)'] : r < 0.6 ? ['mid', 'Increased health risk (NICE: take care)'] : ['high', 'High health risk (NICE: take action)'];
   let bf = null; const L10 = Math.log10, inch = x => x / 2.54;
@@ -543,6 +545,34 @@ function ramadanHTML(date) {
   return '';
 }
 
+/* ---------- page shells ---------- */
+const pageHead = (title, R) => `<header class="ph"><h1>${esc(title)}</h1><span class="hero-chips">${syncDot()}${flameChip(R)}</span></header>`;
+const PTABS = [['week', 'Week'], ['body', 'Body'], ['chain', 'Chain'], ['friends', 'Friends']];
+function progressShell(G) {
+  const tab = PTABS.some(p => p[0] === S.ptab) ? S.ptab : 'week';
+  return `<div class="seg wide ptabs" role="tablist" aria-label="Progress sections">${PTABS.map(([k, l]) => `<button role="tab" data-act="ptab" data-v="${k}" aria-pressed="${tab === k}">${l}</button>`).join('')}</div>` + (G[tab] || '');
+}
+const ME_GROUPS = [
+  ['Plan', [['Meal plan', '🍽️'], ['Weekly training', '🏋️'], ['Supplements', '💊'], ['Stamina track', '🚴'], ['Ramadan mode', '☾']]],
+  ['Habits', [['If-then plans', '⇢'], ['Reminders', '🔔']]],
+  ['Sharing', [['Coach link', '🔗'], ['Strava', '↻']]],
+  ['App', [['Data', '⚙️'], ['Restart', '↺']]]
+];
+function meHTML(R) {
+  const full = setupHTML(R), parts = full.split(/(?=<section )/).filter(Boolean);
+  const title = s => { const m = s.match(/<h2>(.*?)<\/h2>/); return m ? m[1].replace(/&amp;/g, '&') : ''; };
+  const byTitle = Object.fromEntries(parts.map(p => [title(p), p]));
+  if (S.meSec && byTitle[S.meSec]) return `<header class="ph sub2"><button class="back" data-act="mesec" data-v="" aria-label="Back to Me">‹</button><h1>${esc(S.meSec)}</h1></header>` + byTitle[S.meSec];
+  const st = S.settings, w = curWeight();
+  const sum = { 'Meal plan': `${kc(C.sumItems((st.meals || []).flatMap(m => m.items || [])).k)} kcal · ${(st.meals || []).length} meals`, 'Supplements': `${(st.supps || []).filter(s => s.req).length} core`, 'Ramadan mode': st.ramadan && st.ramadan.on ? 'On' : 'Off', 'If-then plans': `${(st.ifthen || []).length} saved`, 'Coach link': st.coach ? 'Sharing' : 'Off', 'Reminders': st.ntfyTopic ? 'On' : 'Not set up', 'Stamina track': (st.stamina || {}).on === false ? 'Off' : 'On', 'Weekly training': '' };
+  let h = `<header class="ph"><h1>Me</h1><span class="hero-chips">${syncDot()}${flameChip(R)}</span></header>
+  <section class="card me-card"><div class="me-top"><span class="avatar">${esc((boardName() || '?').slice(0, 1).toUpperCase())}</span><span><b>${esc(boardName())}</b><small>Day ${Math.min(R.dayNum, 90)} of 90 · attempt ${R.attemptNo}</small></span></div>
+  <div class="me-stats"><span><b class="num">${w ? C.round(w, 1) : '—'}</b><small>kg now</small></span><span><b class="num">${st.goalWeight || '—'}</b><small>kg goal</small></span><span><b class="num">${L(st.waterGoal || 3500)}</b><small>L water</small></span></div>
+  <button class="btn block" data-act="mesec" data-v="Challenge">Edit goals and body</button></section>`;
+  ME_GROUPS.forEach(([g, items]) => { const its = items.filter(([k]) => byTitle[k]); if (!its.length) return; h += `<h3 class="grp">${g}</h3><section class="card list2">${its.map(([k, ic]) => `<button class="lrow" data-act="mesec" data-v="${esc(k)}"><span class="lic">${ic}</span><span class="lt"><b>${esc(k)}</b>${sum[k] ? `<small>${esc(sum[k])}</small>` : ''}</span><span class="le">›</span></button>`).join('')}</section>`; });
+  return h + `<p class="hint center">Signed in as ${esc(S.user.email || '')} · <button class="link" data-act="signout">Sign out</button><br><span class="num">App version ${APP_VERSION}</span></p>`;
+}
+
 /* ---------- day history (read-only) ---------- */
 function openDay(date) { SH = { scope: 'day', date }; $('sheet').hidden = false; drawDay(); }
 function drawDay() {
@@ -591,7 +621,7 @@ function drawSport() {
   <span class="sub">How long</span><div class="row">${[30, 45, 60, 90, 120].map(m => `<button class="btn small" data-act="spmin" data-v="${m}" aria-pressed="${s.min === m}">${{ 30: '30 min', 45: '45 min', 60: '1 h', 90: '1 h 30', 120: '2 h' }[m]}</button>`).join('')}<label class="g">or <input class="in sm" id="sp-min" type="number" inputmode="numeric" min="5" max="600" value="${s.min}"> min</label></div>
   <span class="sub">How hard</span><div class="seg wide" role="group" aria-label="Intensity">${C.LEVELS.map((l, i) => `<button data-act="splvl" data-v="${i}" aria-pressed="${s.lvl === i}">${l}</button>`).join('')}</div><p class="hint">${LVL_HINT[s.lvl]}.</p>
   <label class="full-note">Average heart rate (optional, from your watch)<input class="in" id="sp-hr" type="number" inputmode="numeric" min="60" max="210" placeholder="e.g. 145" value="${s.hr || ''}"></label>
-  ${s.hr && !S.settings.age ? '<p class="hint">Add your age in Setup to use heart rate. Until then it uses the sport and intensity.</p>' : ''}
+  ${s.hr && !S.settings.age ? '<p class="hint">Add your age in Me to use heart rate. Until then it uses the sport and intensity.</p>' : ''}
   ${s.canCount ? `<label class="chk"><input type="checkbox" id="sp-count" ${s.counts ? 'checked' : ''}> Count this as today’s training</label>` : ''}
   <div class="spest"><b class="num">≈ ${kc(kcal)} kcal</b><span>${esc(sp.name)} · ${s.min} min · ${C.LEVELS[s.lvl].toLowerCase()} · ${usingHR ? `heart rate ${s.hr} bpm` : `${C.round(kg, 1)} kg`}</span></div>
   <button class="btn primary block" data-act="spsave">Save</button></div>`;
@@ -649,8 +679,8 @@ async function shareCard() {
   const R = C.computeRun(S.settings, S.days, now()), c = celebData(R);
   const W = 1080, H = 1350, cv = document.createElement('canvas'); cv.width = W; cv.height = H;
   const g = cv.getContext('2d');
-  try { await document.fonts.ready; } catch (e) { }
-  const NAVY = '#1C2638', NAVY2 = '#2C3B57', SPARK = '#E8AE4F', CREAM = '#F5F2EB', MUTE = '#9FB0C8', DISP = '"Barlow Condensed","Arial Narrow",sans-serif', MONO = '"IBM Plex Mono",monospace';
+  try { await document.fonts.load('800 40px Alexandria'); await document.fonts.ready; } catch (e) { }
+  const NAVY = '#14213D', NAVY2 = '#1F2E52', SPARK = '#F2B33D', CREAM = '#FFFFFF', MUTE = '#9FB0D0', DISP = 'Alexandria,sans-serif', MONO = 'Alexandria,sans-serif';
   const grd = g.createLinearGradient(0, 0, 0, H); grd.addColorStop(0, NAVY2); grd.addColorStop(1, NAVY); g.fillStyle = grd; g.fillRect(0, 0, W, H);
   g.fillStyle = MUTE; g.font = `500 32px ${MONO}`; g.fillText('LOCK IN 90', 90, 130); g.textAlign = 'right'; g.fillText(fmt(c.date).toUpperCase(), W - 90, 130); g.textAlign = 'left';
   g.fillStyle = CREAM; g.font = `800 110px ${DISP}`; g.fillText('DAY', 90, 300);
@@ -667,19 +697,18 @@ async function shareCard() {
 function commitHTML(R, d, date) {
   const n = now();
   if (date !== today() || d.commit || R.todayEval.complete || n.hour < 4 || n.hour >= 14) return '';
-  const day = Math.min(R.dayNum, 90);
-  return `<section class="card commit"><span class="sub">Morning commitment</span><h2>Day ${day}. Commit to it.</h2><p class="hint">One tap: a promise to yourself that today gets done, all four pillars.</p><button class="btn primary block" data-act="commit">I commit to Day ${day}</button></section>`;
+  return `<button class="commitbar" data-act="commit"><span>Commit to Day ${Math.min(R.dayNum, 90)}</span><small>A promise that all four get done today</small></button>`;
 }
 
 /* ---------- TODAY ---------- */
 function arc(cx, cy, r, a0, a1) { const R2 = a => a * Math.PI / 180; const x0 = cx + r * Math.cos(R2(a0)), y0 = cy + r * Math.sin(R2(a0)), x1 = cx + r * Math.cos(R2(a1)), y1 = cy + r * Math.sin(R2(a1)); return `M${x0.toFixed(2)},${y0.toFixed(2)} A${r},${r} 0 ${a1 - a0 > 180 ? 1 : 0} 1 ${x1.toFixed(2)},${y1.toFixed(2)}`; }
 function ringsSVG(parts, mealsBad) {
-  const cls = ['meal', 'water', 'train', 'supp'], R0 = [66, 52, 38, 24], sw = 11;
-  let s = `<svg viewBox="0 0 160 160" aria-hidden="true">`;
+  const cls = ['meal', 'water', 'train', 'supp'], R0 = [70, 59, 48, 37], sw = 8;
+  let s = `<svg viewBox="0 0 150 150" aria-hidden="true">`;
   parts.forEach((pt, i) => {
     const r = R0[i], c = 2 * Math.PI * r, v = Math.min(1, Math.max(0, pt.v));
-    s += `<circle cx="80" cy="80" r="${r}" fill="none" class="rtrack ${cls[i]}" stroke-width="${sw}"/>`;
-    if (v > 0) s += `<circle cx="80" cy="80" r="${r}" fill="none" class="rfill ${cls[i]}${i === 0 && mealsBad ? ' bad' : ''}" stroke-width="${sw}" stroke-linecap="round" stroke-dasharray="${(c * v).toFixed(1)} ${c.toFixed(1)}" transform="rotate(-90 80 80)"/>`;
+    s += `<circle cx="75" cy="75" r="${r}" fill="none" class="rtrack ${cls[i]}" stroke-width="${sw}"/>`;
+    if (v > 0) s += `<circle cx="75" cy="75" r="${r}" fill="none" class="rfill ${cls[i]}${i === 0 && mealsBad ? ' bad' : ''}" stroke-width="${sw}" stroke-linecap="round" stroke-dasharray="${(c * v).toFixed(1)} ${c.toFixed(1)}" transform="rotate(-90 75 75)"/>`;
   });
   return s + `</svg>`;
 }
@@ -713,49 +742,80 @@ function todayHTML(R) {
   const line = LINES[((R.dayNum - 1) % LINES.length + LINES.length) % LINES.length];
   const mealsBad = P.off.length || P.offExtra.length;
   const parts = [
-    { v: P.pm.length ? P.clean / P.pm.length : 0, c: mealsBad ? 'bad' : P.mealsOk ? 'done' : '' },
-    { v: Math.min(1, P.w / P.goal), c: P.w >= P.goal ? 'done' : 'water' },
-    { v: P.trained ? 1 : 0, c: 'done' },
-    { v: P.req.length ? P.sDone / P.req.length : 1, c: P.sDone === P.req.length ? 'done' : '' }
+    { v: P.pm.length ? P.clean / P.pm.length : 0 },
+    { v: Math.min(1, P.w / P.goal) },
+    { v: P.trained ? 1 : 0 },
+    { v: P.req.length ? P.sDone / P.req.length : 1 }
   ];
-  const pdone = [P.mealsOk, P.w >= P.goal, P.trained, P.sDone === P.req.length].filter(Boolean).length;
-  let h = '';
-  h += commitHTML(R, d, date);
-  if (grace) h += `<div class="phases" role="group" aria-label="Day being edited"><button data-act="editdate" data-v="${grace}" aria-pressed="${date === grace}">Yesterday · until 3 AM</button><button data-act="editdate" data-v="${t}" aria-pressed="${date === t}">Today</button></div>`;
-  // hero: four concentric rings (one per pillar), the pillar list, then the single most useful next step
-  const supLeft = P.req.filter(s => !(d.supps || {})[s.id]).map(s => s.name);
-  const rows = [
-    { k: 'meals', jump: 'sec-meals', name: 'Meals', ok: P.mealsOk, bad: mealsBad, val: mealsBad ? 'Off-plan logged' : `${P.clean} / ${P.pm.length} on plan` },
-    { k: 'water', jump: 'sec-water', name: 'Water', ok: P.w >= P.goal, val: `${L(P.w)} / ${L(P.goal)} L` },
-    { k: 'train', jump: 'sec-train', name: 'Training', ok: P.trained, val: P.tt === 'rest' ? 'Rest day' : P.trained ? 'Done' : C.TT[P.tt].label },
-    { k: 'supps', jump: 'sec-supps', name: 'Supplements', ok: P.sDone === P.req.length, val: !P.req.length ? 'None required' : P.sDone === P.req.length ? `${P.req.length} / ${P.req.length} core` : `${supLeft.join(', ')} left` }
+  const supLeft = P.req.filter(s => !(d.supps || {})[s.id]).length;
+  const pills = [
+    { k: 'meals', name: 'Meals', ok: P.mealsOk, bad: mealsBad, val: mealsBad ? 'Off-plan' : `${P.clean} / ${P.pm.length}` },
+    { k: 'water', name: 'Water', ok: P.w >= P.goal, val: `${L(P.w)} / ${L(P.goal)} L` },
+    { k: 'train', name: P.tt === 'gym' ? 'Gym' : P.tt === 'cali' ? 'Calisthenics' : P.tt === 'recovery' ? 'Mobility' : 'Rest', ok: P.trained, val: P.tt === 'rest' ? 'Rest day' : P.trained ? 'Done' : 'To do' },
+    { k: 'supps', name: 'Supps', ok: P.sDone === P.req.length, val: !P.req.length ? 'None' : `${P.sDone} / ${P.req.length}` }
   ];
-  h += `<section class="card hero2${ev.complete ? ' locked' : ''}"><div class="hero2-in"><div class="rings">${ringsSVG(parts, mealsBad)}<div class="rings-c"><b class="num">${pdone}</b><span>of 4</span></div></div>
-  <div class="prows">${rows.map(r => `<button class="prow ${r.k}${r.ok ? ' ok' : ''}${r.bad ? ' bad' : ''}" data-act="jump" data-v="${r.jump}"><i aria-hidden="true">${r.ok ? '✓' : ''}</i><span><b>${r.name}</b><small class="num">${esc(r.val)}</small></span></button>`).join('')}</div></div>
-  <div class="hero2-f"><span class="sub">${esc(C.DAYNAMES[C.weekday(date)])} · ${fmt(date)}${d.commit ? ` · <span class="committed">committed ${esc(d.commit)}</span>` : ''}</span><p class="quote">${esc(line)}</p></div></section>`;
-  if (!st.planNoted && P.pm.length && P.pm.every(m => !(m.items || []).length)) h += `<section class="card setupnudge"><span class="sub">Make it yours</span><h3>Add your ${C.inRamadan(st, date) ? 'Ramadan ' : ''}meal plan</h3><p class="hint">Put in your coach’s plan, or your own, in Setup → Meal plan, with the foods and grams for each meal. Then one tap logs a meal and your calorie and protein targets appear. No plan? Just log what you eat in each meal.</p><div class="row"><button class="btn primary" data-act="planset">Set up my plan</button><button class="btn ghost" data-act="plannoted">I’ll log as I go</button></div></section>`;
-  h += ramadanHTML(date);
-  if (date === t) h += reflectHTML(R);
-  h += upNextHTML(R, d, date, P);
-  h += ifThenTodayHTML(date);
-  if (date === t) h += focusHTML();
-  h += cheersHTML();
-  h += friendsLineHTML();
-  // time-aware order: weigh-in first in the morning, missing pillars first in the evening
-  const body = { ok: true, opt: true, html: () => bodyHTML(date, d) };
-  let secs = [
-    { ok: P.mealsOk, html: () => mealsHTML(date, d, P) },
-    { ok: P.w >= P.goal, html: () => waterHTML(P) },
-    { ok: P.trained, html: () => trainCardHTML(date, d, P) },
-    { ok: P.sDone === P.req.length, html: () => suppsHTML(date, d, P) }
-  ];
-  const hr = date === t ? n.hour : 12;
-  if (hr >= 4 && hr < 11 && !d.weight) secs = [body, ...secs];
-  else if (hr >= 20 && !ev.complete) { const moved = secs.some(s => s.ok) && secs.some(s => !s.ok); secs = [...secs.filter(s => !s.ok), ...secs.filter(s => s.ok), body]; if (moved) h += `<p class="hint order-hint">Evening view: what’s still missing is at the top.</p>`; }
-  else secs.push(body);
-  secs.forEach(s => h += s.html());
+  const dayNo = Math.min(R.dayNum, 90);
+  let h = `<section class="hero${ev.complete ? ' locked' : ''}">
+  <div class="hero-top"><span>${esc(C.DAYNAMES[C.weekday(date)])}, ${fmt(date)}</span><span class="hero-chips">${syncDot()}${flameChip(R)}</span></div>
+  ${grace ? `<div class="hero-seg" role="group" aria-label="Day being edited"><button data-act="editdate" data-v="${grace}" aria-pressed="${date === grace}">Yesterday</button><button data-act="editdate" data-v="${t}" aria-pressed="${date === t}">Today</button></div>` : ''}
+  <div class="hero-row"><div class="rings" role="img" aria-label="Day ${dayNo} of 90, ${pills.filter(p => p.ok).length} of 4 pillars done">${ringsSVG(parts, mealsBad)}<div class="rings-c"><b class="num">${dayNo}</b><span>of 90</span></div></div>
+  <div class="pills">${pills.map(p => `<button class="pill2 ${p.k}${p.ok ? ' ok' : ''}${p.bad ? ' bad' : ''}" data-act="panel" data-v="${p.k}"><i aria-hidden="true"></i><span>${esc(p.name)}</span><em class="num">${p.ok ? '✓ ' : ''}${esc(p.val)}</em></button>`).join('')}</div></div>
+  ${commitHTML(R, d, date)}</section>`;
+  // one lifted card: the most useful thing to do right now
+  let lift = date === t ? reflectHTML(R) : '';
+  if (!lift && !st.planNoted && P.pm.length && P.pm.every(m => !(m.items || []).length)) lift = `<section class="card setupnudge"><h3>Add your ${C.inRamadan(st, date) ? 'Ramadan ' : ''}meal plan</h3><p class="hint">Add your coach’s plan or your own in Me → Meal plan. Then one tap logs a meal and your calorie targets appear. No plan? Log what you eat in each meal.</p><div class="row"><button class="btn primary" data-act="planset">Set up my plan</button><button class="btn ghost" data-act="plannoted">I’ll log as I go</button></div></section>`;
+  const next = upNextHTML(R, d, date, P);
+  h += `<div class="lift">${lift || next}</div>`;
+  if (lift && next) h += next;
+  h += todayNotesHTML(R);
+  const shown = ((lift ? '' : next).match(/data-act="meal" data-id="([^"]+)"/) || [])[1];
+  h += todayListHTML(R, date, d, P, line, shown);
   return h;
 }
+// alerts that used to be banners, as quiet rows
+function todayNotesHTML(R) {
+  const n = now(), ev = R.todayEval, out = [];
+  if (R.victory) out.push(['good', '90 days. Done.', `You finished all 90 days on attempt ${R.attemptNo}.`]);
+  if (R.critical && !ev.complete) out.push(['bad', 'Never miss twice', 'Yesterday reset you to Day 1. Today is non-negotiable.']);
+  if (ev.offPlan) out.push(['bad', 'Today can’t count yet', 'Something off-plan is logged. If it was a mistake, change it back.']);
+  else if (!ev.complete && n.hour >= 21) { const left = 24 - n.hour; out.push(['warn', `${left} hour${left === 1 ? '' : 's'} left to lock in today`, ev.missing.join(' · ')]); }
+  const m = C.MILES.find(x => x[0] === R.done);
+  if (ev.complete && m) out.push(['good', `Milestone: Day ${m[0]}`, `${m[1]}. Keep the chain going.`]);
+  const rcp = [30, 60].find(c => R.dayNum === c + 1 || (R.dayNum === c && ev.complete));
+  if (rcp) out.push(['good', `Your Day ${rcp} recap is ready`, 'See it in Progress.']);
+  return out.map(([k, t, b]) => `<div class="note2 ${k}"><b>${esc(t)}</b><span>${esc(b)}</span></div>`).join('');
+}
+function todayListHTML(R, date, d, P, line, shown) {
+  const st = S.settings, t = today(), meals = d.meals || {}, plan = C.plannedMeals(st, d, date), rows = [];
+  const row = (act, v, ic, cls, title, sub, end) => `<button class="lrow${cls ? ' ' + cls : ''}" data-act="${act}" data-v="${v}"><span class="lic">${ic}</span><span class="lt"><b>${esc(title)}</b>${sub ? `<small>${esc(sub)}</small>` : ''}</span><span class="le num">${end || ''}</span></button>`;
+  const logged = plan.filter(m => meals[m.id] && meals[m.id].status), open = plan.filter(m => !(meals[m.id] && meals[m.id].status) && m.id !== shown);
+  if (logged.length) { const k = logged.reduce((s, m) => s + C.sumItems(meals[m.id].items || []).k, 0), off = logged.some(m => meals[m.id].status === 'off'); rows.push(row('panel', 'meals', off ? '!' : '✓', off ? 'bad' : 'ok', logged.length === plan.length ? 'All meals logged' : logged.map(m => m.name).join(', '), off ? 'Includes an off-plan meal' : '', `${kc(k)} kcal`)); }
+  open.slice(0, 3).forEach(m => rows.push(row('panel', 'meals', esc(String(m.name).replace(/\D/g, '').slice(0, 2) || '•'), '', m.name, m.time || '', (m.items || []).length ? `${kc(C.sumItems(m.items).k)} kcal` : '')));
+  if ((d.extras || []).length) rows.push(row('panel', 'meals', '+', '', `${d.extras.length} extra${d.extras.length === 1 ? '' : 's'}`, d.extras.map(x => x.name.split(',')[0]).join(', '), `${kc(d.extras.reduce((s, x) => s + C.itemMacros(x).k, 0))} kcal`));
+  if (C.inRamadan(st, date) && date === t) { const r = C.ramadanOf(st), [ih, im] = r.iftar.split(':').map(Number), mins = now().hour * 60 + now().minute, left = ih * 60 + im - mins; rows.push(row('ramsetup', '', '☾', 'ram', left > 0 ? `Iftar in ${Math.floor(left / 60)} h ${left % 60} min` : 'Iftar time. Ramadan Kareem', `Ramadan day ${C.diffDays(r.from, date) + 1}`, '')); }
+  dayPlans(date).forEach(p => rows.push(`<div class="lrow static"><span class="lic">⇢</span><span class="lt"><b>If ${esc(p.when)}</b><small>then ${esc(p.then)}</small></span></div>`));
+  if (date === t) { const fw = focusWeek(), cur = (st.focus || {})[fw.key], f = cur && FOCUS[cur.id]; if (f) { const nn = Math.min(f.count(fw.ds, fw.from, fw.to), f.target); rows.push(row('focuspick', '', '⚑', nn >= f.target ? 'ok' : 'gold', f.name, 'This week’s focus', `${nn} / ${f.target}`)); } else rows.push(row('focuspick', '', '⚑', 'gold', 'Pick this week’s focus', 'One extra goal, never breaks your streak', '')); }
+  const cheers = Object.values(S.cheers || {});
+  if (cheers.length) rows.push(`<div class="lrow static cheer2"><span class="lic">👏</span><span class="lt"><b>${esc(cheers.map(c => c.name).join(', '))}</b><small>${esc(CHEER_TXT[cheers[0].kind] || CHEER_TXT.cheer)}</small></span><button class="btn small" data-act="cheersok">Thanks</button></div>`);
+  if (st.group) { const fr = friendRows().filter(m => !m.me); if (fr.length) { const done = fr.filter(m => m.fresh && m.done).length, gs = groupStreak(); rows.push(row('ptab', 'friends', '★', 'water', `${done} of ${fr.length} friends locked in`, gs && gs.n ? `Group chain ${gs.n}` : fr.map(m => m.name).join(', '), '')); } }
+  const bodyDone = d.weight || d.sleep;
+  rows.push(row('panel', 'body', '☼', bodyDone ? 'ok' : '', 'Weight, sleep and note', bodyDone ? [d.weight && `${d.weight} kg`, d.sleep && `${d.sleep} h sleep`].filter(Boolean).join(' · ') : 'Morning check-in', ''));
+  return `<section class="card list2">${rows.join('')}</section><p class="quote2">${esc(line)}</p>`;
+}
+const PANEL_T = { meals: 'Meals', water: 'Water', train: 'Training', supps: 'Supplements', body: 'Weight, sleep and note' };
+function panelHTML() {
+  const date = editDate(), d = S.days[date] || {}, P = C.evalDay(S.settings, d, date).P;
+  const body = S.panel === 'meals' ? mealsHTML(date, d, P) : S.panel === 'water' ? waterHTML(P) : S.panel === 'train' ? trainCardHTML(date, d, P) : S.panel === 'supps' ? suppsHTML(date, d, P) : bodyHTML(date, d);
+  return `<div class="sheet panelsheet" role="dialog" aria-modal="true" aria-label="${esc(PANEL_T[S.panel])}"><div class="grab" aria-hidden="true"></div><div class="spread"><h2>${esc(PANEL_T[S.panel])}</h2><button class="x" data-act="panelclose" aria-label="Close">×</button></div>${body}</div>`;
+}
+function drawPanel() {
+  const el = $('panel'); if (!el) return;
+  if (!S.panel || S.view !== 'today' || !S.settings) { if (!el.hidden) { el.hidden = true; el.innerHTML = ''; } return; }
+  const sc = el.firstElementChild ? el.firstElementChild.scrollTop : 0;
+  el.hidden = false; el.innerHTML = panelHTML();
+  if (el.firstElementChild) el.firstElementChild.scrollTop = sc;
+}
+
 function macrosHTML(tot, target) {
   const tk = kc(target.k), tp = kc(target.p);
   const cell = (label, v, unit, target) => `<div class="mac"><span>${label}</span><b class="num">${kc(v)}<small>${target ? ' / ' + target : ''} ${unit}</small></b>${target ? `<div class="mbar"><i class="${v > target * 1.05 ? 'over' : ''}" style="width:${Math.min(100, v / target * 100)}%"></i></div>` : ''}</div>`;
@@ -815,7 +875,7 @@ function trainCardHTML(date, d, P) {
   const gym = d.gymTime || S.settings.gymTime || 'am';
   const acts = actsOn(date);
   let h = `<section class="card" id="sec-train"><div class="card-h"><h2>Training</h2>${pill(P.trained ? 'done' : 'todo', P.tt === 'rest' ? 'Rest' : P.trained ? (d.trainingSource === 'strava' ? 'Done · Strava' : 'Done') : 'Not yet')}</div>`;
-  if (P.tt === 'rest') h += `<p class="hint">${C.TT.rest.sub}. Change your weekly plan in Setup.</p>`;
+  if (P.tt === 'rest') h += `<p class="hint">${C.TT.rest.sub}. Change your weekly plan in Me.</p>`;
   else h += `<button class="check" data-act="train" aria-pressed="${!!d.trainingDone}"><span class="box"></span><span><b>${C.TT[P.tt].label}</b><span>${C.TT[P.tt].sub}</span></span></button>${P.tt === 'cali' ? `<button class="btn primary block" data-act="tab" data-v="train">Open today’s session</button>` : ''}`;
   if (acts.length) h += `<div class="acts">${acts.map(a => `<div class="act"><span><b>${esc(a.name || a.type)}</b> · from Strava</span><span class="num">${a.min} min${a.dist ? ' · ' + C.round(a.dist / 1000, 2) + ' km' : ''}</span></div>`).join('')}</div>`;
   h += sportsListHTML(date, d);
@@ -827,7 +887,7 @@ function suppsHTML(date, d, P) {
   const groups = {};
   supps.forEach(s => { const slot = s[gym] || 'Any time'; (groups[slot] = groups[slot] || []).push(s); });
   const order = Object.keys(groups).sort((a, b) => SLOTS.indexOf(a) - SLOTS.indexOf(b));
-  if (!supps.length) return `<section class="card" id="sec-supps"><div class="card-h"><h2>Supplements</h2>${pill('done', 'None required')}</div><p class="hint">No supplements set. If you take any, add them in Setup and pick which ones are required each day.</p><button class="btn small" data-act="tab" data-v="setup">Add in Setup</button></section>`;
+  if (!supps.length) return `<section class="card" id="sec-supps"><div class="card-h"><h2>Supplements</h2>${pill('done', 'None required')}</div><p class="hint">No supplements set. If you take any, add them in Me and pick which ones are required each day.</p><button class="btn small" data-act="tab" data-v="setup">Add in Me</button></section>`;
   return `<section class="card" id="sec-supps"><div class="card-h"><h2>Supplements</h2>${pill(P.sDone === P.req.length ? 'done' : 'todo', `${P.sDone} / ${P.req.length} core`)}</div>
   <p class="hint">${gym === 'am' ? 'Morning gym day timing.' : 'Night gym day: no fat burner within 5 hours of bed.'}</p>${cafHTML(d)}
   ${order.map(slot => `<div class="sgrp"><span class="sub">${esc(slot)}</span><div class="supps">${groups[slot].map(s => `<button class="supp" data-act="supp" data-id="${esc(s.id)}" aria-pressed="${!!(d.supps || {})[s.id]}">${esc(s.name)}${s.req ? '' : ' <em>optional</em>'}</button>`).join('')}</div></div>`).join('')}</section>`;
@@ -923,7 +983,7 @@ function staminaHTML() {
 }
 function barsHTML(vals, unit, label, labels) {
   const W = 320, H = 120, pb = 18, max = Math.max(1, ...vals), bw = (W - 10) / Math.max(vals.length, 1);
-  return `<div class="chart"><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(label)}">${vals.map((v, i) => { const hh = (H - pb - 14) * v / max; return `<rect x="${5 + i * bw + 3}" y="${H - pb - hh}" width="${bw - 6}" height="${Math.max(hh, v ? 2 : 0)}" rx="3" fill="${i === vals.length - 1 ? 'var(--spark)' : 'var(--accent)'}"/><text x="${5 + i * bw + bw / 2}" y="${H - 5}" text-anchor="middle" font-size="9" fill="var(--muted)" font-family="IBM Plex Mono,monospace">${labels ? esc(labels[i]) : 'W' + (i + 1)}</text>${v && (vals.length <= 8 || i === vals.length - 1) ? `<text x="${5 + i * bw + bw / 2}" y="${H - pb - hh - 3}" text-anchor="middle" font-size="9" fill="var(--ink-2)" font-family="IBM Plex Mono,monospace">${v}</text>` : ''}`; }).join('')}</svg><p class="hint">${esc(label)}</p></div>`;
+  return `<div class="chart"><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(label)}">${vals.map((v, i) => { const hh = (H - pb - 14) * v / max; return `<rect x="${5 + i * bw + 3}" y="${H - pb - hh}" width="${bw - 6}" height="${Math.max(hh, v ? 2 : 0)}" rx="3" fill="${i === vals.length - 1 ? 'var(--spark)' : 'var(--accent)'}"/><text x="${5 + i * bw + bw / 2}" y="${H - 5}" text-anchor="middle" font-size="9" fill="var(--muted)" font-family="Alexandria,sans-serif">${labels ? esc(labels[i]) : 'W' + (i + 1)}</text>${v && (vals.length <= 8 || i === vals.length - 1) ? `<text x="${5 + i * bw + bw / 2}" y="${H - pb - hh - 3}" text-anchor="middle" font-size="9" fill="var(--ink-2)" font-family="Alexandria,sans-serif">${v}</text>` : ''}`; }).join('')}</svg><p class="hint">${esc(label)}</p></div>`;
 }
 
 /* ---------- PROGRESS ---------- */
@@ -948,7 +1008,8 @@ function weekReview() {
 }
 function progressHTML(R) {
   const st = S.settings, t = today(), rv = weekReview();
-  let h = friendsHTML() + recapHTML(R) + `<section class="card"><div class="card-h"><h2>Last 7 days</h2>${pill(rv.locked === rv.n ? 'done' : 'todo', `${rv.locked} / ${rv.n} locked in`)}</div>
+  const G = { friends: friendsHTML() };
+  let h = recapHTML(R) + `<section class="card"><div class="card-h"><h2>Last 7 days</h2>${pill(rv.locked === rv.n ? 'done' : 'todo', `${rv.locked} / ${rv.n} locked in`)}</div>
   <div class="review"><div><b>${rv.worst && rv.worst[1] ? esc(rv.worst[0]) : 'None'}</b><span>${rv.worst && rv.worst[1] ? `Most missed (${rv.worst[1]} day${rv.worst[1] === 1 ? '' : 's'})` : 'Nothing missed'}</span></div>
   <div><b class="num">${rv.prot ? kc(rv.prot) + ' g' : '—'}</b><span>Avg protein${rv.tp ? ` · plan ${kc(rv.tp)} g` : ''}</span></div>
   <div><b class="num">${rv.kcal ? kc(rv.kcal) : '—'}</b><span>Avg calories${rv.tk ? ` · plan ${kc(rv.tk)}` : ''}</span></div>
@@ -957,11 +1018,13 @@ function progressHTML(R) {
   <div><b class="num">${rv.wDelta == null ? '—' : (rv.wDelta > 0 ? '+' : '') + C.round(rv.wDelta, 1) + ' kg'}</b><span>Weight trend (7-day avg)</span></div></div>
   ${(() => { const aw = activityWeek(), pct = Math.min(100, aw.mod / 150 * 100); return `<div class="actweek"><div class="spread"><span><b>Activity</b> · ${aw.min} min${aw.n ? ` · ${aw.n} sport session${aw.n === 1 ? '' : 's'} · ≈ ${kc(aw.kcal)} kcal` : ''}</span><span class="num">${kc(aw.mod)} / 150</span></div><div class="mbar"><i style="width:${pct}%"></i></div><p class="hint">Sports and cardio, as moderate-effort minutes (hard minutes count double). The WHO recommends 150–300 a week on top of strength training.</p></div>`; })()}
   <div class="row"><button class="btn primary" data-act="shareweekimg">Send coach report (image)</button><button class="btn" data-act="share">As text</button></div></section>` + insightsHTML();
+  G.week = h; h = '';
   h += `<div class="stats"><div class="stat feature"><div class="big num">${R.done}</div><span>Days locked in</span></div><div class="stat"><div class="big num">${Math.min(R.dayNum, 90)}</div><span>Day now</span></div><div class="stat"><div class="big num">${R.best}</div><span>Best streak</span></div><div class="stat"><div class="big num">${Math.floor(R.done / 7)}</div><span>Perfect weeks</span></div></div>`;
   const ms = C.MILES.map(m => m[0]);
   h += `<section class="card"><div class="card-h"><h2>The chain</h2><span class="hint">Tap a day to see it</span></div><div class="grid90">${Array.from({ length: 90 }, (_, i) => { const dt = C.addDays(R.attemptStart, i); let c = ''; if (dt <= t && C.evalDay(st, S.days[dt], dt).complete) c = 'done'; else if (dt === t) c = 'today'; else if (dt === R.grace) c = 'open'; if (ms.includes(i + 1)) c += ' m'; return dt <= t ? `<button class="${c}" data-act="dayview" data-v="${dt}" aria-label="Day ${i + 1}, ${fmt(dt)}">${i + 1}</button>` : `<i class="${c}" title="Day ${i + 1} · ${fmt(dt)}">${i + 1}</i>`; }).join('')}</div></section>`;
   h += `<section class="card"><div class="card-h"><h2>Milestones</h2>${pill('todo', `${C.MILES.filter(m => R.done >= m[0]).length} / ${C.MILES.length}`)}</div><div class="miles">${C.MILES.map(m => `<div class="mile ${R.done >= m[0] ? 'got' : ''}"><b class="num">${m[0]}</b><span>${m[1]}</span></div>`).join('')}</div></section>`;
   if (R.attempts.length) h += `<section class="card"><div class="card-h"><h2>Attempts</h2></div><ul class="list">${R.attempts.map((a, i) => `<li><span>Attempt ${i + 1}</span><span class="num">${a.len} day${a.len === 1 ? '' : 's'} · broke ${fmt(a.fail)}</span></li>`).join('')}<li><span>Attempt ${R.attemptNo}</span><span class="num">${R.done} days and counting</span></li></ul></section>`;
+  G.chain = h; h = '';
   // weight
   const pts = {};
   if (st.startWeight) pts[st.startDate] = st.startWeight;
@@ -990,7 +1053,8 @@ function progressHTML(R) {
   h += bodyNumbersHTML(cks) + measuresHTML(cks);
   const ckDates = [...new Set([...cks.map(c => c.date), ...Object.keys(S.photos)])].sort().reverse();
   if (ckDates.length) h += `<ul class="list ckl">${ckDates.map(dt => { const c = S.checkins[dt] || {}; return `<li><span>${fmt(dt)}</span><span class="num">${[c.weight && c.weight + ' kg', c.waist && 'waist ' + c.waist, c.chest && 'chest ' + c.chest, c.arm && 'arm ' + c.arm, c.hips && 'hips ' + c.hips, c.neck && 'neck ' + c.neck, S.photos[dt] && 'photo'].filter(Boolean).join(' · ') || 'photo'}</span><button class="link danger" data-act="ckdel" data-v="${dt}">${S.confirm === 'ck:' + dt ? 'Tap again to delete' : 'Delete'}</button></li>`; }).join('')}</ul>`;
-  return h + `</section>`;
+  G.body = h + `</section>`;
+  return progressShell(G);
 }
 /* real maintenance: average intake minus the energy in your weight change (≈7,700 kcal per kg), over the last 4 weeks */
 function burnHTML(arr, st) {
@@ -1065,7 +1129,7 @@ function weightChart(pts, goal) {
   const t0 = C.parse(pts[0].date).getTime(), t1 = Math.max(t0 + 864e5, C.parse(pts[pts.length - 1].date).getTime());
   const x = d => pl + (C.parse(d).getTime() - t0) / (t1 - t0) * (W - pl - pr), y = v => pt + (hi - v) / (hi - lo) * (H - pt - pb);
   const path = a => a.map((p, i) => `${i ? 'L' : 'M'}${x(p.date).toFixed(1)},${y(p.weight).toFixed(1)}`).join(' ');
-  const last = avg[avg.length - 1], T = v => Math.round(v * 10) / 10, mono = 'font-family="IBM Plex Mono,monospace"';
+  const last = avg[avg.length - 1], T = v => Math.round(v * 10) / 10, mono = 'font-family="Alexandria,sans-serif"';
   return `<div class="chart"><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Weight trend">
   ${[hi, (hi + lo) / 2, lo].map(v => `<line x1="${pl}" x2="${W - pr}" y1="${y(v)}" y2="${y(v)}" stroke="var(--line)"/><text x="${pl - 6}" y="${y(v) + 3.5}" text-anchor="end" font-size="10" fill="var(--muted)" ${mono}>${T(v)}</text>`).join('')}
   ${near ? `<line x1="${pl}" x2="${W - pr}" y1="${y(goal)}" y2="${y(goal)}" stroke="var(--good)" stroke-dasharray="4 4"/><text x="${W - pr}" y="${y(goal) - 4}" text-anchor="end" font-size="10" fill="var(--good)" ${mono}>goal ${goal}</text>` : ''}
@@ -1144,7 +1208,7 @@ function setupHTML(R) {
   <div class="row"><button class="btn" data-act="export">Export backup</button><label class="btn" for="imp-file2">Import backup</label><input id="imp-file2" type="file" accept="application/json,.json" hidden></div>
   <div class="setup-r"><span>Language</span><div class="seg" role="group" aria-label="Language"><button data-act="lang" data-v="en" aria-pressed="${LANG() !== 'ar'}">English</button><button data-act="lang" data-v="ar" aria-pressed="${LANG() === 'ar'}">العربية</button></div></div>
   <div class="setup-r"><span>Vibration on taps</span><div class="seg" role="group" aria-label="Vibration"><button data-act="haptics" data-v="1" aria-pressed="${st.haptics !== false}">On</button><button data-act="haptics" data-v="0" aria-pressed="${st.haptics === false}">Off</button></div></div>
-  <p class="hint">Signed in as ${esc(S.user.email || '')}. <button class="link" data-act="signout">Sign out</button></p><p class="hint num">App version ${APP_VERSION}</p></section>`;
+  </section>`;
   h += `<section class="card"><div class="card-h"><h2>Restart</h2></div><p class="hint">Starts a fresh 90 days from today and clears the attempt history. Logged days stay saved.</p>
   ${S.confirm === 'restart' ? `<div class="wbtns"><button class="btn danger" data-act="restart2">Yes, restart today</button><button class="btn ghost" data-act="cancel">Cancel</button></div>` : `<button class="btn danger" data-act="restart1">Restart challenge</button>`}</section>`;
   return h;
@@ -1354,6 +1418,7 @@ function closeTimer(log) {
 }
 
 /* ---------- events ---------- */
+document.addEventListener('click', ev => { if (ev.target && ev.target.id === 'panel') { S.panel = null; draw(); } else if (ev.target && ev.target.id === 'sheet' && SH && SH.scope !== 'crave') closeSheet(); });
 document.addEventListener('click', async ev => {
   const b = ev.target.closest('[data-act]'); if (!b) return;
   if (b.tagName === 'BUTTON') buzz(8);
@@ -1364,7 +1429,7 @@ document.addEventListener('click', async ev => {
     case 'resetpw': { const em = ($('si-email') && $('si-email').value || '').trim(); if (!em) return toast('Type your email above first.'); try { await sendPasswordResetEmail(auth, em); toast('Reset link sent. Check your email.'); } catch (e) { toast(AUTH_MSG[e && e.code] || 'Couldn’t send the reset email.'); } return; }
     case 'signout': S.unsub.forEach(u => u()); S.unsub = []; S.photosOn = false; S.photos = {}; if (S.boardUnsub) S.boardUnsub(); S.boardUnsub = null; S.boardCode = null; S.board = {}; S.boardLast = null; await signOut(auth); return;
     case 'tab': return go(v);
-    case 'jump': { const el = $(v); if (el) el.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' }); return; }
+    case 'jump': { if (v.startsWith('sec-') && S.view === 'today') { S.panel = v.slice(4); return draw(); } const el = $(v); if (el) el.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' }); return; }
     case 'start': {
       const num = id => parseFloat($(id).value) || null;
       const sd = $('w-start').value || today();
@@ -1373,6 +1438,10 @@ document.addEventListener('click', async ev => {
     }
   }
   if (act === 'lang') { const was = LANG(); try { localStorage.setItem('lk-lang', v); } catch (e) { } if (S.settings) { S.settings.lang = v; saveSettings(); } if (was === 'ar' && v !== 'ar') { setTimeout(() => location.reload(), 500); return; } applyLang(); return draw(); }
+  if (act === 'panel') { S.panel = v; buzz(6); return draw(); }
+  if (act === 'panelclose') { S.panel = null; return draw(); }
+  if (act === 'ptab') { S.ptab = v; S.panel = null; if (S.view !== 'progress') return go('progress'); window.scrollTo(0, 0); return draw(); }
+  if (act === 'mesec') { S.meSec = v || null; window.scrollTo(0, 0); return draw(); }
   if (act === 'closesheet') return closeSheet();
   if (act === 'daynav' && SH && SH.scope === 'day') { SH.date = v; return drawDay(); }
   if (SH && SH.scope === 'sport') {
@@ -1531,7 +1600,7 @@ document.addEventListener('click', async ev => {
     case 'focusset': { const fw = focusWeek(); S.settings.focus = { ...(S.settings.focus || {}), [fw.key]: { id: v } }; saveSettings(); toast('Focus set for this week.'); break; }
     case 'misswhy': { const y = C.addDays(today(), -1), yd = dayDoc(y); yd.missWhy = v === 'skip' ? 'skip' : v; saveDay(y); break; }
     case 'missplanned': { const y = C.addDays(today(), -1), yd = dayDoc(y); yd.missPlanned = true; saveDay(y); break; }
-    case 'iftsugadd': { const [w, th] = IFT_SUGGEST[+v]; S.settings.ifthen = [...(S.settings.ifthen || []), { when: w, then: th, day: null }]; saveSettings(); const y = C.addDays(today(), -1), yd = dayDoc(y); yd.missPlanned = true; saveDay(y); toast('Plan saved. Edit it any time in Setup.'); break; }
+    case 'iftsugadd': { const [w, th] = IFT_SUGGEST[+v]; S.settings.ifthen = [...(S.settings.ifthen || []), { when: w, then: th, day: null }]; saveSettings(); const y = C.addDays(today(), -1), yd = dayDoc(y); yd.missPlanned = true; saveDay(y); toast('Plan saved. Edit it any time in Me.'); break; }
     case 'iftsug': { const [w, th] = IFT_SUGGEST[+v]; $('ift-when').value = w; $('ift-then').value = th; $('ift-when').focus(); return; }
     case 'iftnew': { const w = $('ift-when').value.trim(), th = $('ift-then').value.trim(), dy = $('ift-day').value; if (!w || !th) return toast('Fill in both the “if” and the “then”.'); S.settings.ifthen = [...(S.settings.ifthen || []), { when: w.slice(0, 80), then: th.slice(0, 120), day: dy === '' ? null : +dy }]; saveSettings(); toast('Plan saved.'); break; }
     case 'iftdel': S.settings.ifthen = (S.settings.ifthen || []).filter((_, i) => i !== +v); saveSettings(); break;
@@ -1845,7 +1914,7 @@ onAuthStateChanged(auth, u => {
   if (u) subscribe(); else { S.settings = null; S.days = {}; S.got = { settings: false, days: false }; }
   draw();
 });
-function go(v) { S.view = VIEWS.includes(v) ? v : 'today'; if (location.hash !== '#' + S.view) history.replaceState(null, '', '#' + S.view); window.scrollTo(0, 0); draw(); }
+function go(v) { S.panel = null; S.view = VIEWS.includes(v) ? v : 'today'; if (location.hash !== '#' + S.view) history.replaceState(null, '', '#' + S.view); window.scrollTo(0, 0); draw(); }
 window.addEventListener('hashchange', () => { const v = location.hash.slice(1); if (v === 'water') { S.quickWater = true; return draw(); } if (v === 'sport') { S.quickSport = true; return draw(); } if (VIEWS.includes(v) && v !== S.view) { S.view = v; draw(); } });
 window.addEventListener('online', () => { S.online = true; render(); });
 window.addEventListener('offline', () => { S.online = false; render(); });

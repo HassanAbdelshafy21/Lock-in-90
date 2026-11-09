@@ -1,6 +1,18 @@
 // Arabic translations for Lock In 90. Keys are the English UI text; numbers are written as {n} and filled in order.
 // Used by the app (on screen) and the cloud job (notifications). No DOM access here.
 export const AR = {
+  // design v16
+  "Day {n} of {n}": "اليوم {n} من {n}", "{n} meals": "{n} وجبات", "You finished all {n} days on attempt {n}.": "أكملت كل الأيام الـ{n} في المحاولة {n}.",
+  "Me": "أنا", "Back to Me": "رجوع إلى أنا", "Plan": "الخطة", "Habits": "العادات", "Sharing": "المشاركة", "App": "التطبيق", "Week": "الأسبوع", "Body": "الجسم", "Chain": "السلسلة", "Progress sections": "أقسام التقدم",
+  "Commit to Day {n}": "التزم باليوم {n}", "A promise that all four get done today": "وعد بإنجاز الأربعة اليوم", "Edit goals and body": "تعديل الأهداف والجسم", "kg now": "كجم الآن", "kg goal": "كجم الهدف", "L water": "لتر ماء",
+  "Weight, sleep and note": "الوزن والنوم والملاحظة", "Morning check-in": "تسجيل الصباح", "Pick this week’s focus": "اختر تركيز هذا الأسبوع", "One extra goal, never breaks your streak": "هدف إضافي واحد، لا يكسر سلسلتك أبدًا", "This week’s focus": "تركيز هذا الأسبوع",
+  "{n} of {n} friends locked in": "{n} من {n} أصدقاء أنجزوا اليوم", "Group chain {n}": "سلسلة المجموعة {n}", "Day {n} of {n}, {n} of {n} pillars done": "اليوم {n} من {n}، {n} من {n} أركان منجزة", "of 90": "من 90",
+  "Yesterday reset you to Day 1. Today is non-negotiable.": "أمس أعادك إلى اليوم 1. اليوم غير قابل للتفاوض.", "Today can’t count yet": "اليوم لا يُحتسب بعد", "Something off-plan is logged. If it was a mistake, change it back.": "مسجّل شيء خارج الخطة. لو كان خطأ، غيّره.",
+  "Ramadan day {n}": "اليوم {n} من رمضان", "Iftar in {n} h {n} min": "الإفطار بعد {n} س {n} د", "Iftar time. Ramadan Kareem": "وقت الإفطار. رمضان كريم", "Not set up": "غير مُعد", "To do": "لم يتم", "Gym": "الجيم", "{n} core": "{n} أساسي",
+  "All meals logged": "كل الوجبات مسجلة", "Includes an off-plan meal": "تشمل وجبة خارج الخطة", "See it in Progress.": "شاهده في التقدم.", "Your Day {n} recap is ready": "ملخص اليوم {n} جاهز", "Milestone: Day {n}": "إنجاز: اليوم {n}", "Keep the chain going.": "حافظ على السلسلة.",
+  "{n} hours left to lock in today": "باقي {n} ساعات لإنجاز اليوم", "{n} hour left to lock in today": "باقي ساعة لإنجاز اليوم", "Never miss twice": "لا تفوّت مرتين", "90 days. Done.": "90 يومًا. تم.", "{n} extras": "{n} إضافات", "{n} extra": "إضافة واحدة",
+  "Add your coach’s plan or your own in Me → Meal plan. Then one tap logs a meal and your calorie targets appear. No plan? Log what you eat in each meal.": "أضف خطة مدربك أو خطتك في أنا ← خطة الوجبات. بعدها ضغطة واحدة تسجل الوجبة وتظهر أهداف السعرات. لا توجد خطة؟ سجّل ما تأكله في كل وجبة.",
+  "e.g. lockin90-a1b2c3d4e5f6": "مثال: lockin90-a1b2c3d4e5f6",
   // navigation + common
   "Today": "اليوم", "Train": "التمرين", "Progress": "التقدم", "Setup": "الإعدادات", "Sections": "الأقسام", "Quick add": "إضافة سريعة",
   "Close": "إغلاق", "Cancel": "إلغاء", "Save": "حفظ", "Add": "إضافة", "Back": "رجوع", "Done": "تم", "Remove": "حذف", "New": "جديد", "Next ›": "التالي ›", "‹ Previous": "‹ السابق",
@@ -22,8 +34,8 @@ export const AR = {
   "Sign in once. After that the app works offline and syncs when you’re back online.": "سجّل الدخول مرة واحدة، بعدها يعمل التطبيق بدون إنترنت ويتزامن عند عودة الاتصال.",
   "or with email (works in every browser, best on iPhone)": "أو بالبريد الإلكتروني (يعمل في كل المتصفحات، الأفضل للآيفون)",
   "Start your {n} days": "ابدأ أيامك الـ{n}", "Start date": "تاريخ البدء", "Start Day {n}": "ابدأ اليوم {n}", "Day {n} starts now.": "اليوم {n} يبدأ الآن.", "Current weight (kg)": "الوزن الحالي (كجم)",
-  "Every day needs every planned meal on plan, your water goal, that day’s training and your core supplements. Miss any of them and the counter goes back to Day {n}. You start with Breakfast, Lunch and Dinner. Add your own meal plan and supplements in Setup, or just log what you eat and the app counts the calories.": "كل يوم يحتاج كل الوجبات حسب الخطة، وهدف المياه، وتمرين اليوم، ومكملاتك الأساسية. لو فاتك أي منها يرجع العدّاد لليوم {n}. تبدأ بفطار وغدا وعشا. أضف خطتك ومكملاتك في الإعدادات، أو سجّل ما تأكله والتطبيق يحسب السعرات.",
-  "Every day needs every planned meal on plan, your water goal, that day’s training and your core supplements. Miss any of them and the counter goes back to Day {n}. Your coach’s meal plan is already loaded; edit it in Setup.": "كل يوم يحتاج كل الوجبات حسب الخطة، وهدف المياه، وتمرين اليوم، ومكملاتك الأساسية. لو فاتك أي منها يرجع العدّاد لليوم {n}. خطة الكابتن محمّلة بالفعل؛ عدّلها في الإعدادات.",
+  "Every day needs every planned meal on plan, your water goal, that day’s training and your core supplements. Miss any of them and the counter goes back to Day {n}. You start with Breakfast, Lunch and Dinner. Add your own meal plan and supplements in Me, or just log what you eat and the app counts the calories.": "كل يوم يحتاج كل الوجبات حسب الخطة، وهدف المياه، وتمرين اليوم، ومكملاتك الأساسية. لو فاتك أي منها يرجع العدّاد لليوم {n}. تبدأ بفطار وغدا وعشا. أضف خطتك ومكملاتك في صفحة أنا، أو سجّل ما تأكله والتطبيق يحسب السعرات.",
+  "Every day needs every planned meal on plan, your water goal, that day’s training and your core supplements. Miss any of them and the counter goes back to Day {n}. Your coach’s meal plan is already loaded; edit it in Me.": "كل يوم يحتاج كل الوجبات حسب الخطة، وهدف المياه، وتمرين اليوم، ومكملاتك الأساسية. لو فاتك أي منها يرجع العدّاد لليوم {n}. خطة الكابتن محمّلة بالفعل؛ عدّلها في صفحة أنا.",
   "Moving from the old app?": "قادم من التطبيق القديم؟", "Import a backup file": "استيراد ملف نسخة احتياطية", "instead.": "بدلًا من ذلك.",
 
   // banners
@@ -44,7 +56,7 @@ export const AR = {
   "Mark done": "تم", "Played a sport instead?": "لعبت رياضة بدلًا منه؟", "Open Train": "افتح التمرين", "Your no-bar session. Log your sets in Train.": "تمرينك بدون عقلة. سجّل المجموعات في التمرين.",
   "Supplements: {n} left": "المكملات: متبقٍ {n}", "I took them": "أخذتها", "Locked in. This day counts.": "مكتمل. هذا اليوم محسوب.", "Share image": "مشاركة صورة", "+ Log a sport": "+ سجّل رياضة",
   "Make it yours": "اجعلها خاصتك", "Add your meal plan": "أضف خطة وجباتك", "Add your Ramadan meal plan": "أضف خطة وجبات رمضان", "I’ll log as I go": "سأسجّل أولًا بأول",
-  "Put in your coach’s plan, or your own, in Setup → Meal plan, with the foods and grams for each meal. Then one tap logs a meal and your calorie and protein targets appear. No plan? Just log what you eat in each meal.": "أضف خطة الكابتن أو خطتك في الإعدادات ← خطة الوجبات، بالأطعمة والجرامات لكل وجبة. بعدها نقرة واحدة تسجّل الوجبة وتظهر أهداف السعرات والبروتين. مفيش خطة؟ سجّل اللي بتاكله في كل وجبة.",
+  "Put in your coach’s plan, or your own, in Me → Meal plan, with the foods and grams for each meal. Then one tap logs a meal and your calorie and protein targets appear. No plan? Just log what you eat in each meal.": "أضف خطة الكابتن أو خطتك في صفحة أنا ← خطة الوجبات، بالأطعمة والجرامات لكل وجبة. بعدها نقرة واحدة تسجّل الوجبة وتظهر أهداف السعرات والبروتين. مفيش خطة؟ سجّل اللي بتاكله في كل وجبة.",
   "Morning commitment": "التزام الصباح", "Day {n}. Commit to it.": "اليوم {n}. التزم به.", "I commit to Day {n}": "ألتزم باليوم {n}", "One tap: a promise to yourself that today gets done, all four pillars.": "نقرة واحدة: وعد لنفسك أن اليوم سيكتمل بكل أركانه الأربعة.",
   "Committed to Day {n}. Go get it.": "التزمت باليوم {n}. يلا بينا.", "committed {n}:{n}": "التزمت {n}:{n}", "Committed at {n}:{n}": "التزمت الساعة {n}:{n}",
   "Every box is checked. This day counts.": "كل المربعات مكتملة. هذا اليوم محسوب.", "Every box checked. This day counts.": "كل المربعات مكتملة. هذا اليوم محسوب.", "Milestone: Day {n} ": "إنجاز: اليوم {n}",
@@ -83,7 +95,7 @@ export const AR = {
   "Morning gym day timing.": "مواعيد يوم الجيم الصباحي.", "Night gym day: no fat burner within {n} hours of bed.": "يوم الجيم الليلي: لا حارق دهون قبل النوم بـ{n} ساعات.",
   "Pre-gym": "قبل الجيم", "Post-gym": "بعد الجيم", "Any time": "أي وقت", "Before Meal {n}": "قبل الوجبة {n}", "With Meal {n}": "مع الوجبة {n}", "Before bed": "قبل النوم",
   "Creatine": "كرياتين", "Omega {n}": "أوميجا {n}", "Multivitamin": "ملتي فيتامين", "Powermax": "باور ماكس", "L-Carnitine": "إل-كارنيتين", "Fat burner · cap {n}": "حارق دهون · كبسولة {n}", "Vitamin D": "فيتامين د", "Whey protein": "واي بروتين", "Magnesium": "ماغنسيوم",
-  "No supplements set. If you take any, add them in Setup and pick which ones are required each day.": "لا توجد مكملات. لو بتاخد أي مكمل أضفه في الإعدادات واختر المطلوب يوميًا.", "Add in Setup": "أضف في الإعدادات",
+  "No supplements set. If you take any, add them in Me and pick which ones are required each day.": "لا توجد مكملات. لو بتاخد أي مكمل أضفه في صفحة أنا واختر المطلوب يوميًا.", "Add in Me": "أضف في صفحة أنا",
   "Core supplements ticked.": "تم تعليم المكملات الأساسية.",
 
   // body & notes
@@ -107,7 +119,7 @@ export const AR = {
   // sports
   "Log a sport": "سجّل رياضة", "How long": "المدة", "How hard": "الشدة", "Easy": "سهل", "Normal": "متوسط", "Hard": "قوي", "Intensity": "الشدة",
   "Relaxed, lots of breaks, you can chat easily.": "هادئ، راحات كثيرة، تقدر تتكلم بسهولة.", "A proper game: breathing hard at times.": "ماتش حقيقي: نفَسك يتقطع أحيانًا.", "Competitive, full pace, you can barely talk.": "تنافسي، بأقصى سرعة، بالكاد تتكلم.",
-  "Average heart rate (optional, from your watch)": "متوسط النبض (اختياري، من ساعتك)", "Count this as today’s training": "احسبها تمرين اليوم", "Add your age in Setup to use heart rate. Until then it uses the sport and intensity.": "أضف عمرك في الإعدادات لاستخدام النبض. لحد ساعتها يُحسب حسب الرياضة والشدة.",
+  "Average heart rate (optional, from your watch)": "متوسط النبض (اختياري، من ساعتك)", "Count this as today’s training": "احسبها تمرين اليوم", "Add your age in Me to use heart rate. Until then it uses the sport and intensity.": "أضف عمرك في صفحة أنا لاستخدام النبض. لحد ساعتها يُحسب حسب الرياضة والشدة.",
   "Football": "كرة القدم", "Padel": "بادل", "Tennis": "تنس", "Basketball": "كرة السلة", "Volleyball": "كرة الطائرة", "Squash": "اسكواش", "Badminton": "تنس الريشة", "Table tennis": "تنس الطاولة", "Handball": "كرة اليد", "Swimming": "سباحة", "Boxing / MMA": "ملاكمة / MMA", "Running": "جري", "Cycling": "دراجة", "Walking": "مشي", "Hiking": "هايكنج", "Other sport": "رياضة أخرى",
   "easy": "سهل", "normal": "متوسط", "hard": "قوي", "counts as training": "محسوبة تمرين", "Sport": "رياضة", "Food or drink": "طعام أو مشروب", "Weight": "الوزن", "Calisthenics": "كاليسثنكس", "Cardio": "كارديو",
   "30 min": "30 دقيقة", "45 min": "45 دقيقة", "1 h": "1 ساعة", "1 h 30": "1:30 ساعة", "2 h": "2 ساعة",
@@ -235,7 +247,7 @@ export const AR = {
   "I eat my plan portion first, take one small plate and skip seconds": "آكل حصتي من الخطة الأول، وآخد طبق صغير ومفيش طبق تاني", "I order grilled protein with salad and drink water or zero soda": "أطلب بروتين مشوي مع سلطة وأشرب مياه أو صودا زيرو",
   "I drink 500 ml of water and have my planned snack, or wait 10 minutes": "أشرب 500 مل مياه وآكل السناك المخطط، أو أستنى 10 دقايق", "I say “no thanks, I’m on a challenge” and have tea or coffee": "أقول “لا شكرًا، أنا في تحدي” وأشرب شاي أو قهوة",
   "I pack my meals and supplements the night before": "أجهز وجباتي ومكملاتي من الليلة اللي قبلها", "I do the warm-up only; if I still want to stop after 10 minutes, I can": "أعمل الإحماء بس؛ ولو لسه عايز أوقف بعد 10 دقايق، أوقف",
-  "Fill in both the “if” and the “then”.": "اكتب “لو” و“إذن” الاثنين.", "Plan saved.": "حُفظت الخطة.", "Plan saved. Edit it any time in Setup.": "حُفظت الخطة. عدّلها في أي وقت من الإعدادات.",
+  "Fill in both the “if” and the “then”.": "اكتب “لو” و“إذن” الاثنين.", "Plan saved.": "حُفظت الخطة.", "Plan saved. Edit it any time in Me.": "حُفظت الخطة. عدّلها في أي وقت من الإعدادات.",
   "Yesterday didn’t count": "أمس لم يُحسب", "What got in the way?": "إيه اللي وقفك؟", "One tap. No judgement: it’s data for your next plan.": "نقرة واحدة. بدون لوم: دي بيانات لخطتك الجاية.", "Skip": "تخطي",
   "Social event": "مناسبة اجتماعية", "Travel": "سفر", "Hunger or cravings": "جوع أو رغبة", "No time": "مفيش وقت", "Forgot to log": "نسيت أسجل", "Low motivation": "حماس قليل", "Sick": "مريض", "Other": "أخرى",
   "Plan for next time": "خطة للمرة الجاية", "Save this if-then plan": "احفظ خطة لو-إذن دي", "No thanks": "لا شكرًا",
@@ -256,7 +268,7 @@ export const AR = {
   "Waist ÷ height": "الوسط ÷ الطول", "Body fat (estimate)": "نسبة الدهون (تقدير)", "Healthy (NICE)": "صحي (NICE)", "Increased health risk (NICE: take care)": "خطر صحي أعلى (NICE: انتبه)", "High health risk (NICE: take action)": "خطر صحي عالٍ (NICE: تصرّف)", "Below the healthy range": "أقل من المدى الصحي",
   "Under 0.5 means a waist below {n} cm": "أقل من 0.5 يعني وسط أقل من {n} سم", "Add your neck in a check-in": "أضف مقاس الرقبة في المتابعة", "≈ {n} kg fat · {n} kg lean": "≈ {n} كجم دهون · {n} كجم كتلة صافية",
   "Body fat uses the US Navy tape formula, usually within about 3–4% of a lab scan. Measure the same way every time.": "نسبة الدهون بمعادلة البحرية الأمريكية بشريط القياس، عادة في حدود 3–4% من فحص المعمل. قِس بنفس الطريقة كل مرة.",
-  "Add your height in Setup (and neck in a check-in) to see your waist-to-height ratio and a body-fat estimate.": "أضف طولك في الإعدادات (والرقبة في المتابعة) لترى نسبة الوسط للطول وتقدير الدهون.",
+  "Add your height in Me (and neck in a check-in) to see your waist-to-height ratio and a body-fat estimate.": "أضف طولك في صفحة أنا (والرقبة في المتابعة) لترى نسبة الوسط للطول وتقدير الدهون.",
   "Most days locked in": "أكثر أيام مكتملة", "Most water": "أكثر مياه", "Most active minutes": "أكثر دقائق نشاط", "Best average sleep": "أفضل متوسط نوم", "{n} days": "{n} أيام",
   "Coach link": "رابط الكابتن", "Sharing": "مشاركة", "Create coach link": "إنشاء رابط الكابتن", "Send to coach": "أرسل للكابتن", "Open": "افتح", "Include my daily notes": "ضمّن ملاحظاتي اليومية", "Stop sharing (the link stops working)": "إيقاف المشاركة (الرابط يتوقف)", "Tap again to stop sharing": "اضغط مرة أخرى لإيقاف المشاركة",
   "A private, read-only page for your coach: the last 14 days (meals vs plan, water, training, supplements, sleep, sports), your weight trend and measurements. It updates by itself. Anyone with the link can view it, so only send it to your coach.": "صفحة خاصة للقراءة فقط للكابتن: آخر 14 يوم (الوجبات مقابل الخطة، المياه، التمرين، المكملات، النوم، الرياضة)، واتجاه وزنك وقياساتك. بتتحدث لوحدها. أي حد معاه الرابط يقدر يشوفها، فابعته للكابتن بس.",
@@ -274,12 +286,13 @@ export const AR = {
 // sentences that contain names or lists: [regex, Arabic builder]
 const UNIT = { can: 'علبة', 'large bottle': 'زجاجة كبيرة', 'small bottle': 'زجاجة صغيرة', bottle: 'زجاجة', piece: 'قطعة', cup: 'كوب', tbsp: 'ملعقة كبيرة', tsp: 'ملعقة صغيرة', slice: 'شريحة', egg: 'بيضة', fruit: 'ثمرة', medium: 'متوسطة', loaf: 'رغيف', plate: 'طبق', bowl: 'طبق', handful: 'حفنة', scoop: 'سكوب', glass: 'كوب', sandwich: 'ساندوتش', serving: 'حصة', 'whole dish': 'الطبق كله', date: 'تمرة', portion: 'حصة', white: 'بياض', 'small box': 'علبة صغيرة', 'large box': 'علبة كبيرة', 'bar 40 g': 'لوح 40 جم', 'cup 105 g': 'كوب 105 جم', 'cup 170 g': 'كوب 170 جم' };
 export const AR_PATTERNS = [
+  [/^(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday), (.+)$/, (m, t) => `${t(m[1])}، ${m[2]}`], [/^(\d+) core$/, m => `${m[1]} أساسي`],
 
   [/^Your plan for (.+)$/, (m, t) => `خطتك ليوم ${t(m[1])}`], [/^Week (\d+) focus$/, m => `تركيز الأسبوع ${m[1]}`], [/^Suggested from your last 7 days:$/, () => 'مقترح من آخر 7 أيام:'],
   [/^This week’s challenge · (.+)$/, m => `تحدي الأسبوع · ${m[1]}`], [/^Line yourself up with your (.+) photo$/, m => `طابق وضعك مع صورة ${m[1]}`],
   [/^(.+) · Day (\d+) \/ 90$/, m => `${m[1]} · اليوم ${m[2]} / 90`], [/^Streak (\d+) · attempt (\d+) · started (.+?)( · updated (.+))?$/, m => `السلسلة ${m[1]} · المحاولة ${m[2]} · البداية ${m[3]}${m[5] ? ' · آخر تحديث ' + m[5] : ''}`],
   [/^Read-only view shared by (.+) from the Lock In 90 app\. It updates when they log\.$/, m => `عرض للقراءة فقط شاركه ${m[1]} من تطبيق Lock In 90. يتحدث عند التسجيل.`],
-  [/^Your most common reason for a missed day: (.+) \((\d+) times\)\. Add an if-then plan for it in Setup\.$/, (m, t) => `أكثر سبب لفوات اليوم: ${t(m[1])} (${m[2]} مرات). أضف له خطة لو-إذن في الإعدادات.`],
+  [/^Your most common reason for a missed day: (.+) \((\d+) times\)\. Add an if-then plan for it in Setup\.$/, (m, t) => `أكثر سبب لفوات اليوم: ${t(m[1])} (${m[2]} مرات). أضف له خطة لو-إذن في صفحة أنا.`],
   [/^You used the craving tool (\d+) times and it passed (\d+) times\.$/, m => `استخدمت أداة الرغبة ${m[1]} مرات وعدّت ${m[2]} مرات.`],
   [/^about (\d+) × (.+)$/, m => `حوالي ${m[1]} × ${UNIT[m[2]] || m[2]}`],
 

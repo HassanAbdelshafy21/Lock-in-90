@@ -7,11 +7,11 @@ A personal 90-day challenge tracker that works offline and syncs through Firebas
 - **Training:** calisthenics with drawn start/finish figures, hold and rest timers, personal bests; a 12-week stamina track that never affects the streak.
 - **Motivation:** morning commitment, a day-complete celebration with a shareable image, a flame streak that warns after 21:00, Day 30/60/90 recaps.
 - **Insights:** weight wins (lowest, since start, this week, to goal), real calorie burn from logs + weight trend, recipe builder, copy a past meal, daily notes.
-- **Home screen:** four pillar rings, an “Up next” card with the one thing to do now, and a + button for quick adds.
+- **Design (v16):** one screen for today. A navy scoreboard with four pillar rings around the day number, one lifted “Up next” card, and a short list. Tap a pillar for its details. Progress has Week / Body / Chain / Friends tabs, and Me is a short menu. One typeface (Alexandria, Latin + Arabic, self-hosted, OFL), light and dark palettes, a + button for quick adds.
 - **Sports:** log football, padel, tennis and 13 more with duration and intensity; calories from the 2024 Compendium of Physical Activities (or your average heart rate and age), a sweat top-up hint, and WHO weekly activity minutes.
 - **Ramadan mode:** a Suhoor / Iftar / after-Taraweeh plan, water paced from iftar to fajr, evening water reminders, and an iftar countdown (default dates 8 Feb – 8 Mar 2027, editable).
 - **History and insights:** tap any day in the chain to see what was logged; patterns from your own data; measurement trends; a weekly coach report as an image.
-- **Arabic:** full right-to-left Arabic interface and notifications (Setup → Language).
+- **Arabic:** full right-to-left Arabic interface and notifications (Me → Data → Language).
 - **Habits that stick:** if-then plans for risky moments (shown on the right day), a 3-tap reflection after a missed day, a 10-minute craving tool, a sleep goal with a bedtime reminder, and one weekly focus goal.
 - **Body numbers:** waist-to-height ratio (NICE 2022 bands) and a US Navy body-fat estimate; a camera photo guide that overlays last week's photo.
 - **Coach link:** a private read-only page (coach.html) that updates by itself.
