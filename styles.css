@@ -68,6 +68,8 @@ h1,h2,h3{text-wrap:balance}
 .card-h h2{margin:0;font-family:var(--f-display);font-weight:700;font-size:23px;letter-spacing:.03em;text-transform:uppercase;line-height:1}
 .state{font-family:var(--f-mono);font-size:11.5px;padding:4px 9px;border-radius:999px;white-space:nowrap}
 .s-done{background:var(--good-soft);color:var(--good)}.s-todo{background:var(--surface-2);color:var(--ink-2)}.s-bad{background:var(--bad-soft);color:var(--bad)}.s-opt{background:var(--accent-soft);color:var(--accent-strong)}
+.s-water{background:var(--water-soft);color:var(--water)}
+.chk{display:flex;gap:8px;align-items:center;font-size:14px;color:var(--ink-2);margin:8px 0}.chk input{width:18px;height:18px;accent-color:var(--water)}
 .hint{color:var(--ink-2);font-size:13px;margin:0}
 .sub{font-family:var(--f-mono);font-size:10.5px;letter-spacing:.06em;color:var(--muted);text-transform:uppercase}
 .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}

@@ -109,7 +109,7 @@ async function reminders(uid, settings) {
       const tt = C.trainType(settings, date);
       msg = [`Day ${Math.min(R.dayNum, 90)} of 90`, `${C.DAYNAMES[C.weekday(date)]}: ${C.TT[tt].label}. Water goal ${L(settings.waterGoal || 3500)} L.`, R.critical ? 'Yesterday broke the chain. Never miss twice.' : `Streak ${R.done}.`, { tags: 'sunrise' }];
     } else if (r.key === 'water') {
-      const goal = settings.waterGoal || 3500, w = day.water || 0;
+      const goal = settings.waterGoal || 3500, w = C.waterTotal(day);
       const expected = goal * Math.min(1, Math.max(0, (nowMin - at(8, 0)) / (at(22, 0) - at(8, 0))));
       if (w < expected - 500) msg = ['Water check', `${L(w)} L so far. Aim for about ${L(Math.round(expected / 250) * 250)} L by now.`, { tags: 'droplet' }];
     } else if (r.key === 'burner') {

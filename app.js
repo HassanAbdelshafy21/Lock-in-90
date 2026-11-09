@@ -101,7 +101,7 @@ function draw() {
   if (!S.user) { $('top').innerHTML = topIdle(); m.innerHTML = signinHTML(); return; }
   if (!S.got.settings) { $('top').innerHTML = topIdle(); m.innerHTML = `<div class="card hint">Loading your challenge…</div>`; return; }
   if (!S.settings) { $('top').innerHTML = topIdle(); m.innerHTML = welcomeHTML(); return; }
-  if (S.quickWater && S.got.days) { S.quickWater = false; const dd = dayDoc(today()); dd.water = (dd.water || 0) + 250; saveDay(today()); S.view = 'today'; history.replaceState(null, '', '#today'); toast(`+250 ml · ${L(dd.water)} L today`); }
+  if (S.quickWater && S.got.days) { S.quickWater = false; const dd = dayDoc(today()); dd.water = (dd.water || 0) + 250; saveDay(today()); S.view = 'today'; history.replaceState(null, '', '#today'); toast(`+250 ml · ${L(C.waterTotal(dd))} L today`); }
   const R = C.computeRun(S.settings, S.days, now());
   $('top').innerHTML = topHTML(R);
   if (S.view === 'progress') photosOn();
@@ -206,8 +206,9 @@ function macrosHTML(tot, target) {
   const cell = (label, v, unit, target) => `<div class="mac"><span>${label}</span><b class="num">${kc(v)}<small>${target ? ' / ' + target : ''} ${unit}</small></b>${target ? `<div class="mbar"><i class="${v > target * 1.05 ? 'over' : ''}" style="width:${Math.min(100, v / target * 100)}%"></i></div>` : ''}</div>`;
   return `<div class="macros">${cell('Calories', tot.k, 'kcal', tk)}${cell('Protein', tot.p, 'g', tp)}${cell('Carbs', tot.c, 'g')}${cell('Fat', tot.f, 'g')}</div>`;
 }
+const dropTag = it => C.isDrink(it) ? ' <span class="state s-water">counts as water</span>' : '';
 function itemsEditor(items, scope) {
-  return `<div class="items">${items.length ? items.map((it, i) => { const m = C.itemMacros(it); return `<div class="itm"><div class="nm">${esc(it.name)}<small>${kc(m.k)} kcal · ${C.round(m.p, 1)} g protein</small></div><label class="g"><input type="number" inputmode="decimal" min="0" step="any" value="${C.round(it.g, 1)}" data-grams="${scope}:${i}" aria-label="${esc(it.name)} grams">g</label><button class="x" data-act="rmitem" data-v="${scope}:${i}" aria-label="Remove ${esc(it.name)}">×</button></div>`; }).join('') : '<p class="hint">No foods yet.</p>'}
+  return `<div class="items">${items.length ? items.map((it, i) => { const m = C.itemMacros(it); return `<div class="itm"><div class="nm">${esc(it.name)}${dropTag(it)}<small>${kc(m.k)} kcal · ${C.round(m.p, 1)} g protein</small></div><label class="g"><input type="number" inputmode="decimal" min="0" step="any" value="${C.round(it.g, 1)}" data-grams="${scope}:${i}" aria-label="${esc(it.name)} ${C.isDrink(it) ? 'millilitres' : 'grams'}">${C.isDrink(it) ? 'ml' : 'g'}</label><button class="x" data-act="rmitem" data-v="${scope}:${i}" aria-label="Remove ${esc(it.name)}">×</button></div>`; }).join('') : '<p class="hint">No foods yet.</p>'}
   <button class="btn small" data-act="addfood" data-v="${scope}">+ Add food</button></div>`;
 }
 function mealsHTML(date, d, P) {
@@ -233,8 +234,8 @@ function mealsHTML(date, d, P) {
   });
   h += `</div>`;
   const ex = d.extras || [];
-  h += `<div class="sgrp"><span class="sub">Extras outside your meals</span>${ex.length ? `<div class="items">${ex.map((it, i) => { const mm = C.itemMacros(it); return `<div class="itm"><div class="nm">${esc(it.name)} ${it.off ? '<span class="state s-bad">off-plan</span>' : ''}<small>${kc(mm.k)} kcal · ${C.round(mm.p, 1)} g protein</small></div><label class="g"><input type="number" inputmode="decimal" min="0" step="any" value="${C.round(it.g, 1)}" data-grams="extra:${i}" aria-label="${esc(it.name)} grams">g</label><button class="x" data-act="rmitem" data-v="extra:${i}" aria-label="Remove">×</button></div>`; }).join('')}</div>` : ''}
-  <button class="btn small" data-act="addfood" data-v="extra">+ Log an extra (coffee, snack, cheat)</button></div></section>`;
+  h += `<div class="sgrp"><span class="sub">Extras outside your meals</span>${ex.length ? `<div class="items">${ex.map((it, i) => { const mm = C.itemMacros(it); return `<div class="itm"><div class="nm">${esc(it.name)} ${it.off ? '<span class="state s-bad">off-plan</span>' : ''}${dropTag(it)}<small>${kc(mm.k)} kcal · ${C.round(mm.p, 1)} g protein</small></div><label class="g"><input type="number" inputmode="decimal" min="0" step="any" value="${C.round(it.g, 1)}" data-grams="extra:${i}" aria-label="${esc(it.name)} ${C.isDrink(it) ? 'millilitres' : 'grams'}">${C.isDrink(it) ? 'ml' : 'g'}</label><button class="x" data-act="rmitem" data-v="extra:${i}" aria-label="Remove">×</button></div>`; }).join('')}</div>` : ''}
+  <button class="btn small" data-act="addfood" data-v="extra">+ Log an extra (drink, snack, cheat)</button></div></section>`;
   return h;
 }
 function waterHTML(P) {
@@ -243,7 +244,7 @@ function waterHTML(P) {
   const left = Math.max(0, P.goal - P.w);
   return `<section class="card" id="sec-water"><div class="card-h"><h2>Water</h2>${pill(P.w >= P.goal ? 'done' : 'todo', P.w >= P.goal ? 'Goal hit' : `${L(left)} L to go`)}</div>
   <div class="water-row"><div class="bottle" role="img" aria-label="${L(P.w)} of ${L(P.goal)} litres"><div class="fill" style="height:${pct}%"></div>${ticks}</div>
-  <div class="water-info"><div class="big num">${L(P.w)}<small> / ${L(P.goal)} L</small></div><p class="hint num">${left ? `${Math.ceil(left / 250)} glasses of 250 ml left` : 'Done for today'}</p>
+  <div class="water-info"><div class="big num">${L(P.w)}<small> / ${L(P.goal)} L</small></div><p class="hint num">${left ? `${Math.ceil(left / 250)} glasses of 250 ml left` : 'Done for today'}</p>${P.wDrinks ? `<p class="hint num">Includes ${L(P.wDrinks)} L from drinks you logged in meals and extras.</p>` : ''}
   <div class="wbtns"><button class="btn wat" data-act="water" data-n="250">+ 250 ml</button><button class="btn wat" data-act="water" data-n="500">+ 500 ml</button><button class="btn" data-act="water" data-n="1000">+ 1 L</button><button class="btn ghost" data-act="water" data-n="-250">− 250 ml</button></div></div></div>
   ${P.goal > 5000 ? '<p class="safety">At this goal, spread it across the day: no more than about 1 L per hour.</p>' : ''}</section>`;
 }
@@ -268,13 +269,13 @@ function suppsHTML(date, d, P) {
   ${order.map(slot => `<div class="sgrp"><span class="sub">${esc(slot)}</span><div class="supps">${groups[slot].map(s => `<button class="supp" data-act="supp" data-id="${esc(s.id)}" aria-pressed="${!!(d.supps || {})[s.id]}">${esc(s.name)}${s.req ? '' : ' <em>optional</em>'}</button>`).join('')}</div></div>`).join('')}</section>`;
 }
 function cafHTML(d) {
-  const sp = d.supps || {}, coffee = it => /coffee|espresso|cappuccino|latte|nescaf|قهوة/i.test(it.name || '') ? (it.g || 0) / 240 * 95 : 0;
+  const sp = d.supps || {}, coffee = it => { const n = it.name || '', g = it.g || 0; if (/coffee|espresso|cappuccino|latte|nescaf|قهوة/i.test(n)) return g / 240 * 95; if (/\btea\b|شاي/i.test(n)) return g / 240 * (/green|أخضر/i.test(n) ? 28 : 47); if (/cola|pepsi|coke|كولا|بيبسي/i.test(n)) return g / 330 * 34; return 0; };
   let mg = (sp.burner ? 125 : 0) + (sp.burner2 ? 125 : 0);
   (d.extras || []).forEach(it => mg += coffee(it));
   Object.values(d.meals || {}).forEach(md => (md.items || []).forEach(it => mg += coffee(it)));
   mg = Math.round(mg);
   if (!mg) return '';
-  return mg > 400 ? `<p class="safety">Caffeine today ≈ ${mg} mg, above the 400 mg daily limit. Skip more coffee or the second cap.</p>` : `<p class="hint">Caffeine today ≈ ${mg} mg of a 400 mg daily limit (fat burner caps + coffee you logged).</p>`;
+  return mg > 400 ? `<p class="safety">Caffeine today ≈ ${mg} mg, above the 400 mg daily limit. Skip more coffee or the second cap.</p>` : `<p class="hint">Caffeine today ≈ ${mg} mg of a 400 mg daily limit (fat burner caps + coffee, tea and cola you logged).</p>`;
 }
 function bodyHTML(date, d) {
   const sleeps = [4, 5, 5.5, 6, 6.5, 7, 7.5, 8, 8.5, 9, 10];
@@ -561,8 +562,9 @@ function drawPicked() {
   const f = SH.picked, g = SH.g;
   const m = C.itemMacros({ g, per: f.per });
   $('fs-body').innerHTML = `<div class="picked"><div><b>${esc(f.name)}</b><div class="hint num">Per 100 g: ${kc(f.per.k)} kcal · ${C.round(f.per.p, 1)} P · ${C.round(f.per.c, 1)} C · ${C.round(f.per.f, 1)} F</div></div>
-  <div class="row"><label class="g" style="display:flex;gap:6px;align-items:center">Grams <input class="in sm" id="fs-g" type="number" inputmode="decimal" step="any" value="${C.round(g, 1)}"></label>${(f.units || []).map(u => `<button class="btn small" data-act="unit" data-v="${u[1]}">1 ${esc(u[0])} · ${u[1]} g</button>`).join('')}</div>
+  <div class="row"><label class="g" style="display:flex;gap:6px;align-items:center">${SH.drink ? 'Millilitres' : 'Grams'} <input class="in sm" id="fs-g" type="number" inputmode="decimal" step="any" value="${C.round(g, 1)}"></label>${(f.units || []).map(u => `<button class="btn small" data-act="unit" data-v="${u[1]}">1 ${esc(u[0])} · ${u[1]} ${SH.drink ? 'ml' : 'g'}</button>`).join('')}</div>
   <div class="hint num" id="fs-m">${kc(m.k)} kcal · ${C.round(m.p, 1)} g protein · ${C.round(m.c, 1)} g carbs · ${C.round(m.f, 1)} g fat</div>
+  <label class="chk"><input type="checkbox" id="fs-drink" ${SH.drink ? 'checked' : ''}> It’s a drink: count it toward my water</label>
   ${SH.scope === 'extra' ? `<div class="seg wide" role="group" aria-label="Plan status"><button class="clean" data-act="extraoff" data-v="0" aria-pressed="${!SH.off}">Allowed by plan</button><button class="off" data-act="extraoff" data-v="1" aria-pressed="${SH.off}">Off-plan</button></div>` : ''}
   <div class="row"><button class="btn primary grow" data-act="addpicked">Add</button><button class="btn ghost" data-act="unpick">Back</button>${f.src === 'usda' || f.src === 'off' ? '<button class="btn small" data-act="savefood">Save to my foods</button>' : ''}</div></div>`;
   $('fs-g').addEventListener('input', e => { SH.g = parseFloat(e.target.value) || 0; const mm = C.itemMacros({ g: SH.g, per: f.per }); $('fs-m').textContent = `${kc(mm.k)} kcal · ${C.round(mm.p, 1)} g protein · ${C.round(mm.c, 1)} g carbs · ${C.round(mm.f, 1)} g fat`; });
@@ -588,7 +590,7 @@ async function lookupBarcode(code) {
     if (!p || !n) { $('fs-body').innerHTML = `<p class="hint">No product found for ${esc(code)}. Add it as a custom food from the label.</p>`; return; }
     const kcal = n['energy-kcal_100g'] != null ? n['energy-kcal_100g'] : (n.energy_100g || 0) / 4.184;
     SH.picked = { id: 'off_' + code, name: `${p.product_name || 'Product'}${p.brands ? ' (' + p.brands.split(',')[0] + ')' : ''}`, per: { k: +kcal || 0, p: +n.proteins_100g || 0, c: +n.carbohydrates_100g || 0, f: +n.fat_100g || 0 }, units: [], src: 'off' };
-    SH.g = 100; drawPicked();
+    SH.drink = false; SH.g = 100; drawPicked();
   } catch (e) { $('fs-body').innerHTML = '<p class="hint">Lookup failed. Check your connection.</p>'; }
 }
 async function startScan() {
@@ -612,7 +614,7 @@ async function startScan() {
 }
 function stopCam() { if (SH && SH.stream) { SH.stream.getTracks().forEach(t => t.stop()); SH.stream = null; } }
 function customForm() {
-  $('fs-body').innerHTML = `<div class="picked"><b>New custom food</b><p class="hint">Copy the “per 100 g” values from the label.</p><div class="form"><label class="full">Name<input class="in" id="cf-n"></label><label>Calories<input class="in" id="cf-k" type="number" inputmode="decimal"></label><label>Protein (g)<input class="in" id="cf-p" type="number" inputmode="decimal"></label><label>Carbs (g)<input class="in" id="cf-c" type="number" inputmode="decimal"></label><label>Fat (g)<input class="in" id="cf-f" type="number" inputmode="decimal"></label><label class="full">Serving name and grams (optional)<input class="in" id="cf-u" placeholder="e.g. bar = 40"></label></div><button class="btn primary" data-act="cfsave">Save and use</button></div>`;
+  $('fs-body').innerHTML = `<div class="picked"><b>New custom food</b><p class="hint">Copy the “per 100 g” values from the label.</p><div class="form"><label class="full">Name<input class="in" id="cf-n"></label><label>Calories<input class="in" id="cf-k" type="number" inputmode="decimal"></label><label>Protein (g)<input class="in" id="cf-p" type="number" inputmode="decimal"></label><label>Carbs (g)<input class="in" id="cf-c" type="number" inputmode="decimal"></label><label>Fat (g)<input class="in" id="cf-f" type="number" inputmode="decimal"></label><label class="full">Serving name and grams (optional)<input class="in" id="cf-u" placeholder="e.g. bar = 40 or bottle = 500"></label><label class="chk full"><input type="checkbox" id="cf-drink"> It’s a drink (counts toward water)</label></div><button class="btn primary" data-act="cfsave">Save and use</button></div>`;
 }
 function addItemTo(scope, item) {
   const [kind, id] = scope.split(':');
@@ -687,17 +689,17 @@ document.addEventListener('click', async ev => {
   if (act === 'cfsave') {
     const n = $('cf-n').value.trim(); if (!n) return toast('Give the food a name.');
     const num = id => parseFloat($(id).value) || 0, um = ($('cf-u').value || '').match(/^(.+?)\s*=\s*([\d.]+)/);
-    const f = { id: 'c' + Date.now().toString(36), name: n.slice(0, 60), per: { k: num('cf-k'), p: num('cf-p'), c: num('cf-c'), f: num('cf-f') }, units: um ? [[um[1].trim(), +um[2]]] : [], src: 'custom' };
+    const f = { id: 'c' + Date.now().toString(36), name: n.slice(0, 60), per: { k: num('cf-k'), p: num('cf-p'), c: num('cf-c'), f: num('cf-f') }, units: um ? [[um[1].trim(), +um[2]]] : [], src: 'custom', drink: $('cf-drink').checked };
     S.foods[f.id] = f; setDoc(doc(db, up('foods/' + f.id)), clone(f)).catch(() => { });
-    SH.picked = f; SH.g = f.units[0] ? f.units[0][1] : 100; return drawPicked();
+    SH.picked = f; SH.drink = !!f.drink; SH.g = f.units[0] ? f.units[0][1] : 100; return drawPicked();
   }
-  if (act === 'pick') { const [src, i] = v.split(':'); SH.picked = (src === 'usda' ? SH.usda : SH.results)[+i]; SH.g = SH.picked.units && SH.picked.units[0] ? SH.picked.units[0][1] : 100; return drawPicked(); }
+  if (act === 'pick') { const [src, i] = v.split(':'); SH.picked = (src === 'usda' ? SH.usda : SH.results)[+i]; SH.drink = !!SH.picked.drink; if (SH.scope === 'extra') SH.off = !(SH.drink && (SH.picked.per.k || 0) < 5); SH.g = SH.picked.units && SH.picked.units[0] ? SH.picked.units[0][1] : 100; return drawPicked(); }
   if (act === 'unpick') { SH.picked = null; return sheetSearch(); }
   if (act === 'unit') { SH.g = +v; return drawPicked(); }
   if (act === 'extraoff') { SH.off = v === '1'; return drawPicked(); }
-  if (act === 'savefood') { const f = { ...SH.picked, id: 'c' + Date.now().toString(36), src: 'custom' }; S.foods[f.id] = f; setDoc(doc(db, up('foods/' + f.id)), clone(f)).catch(() => { }); return toast('Saved to your foods.'); }
+  if (act === 'savefood') { const f = { ...SH.picked, drink: !!SH.drink, id: 'c' + Date.now().toString(36), src: 'custom' }; S.foods[f.id] = f; setDoc(doc(db, up('foods/' + f.id)), clone(f)).catch(() => { }); return toast('Saved to your foods.'); }
   if (act === 'addpicked') {
-    const f = SH.picked, item = { fid: f.id, name: f.name, g: C.round(SH.g, 1), per: { ...f.per } };
+    const f = SH.picked, item = { fid: f.id, name: f.name, g: C.round(SH.g, 1), per: { ...f.per }, drink: !!SH.drink };
     if (SH.scope === 'extra') item.off = SH.off;
     addItemTo(SH.scope, item); closeSheet(); toast(`Added ${f.name.split(',')[0]}`); return draw();
   }
@@ -780,6 +782,8 @@ document.addEventListener('input', ev => {
 document.addEventListener('change', ev => {
   const t = ev.target;
   if (t.id === 'imp-file' || t.id === 'imp-file2') return importBackup(t.files[0]);
+  if (t.id === 'fs-drink' && SH) { SH.drink = t.checked; if (SH.scope === 'extra') SH.off = !(SH.drink && (SH.picked.per.k || 0) < 5); return drawPicked(); }
+  if (t.dataset && t.dataset.grams && S.settings) { const v = t.dataset.grams, i = v.lastIndexOf(':'), it = itemList(v.slice(0, i))[+v.slice(i + 1)]; if (C.isDrink(it)) return draw(); }
   if (!S.settings) return;
   const D = editDate();
   if (t.dataset.dayfield) { const v = parseFloat(t.value); dayDoc(D)[t.dataset.dayfield] = isNaN(v) ? null : v; saveDay(D); return; }

@@ -67,6 +67,19 @@ export function dayTotals(settings, day) {
   return t;
 }
 
+/* drinks: anything you drink that you log in a meal or as an extra counts toward water (1 g ≈ 1 ml) */
+export const DRINK_IDS = ['coffee', 'coffee_milk', 'tea', 'green_tea', 'cola', 'cola_zero', 'sparkling', 'juice_orange', 'milk_skim', 'milk_full'];
+export const isDrink = it => !!it && (it.drink === true || (it.drink !== false && DRINK_IDS.includes(it.fid)));
+export function drinkMl(day) {
+  if (!day) return 0;
+  let ml = 0;
+  const meals = day.meals || {}, skip = day.skip || {};
+  Object.keys(meals).forEach(id => { const md = meals[id]; if (!md || !md.status || skip[id]) return; (md.items || []).forEach(it => { if (isDrink(it)) ml += it.g || 0; }); });
+  (day.extras || []).forEach(it => { if (isDrink(it)) ml += it.g || 0; });
+  return Math.round(ml);
+}
+export const waterTotal = day => ((day && day.water) || 0) + drinkMl(day);
+
 /* the four required pillars */
 export function trainType(settings, date) {
   const p = (settings && settings.plan) || DEFAULT_PLAN;
@@ -79,12 +92,12 @@ export function pillars(settings, day, date) {
   const isClean = id => meals[id] && (meals[id].status === 'plan' || meals[id].status === 'swap');
   const off = pm.filter(m => meals[m.id] && meals[m.id].status === 'off');
   const clean = pm.filter(m => isClean(m.id)).length;
-  const goal = settings.waterGoal || 3500, w = day.water || 0;
+  const goal = settings.waterGoal || 3500, wDrinks = drinkMl(day), w = (day.water || 0) + wDrinks;
   const tt = trainType(settings, date);
   const req = (settings.supps || []).filter(s => s.req);
   const sDone = req.filter(s => (day.supps || {})[s.id]).length;
   const offExtra = (day.extras || []).filter(x => x.off);
-  return { pm, clean, off, offExtra, mealsOk: pm.length > 0 && clean === pm.length && !offExtra.length, goal, w, tt, trained: tt === 'rest' || !!day.trainingDone, req, sDone };
+  return { pm, clean, off, offExtra, wDrinks, mealsOk: pm.length > 0 && clean === pm.length && !offExtra.length, goal, w, tt, trained: tt === 'rest' || !!day.trainingDone, req, sDone };
 }
 export function evalDay(settings, day, date) {
   day = day || {};

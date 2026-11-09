@@ -161,8 +161,12 @@ const RAW = [
   ['mayo', 'Mayonnaise', 680, 1, 0.6, 75, [['tbsp', 14]], 'مايونيز'],
   // drinks and treats
   ['coffee', 'Coffee, black', 2, 0.3, 0, 0, [['cup', 240]], 'قهوة'],
+  ['coffee_milk', 'Coffee with milk, no sugar (est.)', 25, 1.4, 2.1, 1.1, [['cup', 240]], 'قهوة باللبن'],
   ['tea', 'Tea, no sugar', 1, 0, 0.3, 0, [['cup', 240]], 'شاي'],
-  ['cola', 'Cola', 42, 0, 10.6, 0, [['can', 330]], 'كولا'],
+  ['green_tea', 'Green tea, no sugar', 1, 0, 0.2, 0, [['cup', 240]], 'شاي أخضر'],
+  ['cola', 'Cola', 42, 0, 10.6, 0, [['can', 330], ['large bottle', 1000]], 'كولا'],
+  ['cola_zero', 'Cola zero / diet soda', 0.4, 0, 0, 0, [['can', 330], ['small bottle', 500], ['large bottle', 1000]], 'كولا زيرو دايت'],
+  ['sparkling', 'Sparkling water', 0, 0, 0, 0, [['bottle', 330]], 'مياه فوارة صودا'],
   ['juice_orange', 'Orange juice', 45, 0.7, 10.4, 0.2, [['glass', 250]], 'عصير برتقال'],
   ['shawarma', 'Chicken shawarma sandwich (est.)', 215, 12, 22, 9, [['sandwich', 250]], 'شاورما'],
   ['burger', 'Beef burger sandwich (est.)', 250, 13, 26, 11, [['sandwich', 220]], 'برجر'],
@@ -172,7 +176,8 @@ const RAW = [
   ['chocolate', 'Milk chocolate', 535, 7.7, 59, 30, [['bar 40 g', 40]], 'شوكولاتة'],
   ['basbousa', 'Basbousa (est.)', 350, 4, 55, 13, [['piece', 80]], 'بسبوسة']
 ];
-export const FOODS = RAW.map(([id, name, k, p, c, f, units, ar]) => ({ id, name, per: { k, p, c, f }, units: units || [], ar: ar || '', src: 'lib' }));
+import { DRINK_IDS } from './core.js';
+export const FOODS = RAW.map(([id, name, k, p, c, f, units, ar]) => ({ id, name, per: { k, p, c, f }, units: units || [], ar: ar || '', src: 'lib', drink: DRINK_IDS.includes(id) }));
 export const foodById = id => FOODS.find(f => f.id === id);
 const it = (id, g) => { const f = foodById(id); return { fid: id, name: f.name, g, per: { ...f.per } }; };
 
