@@ -2,7 +2,7 @@ import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.14.1/fireba
 import { getAuth, GoogleAuthProvider, signInWithPopup, getRedirectResult, onAuthStateChanged, signOut, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js';
 import { initializeFirestore, getFirestore, persistentLocalCache, persistentMultipleTabManager, doc, collection, onSnapshot, setDoc, getDoc, deleteDoc, writeBatch } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
 import * as C from './core.js';
-const APP_VERSION = '10 · new home, logo, sports';
+const APP_VERSION = '11 · your own meal plan';
 import { EX, POSE, figSVG, YT, LINES, FOODS, COACH_MEALS, DEFAULT_SUPPS, SLOTS, CARDIO_MODES } from './data.js';
 
 /* ---------- config ---------- */
@@ -105,6 +105,8 @@ function draw() {
   if (!S.got.settings) { $('top').innerHTML = topIdle(); m.innerHTML = `<div class="card hint">Loading your challenge…</div>`; return; }
   if (!S.settings) { $('top').innerHTML = topIdle(); m.innerHTML = welcomeHTML(); return; }
   if (S.quickWater && S.got.days) { S.quickWater = false; const dd = dayDoc(today()); dd.water = (dd.water || 0) + 250; saveDay(today()); S.view = 'today'; history.replaceState(null, '', '#today'); toast(`+250 ml · ${L(C.waterTotal(dd))} L today`); }
+  privacyMigrate();
+  C.TT.gym.sub = isOwner() ? 'Your PPLUL day. Tick it after you log it in Lyfta.' : 'Tick it once your gym workout is done.';
   if (S.quickSport && S.got.days) { S.quickSport = false; S.view = 'today'; history.replaceState(null, '', '#today'); setTimeout(openSport, 50); }
   const R = C.computeRun(S.settings, S.days, now());
   $('top').innerHTML = topHTML(R);
@@ -161,7 +163,7 @@ function signinHTML() {
 function waterSelect(id, attr, val) { return `<select class="in" id="${id}" ${attr}>${WATER_OPTS.map(v => `<option value="${v}" ${v === val ? 'selected' : ''}>${L(v)} L</option>`).join('')}</select>`; }
 function welcomeHTML() {
   return `<section class="card"><div class="card-h"><h2>Start your 90 days</h2></div>
-  <p class="hint">Every day needs every planned meal on plan, your water goal, that day’s training and your core supplements. Miss any of them and the counter goes back to Day 1. Your coach’s meal plan is already loaded; edit it in Setup.</p>
+  <p class="hint">Every day needs every planned meal on plan, your water goal, that day’s training and your core supplements. Miss any of them and the counter goes back to Day 1. ${isOwner() ? 'Your coach’s meal plan is already loaded; edit it in Setup.' : 'You start with Breakfast, Lunch and Dinner. Add your own meal plan and supplements in Setup, or just log what you eat and the app counts the calories.'}</p>
   <div class="form"><label>Start date<input class="in" id="w-start" type="date" value="${today()}" max="${today()}"></label>
   <label>Water goal${waterSelect('w-water', '', 4000)}</label>
   <label>Current weight (kg)<input class="in" id="w-weight" type="number" inputmode="decimal" step="0.1"></label>
@@ -172,11 +174,33 @@ function welcomeHTML() {
   <p class="hint">Moving from the old app? <label class="link" for="imp-file">Import a backup file</label> instead.</p>
   <input id="imp-file" type="file" accept="application/json,.json" hidden></section>`;
 }
+/* The coach's meal plan and supplement stack are Hassan's. Everyone else starts blank and builds their own. */
+const OWNER = 'hassan.abdelshafy14@gmail.com';
+const isOwner = () => !!(S.user && String(S.user.email || '').toLowerCase() === OWNER);
+const BLANK_MEALS = () => [{ id: 'b', name: 'Breakfast', time: '09:00', items: [] }, { id: 'l', name: 'Lunch', time: '14:00', items: [] }, { id: 'd', name: 'Dinner', time: '20:00', items: [] }];
+const STARTER_SUPPS = ['Creatine', 'Omega 3', 'Multivitamin', 'Vitamin D', 'Whey protein', 'Magnesium'];
+const mealSig = ms => JSON.stringify((ms || []).map(m => [m.id, (m.items || []).map(i => `${i.fid}:${i.g}`)]));
+const COACH_SIG = mealSig(COACH_MEALS);
+// one-time clean-up for friends who signed up when the coach plan was the default: keep the meal slots (so past days still count) but drop the foods
+function privacyMigrate() {
+  const st = S.settings;
+  if (isOwner() || !st || st.privMig || !S.got.days) return;
+  const strip = ms => ms.map(m => ({ ...m, items: [] }));
+  if (mealSig(st.meals) === COACH_SIG) st.meals = strip(st.meals);
+  Object.keys(st.planLog || {}).forEach(k => { if (mealSig(st.planLog[k]) === COACH_SIG) st.planLog[k] = strip(st.planLog[k]); });
+  const coach = Object.fromEntries(COACH_MEALS.map(m => [m.id, JSON.stringify((m.items || []).map(i => `${i.fid}:${i.g}`))]));
+  Object.keys(S.days).forEach(k => {
+    const d = S.days[k]; let ch = false;
+    Object.entries(d.meals || {}).forEach(([id, md]) => { if (md && md.status === 'plan' && coach[id] && JSON.stringify((md.items || []).map(i => `${i.fid}:${i.g}`)) === coach[id]) { md.items = []; ch = true; } });
+    if (ch) saveDay(k);
+  });
+  st.privMig = 1; saveSettings();
+}
 function newSettings(o = {}) {
   return {
     startDate: o.startDate || today(), waterGoal: o.waterGoal || 4000, startWeight: o.startWeight || null, goalWeight: o.goalWeight || null,
     plan: { ...C.DEFAULT_PLAN }, gymTime: 'am',
-    meals: clone(COACH_MEALS), planLog: { [o.startDate || today()]: clone(COACH_MEALS) }, supps: clone(DEFAULT_SUPPS), stamina: { on: true, days: [1, 3, 5] },
+    meals: isOwner() ? clone(COACH_MEALS) : BLANK_MEALS(), planLog: { [o.startDate || today()]: isOwner() ? clone(COACH_MEALS) : BLANK_MEALS() }, supps: isOwner() ? clone(DEFAULT_SUPPS) : [], stamina: { on: true, days: [1, 3, 5] }, privMig: 1,
     reminders: Object.fromEntries(REMINDERS.map(r => [r[0], r[0] !== 'meals'])), created: new Date().toISOString()
   };
 }
@@ -305,7 +329,7 @@ function upNextHTML(R, d, date, P) {
   const meals = d.meals || {}, tm = m => { const [a, b] = String(m.time || '').split(':').map(Number); return isNaN(a) ? null : a * 60 + (b || 0); };
   const open = P.pm.filter(m => !(meals[m.id] && meals[m.id].status));
   const due = open.filter(m => tm(m) != null && tm(m) <= mins).sort((a, b) => tm(a) - tm(b))[0];
-  const mealCard = (m, early) => { const s = C.sumItems(m.items); return card(`${esc(m.name)} · ${esc(m.time || '')}${early ? ' (coming up)' : ''}`, `${esc(m.items.map(x => x.name.split(',')[0]).join(', '))} · ${kc(s.k)} kcal · ${C.round(s.p, 1)} g protein`, `<button class="btn good" data-act="meal" data-id="${m.id}" data-v="plan">Ate it as planned</button><button class="btn" data-act="meal" data-id="${m.id}" data-v="swap">Changed</button>`); };
+  const mealCard = (m, early) => { if (!(m.items || []).length) return card(`${esc(m.name)} · ${esc(m.time || '')}${early ? ' (coming up)' : ''}`, 'No foods planned for this meal yet. Log what you ate and the app works out the calories.', `<button class="btn good" data-act="meal" data-id="${m.id}" data-v="swap">Log what I ate</button><button class="btn ghost" data-act="planset">Set up my plan</button>`); const s = C.sumItems(m.items); return card(`${esc(m.name)} · ${esc(m.time || '')}${early ? ' (coming up)' : ''}`, `${esc(m.items.map(x => x.name.split(',')[0]).join(', '))} · ${kc(s.k)} kcal · ${C.round(s.p, 1)} g protein`, `<button class="btn good" data-act="meal" data-id="${m.id}" data-v="plan">Ate it as planned</button><button class="btn" data-act="meal" data-id="${m.id}" data-v="swap">Changed</button>`); };
   if (due) return mealCard(due);
   const expected = P.goal * Math.min(1, Math.max(0, (mins - 480) / 840)), behind = expected - P.w;
   if (behind >= 500) return card(`Water: ${L(Math.round(behind / 250) * 250)} L behind pace`, `${L(P.w)} of ${L(P.goal)} L so far. Aim for about ${L(Math.round(expected / 250) * 250)} L by now.`, `<button class="btn wat" data-act="water" data-n="500">+ 500 ml</button><button class="btn" data-act="water" data-n="250">+ 250 ml</button>`);
@@ -342,11 +366,12 @@ function todayHTML(R) {
     { k: 'meals', jump: 'sec-meals', name: 'Meals', ok: P.mealsOk, bad: mealsBad, val: mealsBad ? 'Off-plan logged' : `${P.clean} / ${P.pm.length} on plan` },
     { k: 'water', jump: 'sec-water', name: 'Water', ok: P.w >= P.goal, val: `${L(P.w)} / ${L(P.goal)} L` },
     { k: 'train', jump: 'sec-train', name: 'Training', ok: P.trained, val: P.tt === 'rest' ? 'Rest day' : P.trained ? 'Done' : C.TT[P.tt].label },
-    { k: 'supps', jump: 'sec-supps', name: 'Supplements', ok: P.sDone === P.req.length, val: P.sDone === P.req.length ? `${P.req.length} / ${P.req.length} core` : `${supLeft.join(', ')} left` }
+    { k: 'supps', jump: 'sec-supps', name: 'Supplements', ok: P.sDone === P.req.length, val: !P.req.length ? 'None required' : P.sDone === P.req.length ? `${P.req.length} / ${P.req.length} core` : `${supLeft.join(', ')} left` }
   ];
   h += `<section class="card hero2${ev.complete ? ' locked' : ''}"><div class="hero2-in"><div class="rings">${ringsSVG(parts, mealsBad)}<div class="rings-c"><b class="num">${pdone}</b><span>of 4</span></div></div>
   <div class="prows">${rows.map(r => `<button class="prow ${r.k}${r.ok ? ' ok' : ''}${r.bad ? ' bad' : ''}" data-act="jump" data-v="${r.jump}"><i aria-hidden="true">${r.ok ? '✓' : ''}</i><span><b>${r.name}</b><small class="num">${esc(r.val)}</small></span></button>`).join('')}</div></div>
   <div class="hero2-f"><span class="sub">${esc(C.DAYNAMES[C.weekday(date)])} · ${fmt(date)}${d.commit ? ` · <span class="committed">committed ${esc(d.commit)}</span>` : ''}</span><p class="quote">${esc(line)}</p></div></section>`;
+  if (!st.planNoted && P.pm.length && P.pm.every(m => !(m.items || []).length)) h += `<section class="card setupnudge"><span class="sub">Make it yours</span><h3>Add your meal plan</h3><p class="hint">Put in your coach’s plan, or your own, in Setup → Meal plan, with the foods and grams for each meal. Then one tap logs a meal and your calorie and protein targets appear. No plan? Just log what you eat in each meal.</p><div class="row"><button class="btn primary" data-act="planset">Set up my plan</button><button class="btn ghost" data-act="plannoted">I’ll log as I go</button></div></section>`;
   h += upNextHTML(R, d, date, P);
   h += friendsLineHTML();
   // time-aware order: weigh-in first in the morning, missing pillars first in the evening
@@ -376,9 +401,9 @@ function itemsEditor(items, scope) {
 }
 function mealsHTML(date, d, P) {
   const st = S.settings, meals = d.meals || {}, tot = C.dayTotals(st, d), plan = C.mealsOn(st, date);
-  const unl = plan.filter(m => !(d.skip || {})[m.id] && !(meals[m.id] && meals[m.id].status)).length;
+  const unl = plan.filter(m => (m.items || []).length && !(d.skip || {})[m.id] && !(meals[m.id] && meals[m.id].status)).length;
   let h = `<section class="card" id="sec-meals"><div class="card-h"><h2>Meals</h2>${pill(P.off.length || P.offExtra.length ? 'bad' : P.mealsOk ? 'done' : 'todo', P.off.length || P.offExtra.length ? 'Off-plan' : `${P.clean} / ${P.pm.length} on plan`)}</div>
-  ${macrosHTML(tot, C.planTargets(st, d, date))}${unl ? `<button class="btn good" data-act="allplan">Log ${unl === plan.length ? 'all meals' : 'the other ' + unl} as planned</button>` : ''}<div class="tl">`;
+  ${macrosHTML(tot, C.planTargets(st, d, date))}${unl ? `<button class="btn good" data-act="allplan">Log ${unl === plan.length ? 'all meals' : unl === 1 ? 'the last planned meal' : 'the other ' + unl} as planned</button>` : ''}<div class="tl">`;
   plan.forEach((m, i) => {
     const md = meals[m.id] || {}, skip = d.skip && d.skip[m.id], status = skip ? 'skip' : md.status || '';
     const plan = C.sumItems(m.items);
@@ -392,8 +417,8 @@ function mealsHTML(date, d, P) {
     h += `<div class="meal ${status}"><div class="mi">${svgI(mealIcon(m, i))}</div><div class="mbody">
       <div class="spread"><div class="meal-n">${esc(m.name)} <span>${esc(m.time || '')}</span></div>${skip ? `<button class="link" data-act="unskip" data-v="${m.id}">Undo</button>` : `<button class="link" data-act="skip" data-v="${m.id}">Not today</button>`}</div>`;
     if (skip) { h += `<p class="meal-sum">Not part of today’s plan.</p></div></div>`; return; }
-    h += `<div class="meal-sum">${md.status ? `Logged <b>${kc(logged.k)} kcal · ${C.round(logged.p, 1)} g protein</b>` : `Plan: ${esc(m.items.map(x => x.name.split(',')[0]).join(', ')) || 'no foods set'} · <b>${kc(plan.k)} kcal</b>`}</div>
-      <div class="seg wide" role="group" aria-label="${esc(m.name)}"><button class="clean" data-act="meal" data-id="${m.id}" data-v="plan" aria-pressed="${md.status === 'plan'}">As planned</button><button class="clean" data-act="meal" data-id="${m.id}" data-v="swap" aria-pressed="${md.status === 'swap'}">Changed</button><button class="off" data-act="meal" data-id="${m.id}" data-v="off" aria-pressed="${md.status === 'off'}">Off-plan</button></div>`;
+    h += `<div class="meal-sum">${md.status ? `Logged <b>${kc(logged.k)} kcal · ${C.round(logged.p, 1)} g protein</b>` : m.items.length ? `Plan: ${esc(m.items.map(x => x.name.split(',')[0]).join(', '))} · <b>${kc(plan.k)} kcal</b>` : 'No plan set for this meal. Log what you ate.'}</div>
+      <div class="seg wide" role="group" aria-label="${esc(m.name)}">${m.items.length ? `<button class="clean" data-act="meal" data-id="${m.id}" data-v="plan" aria-pressed="${md.status === 'plan'}">As planned</button><button class="clean" data-act="meal" data-id="${m.id}" data-v="swap" aria-pressed="${md.status === 'swap'}">Changed</button>` : `<button class="clean" data-act="meal" data-id="${m.id}" data-v="swap" aria-pressed="${md.status === 'swap'}">Log what I ate</button>`}<button class="off" data-act="meal" data-id="${m.id}" data-v="off" aria-pressed="${md.status === 'off'}">Off-plan</button></div>`;
     if (!md.status) h += `<button class="link" data-act="copymeal" data-v="${m.id}">Copy a past meal</button>`;
     if (md.status === 'plan' && S.expandMeal === m.id) h += `<button class="link" data-act="expandmeal" data-v="${m.id}">Done</button>`;
     if (md.status === 'swap' || md.status === 'off') {
@@ -435,6 +460,7 @@ function suppsHTML(date, d, P) {
   const groups = {};
   supps.forEach(s => { const slot = s[gym] || 'Any time'; (groups[slot] = groups[slot] || []).push(s); });
   const order = Object.keys(groups).sort((a, b) => SLOTS.indexOf(a) - SLOTS.indexOf(b));
+  if (!supps.length) return `<section class="card" id="sec-supps"><div class="card-h"><h2>Supplements</h2>${pill('done', 'None required')}</div><p class="hint">No supplements set. If you take any, add them in Setup and pick which ones are required each day.</p><button class="btn small" data-act="tab" data-v="setup">Add in Setup</button></section>`;
   return `<section class="card" id="sec-supps"><div class="card-h"><h2>Supplements</h2>${pill(P.sDone === P.req.length ? 'done' : 'todo', `${P.sDone} / ${P.req.length} core`)}</div>
   <p class="hint">${gym === 'am' ? 'Morning gym day timing.' : 'Night gym day: no fat burner within 5 hours of bed.'}</p>${cafHTML(d)}
   ${order.map(slot => `<div class="sgrp"><span class="sub">${esc(slot)}</span><div class="supps">${groups[slot].map(s => `<button class="supp" data-act="supp" data-id="${esc(s.id)}" aria-pressed="${!!(d.supps || {})[s.id]}">${esc(s.name)}${s.req ? '' : ' <em>optional</em>'}</button>`).join('')}</div></div>`).join('')}</section>`;
@@ -708,7 +734,7 @@ function setupHTML(R) {
   <div class="setup-r"><span>Usual gym time</span><div class="seg"><button data-act="defgym" data-v="am" aria-pressed="${(st.gymTime || 'am') === 'am'}">Morning</button><button data-act="defgym" data-v="pm" aria-pressed="${st.gymTime === 'pm'}">Night</button></div></div></section>`;
   // meal plan
   const planTot = C.sumItems((st.meals || []).flatMap(m => m.items || []));
-  h += `<section class="card"><div class="card-h"><h2>Meal plan</h2>${pill('todo', `${kc(planTot.k)} kcal · ${kc(planTot.p)} g protein`)}</div><p class="hint">Your coach’s plan, in cooked weights. Its totals are your daily calorie and protein targets. When your coach changes it, edit it here: the change applies from today, and earlier days keep the plan they had.</p>${planHistoryHTML(st)}`;
+  h += `<section class="card" id="sec-plan"><div class="card-h"><h2>Meal plan</h2>${pill('todo', `${kc(planTot.k)} kcal · ${kc(planTot.p)} g protein`)}</div><p class="hint">${isOwner() ? 'Your coach’s plan' : 'Your meal plan (from your coach, or your own)'}, in cooked weights. Add the foods and grams for each meal; the totals become your daily calorie and protein targets. When your coach changes it, edit it here: the change applies from today, and earlier days keep the plan they had.</p>${planHistoryHTML(st)}`;
   (st.meals || []).forEach((m, i) => {
     const s = C.sumItems(m.items);
     h += `<div class="planmeal"><div class="row"><input class="in grow" id="pm-n-${m.id}" data-mealname="${m.id}" value="${esc(m.name)}" aria-label="Meal name"><input class="in sm" id="pm-t-${m.id}" type="time" data-mealtime="${m.id}" value="${esc(m.time || '')}" aria-label="Time" style="width:110px"></div>
@@ -728,7 +754,8 @@ function setupHTML(R) {
   h += `<section class="card"><div class="card-h"><h2>Supplements</h2></div><p class="hint">Core ones are required for the day to count. Timing changes with your gym time.</p>
   ${(st.supps || []).map(s => `<div class="sup-r"><div class="spread"><b>${esc(s.name)}</b><div class="row"><button class="btn small" data-act="sreq" data-id="${esc(s.id)}">${s.req ? 'Core' : 'Optional'}</button><button class="btn small danger" data-act="sdel" data-id="${esc(s.id)}">Remove</button></div></div>
   <div class="form"><label>Morning gym day<select class="in" data-stime="${esc(s.id)}:am">${SLOTS.map(o => `<option ${s.am === o ? 'selected' : ''}>${o}</option>`).join('')}</select></label><label>Night gym day<select class="in" data-stime="${esc(s.id)}:pm">${SLOTS.map(o => `<option ${s.pm === o ? 'selected' : ''}>${o}</option>`).join('')}</select></label></div></div>`).join('')}
-  <div class="row"><input class="in grow" id="s-new" placeholder="Add a supplement"><button class="btn small" data-act="sadd">Add</button></div></section>`;
+  <div class="row"><input class="in grow" id="s-new" placeholder="Add a supplement"><button class="btn small" data-act="sadd">Add</button></div>
+  ${(() => { const have = new Set((st.supps || []).map(s => s.name)), left = STARTER_SUPPS.filter(n => !have.has(n)); return left.length ? `<span class="sub">Quick add</span><div class="supps">${left.map(n => `<button class="supp" data-act="sstarter" data-v="${esc(n)}">+ ${esc(n)}</button>`).join('')}</div>` : ''; })()}</section>`;
   // reminders + strava
   const rm = st.reminders || {}, sv = S.meta.strava;
   h += `<section class="card"><div class="card-h"><h2>Reminders</h2></div><p class="hint">Sent to the ntfy app on your phone. Each one checks your day first and stays quiet if there’s nothing to do. Times can run 5 to 15 minutes late.</p>
@@ -1059,7 +1086,7 @@ document.addEventListener('click', async ev => {
     case 'openmeal': S.openMeal = v; break;
     case 'copymeal': return openCopy(v);
     case 'expandmeal': S.expandMeal = S.expandMeal === v ? null : v; break;
-    case 'allplan': { const dd = d(); C.mealsOn(S.settings, D).forEach(m => { if (!dd.skip[m.id] && !(dd.meals[m.id] && dd.meals[m.id].status)) dd.meals[m.id] = { status: 'plan', items: clone(m.items), note: '' }; }); saveDay(D); toast('Meals logged as planned.'); break; }
+    case 'allplan': { const dd = d(); C.mealsOn(S.settings, D).forEach(m => { if ((m.items || []).length && !dd.skip[m.id] && !(dd.meals[m.id] && dd.meals[m.id].status)) dd.meals[m.id] = { status: 'plan', items: clone(m.items), note: '' }; }); saveDay(D); toast('Meals logged as planned.'); break; }
     case 'share': return shareWeek();
     case 'sharecard': return shareCard();
     case 'sharerecap': {
@@ -1107,6 +1134,9 @@ document.addEventListener('click', async ev => {
     case 'train': { const dd = d(); dd.trainingDone = !dd.trainingDone; dd.trainingSource = dd.trainingDone ? 'manual' : null; saveDay(D); break; }
     case 'gymtime': d().gymTime = v; saveDay(D); break;
     case 'sport': return openSport();
+    case 'planset': go('setup'); setTimeout(() => { const el = $('sec-plan'); if (el) el.scrollIntoView({ block: 'start' }); }, 60); return;
+    case 'plannoted': S.settings.planNoted = true; saveSettings(); break;
+    case 'sstarter': if (!S.settings.supps.some(s => s.name === v)) { S.settings.supps.push({ id: 's' + Date.now().toString(36), name: v, req: true, am: 'Any time', pm: 'Any time' }); saveSettings(); toast(`${v} added as a core supplement. Tap “core” to make it optional.`); } break;
     case 'quick': return openQuick();
     case 'sex': S.settings.sex = v; saveSettings(); break;
     case 'sprm': { const dd = d(), s = dd.sports.splice(+v, 1)[0]; if (s && s.counts && dd.trainingSource === 'sport' && !dd.sports.some(x => x.counts)) { dd.trainingDone = false; dd.trainingSource = null; } saveDay(D); break; }
