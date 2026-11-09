@@ -83,23 +83,12 @@ _Screenshots use a demo account with made-up data._
 
 - **Hosting:** GitHub Pages serves the app. A service worker caches it for offline use and updates it in the background.
 - **Data:** Firebase Auth and Firestore on the free Spark plan. Each collection loads from the phone's cache and only fetches what changed, so about 60 people fit.
-- **Reminders:** a GitHub Actions job runs every 30 minutes and sends smart reminders as app notifications through Firebase Cloud Messaging (free). Anyone who hasn't turned those on gets them through ntfy instead. Strava sync is built in but switched off unless Strava secrets are added.
-
-## Setup
-
-1. **Firestore rules:** Firebase console → Firestore Database → Rules → paste `firestore.rules` → Publish. Re-publish whenever this file changes.
-2. **Authorized domain:** Authentication → Settings → Authorized domains → add `hassanabdelshafy21.github.io`.
-3. **GitHub Pages:** repo Settings → Pages → Deploy from a branch → `main` / `(root)`.
-4. **Push key:** Project settings → Cloud Messaging → Web Push certificates → Generate key pair. The public key goes in `app.js` (`VAPID`); it is meant to be public. Make sure "Firebase Cloud Messaging API (V1)" is enabled.
-5. **Secrets** (repo Settings → Secrets and variables → Actions → New repository secret):
-   - `FIREBASE_SERVICE_ACCOUNT`: Firebase → Project settings → Service accounts → Generate new private key → paste the whole file.
-   - `NTFY_TOPIC` (optional fallback): a long random name; subscribe to the same name in the ntfy app.
-6. **Test reminders:** Actions → **tick** → Run workflow → tick "Send a test notification".
+- **Reminders:** a scheduled job runs every 30 minutes and sends smart reminders as app notifications through Firebase Cloud Messaging (free), or through ntfy for anyone who hasn't turned those on.
 
 ## Privacy and security
 
 - The repo is public, so nothing private lives in it: no keys, no personal plans, no emails. The Firebase web config and the push public key are designed to be public; access is controlled by `firestore.rules` (each person can only read and write their own data).
-- Secrets (`FIREBASE_SERVICE_ACCOUNT`, `NTFY_TOPIC`) live only in GitHub Actions secrets.
+- Keys for the reminder job live only in encrypted GitHub Actions secrets, never in the code.
 - The friends board shares only day count, streak, today's status, league points and rank; never food, weight or photos.
 
 ## Credits
