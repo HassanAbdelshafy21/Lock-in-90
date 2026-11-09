@@ -7,6 +7,8 @@ A personal 90-day challenge tracker that works offline and syncs through Firebas
 - **Training:** calisthenics with drawn start/finish figures, hold and rest timers, personal bests; a 12-week stamina track that never affects the streak.
 - **Motivation:** morning commitment, a day-complete celebration with a shareable image, a flame streak that warns after 21:00, Day 30/60/90 recaps.
 - **Insights:** weight wins (lowest, since start, this week, to goal), real calorie burn from logs + weight trend, recipe builder, copy a past meal, daily notes.
+- **Home screen:** four pillar rings, an “Up next” card with the one thing to do now, and a + button for quick adds.
+- **Sports:** log football, padel, tennis and 13 more with duration and intensity; calories from the 2024 Compendium of Physical Activities (or your average heart rate and age), a sweat top-up hint, and WHO weekly activity minutes.
 - **Friends board:** create a group, share the 6-character code, and everyone in it sees each other's day count, streak, today's status and the group chain (days everyone locked in). Nothing else is shared.
 - **Progress:** weekly review, 90-day chain, milestones, weight with 7-day average, measurements, before/after photo slider.
 - **Cloud job (GitHub Actions, every 30 min):** sends smart reminders to the ntfy app. (Strava sync is built in but switched off; it only runs if Strava secrets are added.)

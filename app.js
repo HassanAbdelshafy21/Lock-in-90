@@ -2,7 +2,7 @@ import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.14.1/fireba
 import { getAuth, GoogleAuthProvider, signInWithPopup, getRedirectResult, onAuthStateChanged, signOut, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js';
 import { initializeFirestore, getFirestore, persistentLocalCache, persistentMultipleTabManager, doc, collection, onSnapshot, setDoc, getDoc, deleteDoc, writeBatch } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
 import * as C from './core.js';
-const APP_VERSION = '9 · celebrations, recipes, insights';
+const APP_VERSION = '10 · new home, logo, sports';
 import { EX, POSE, figSVG, YT, LINES, FOODS, COACH_MEALS, DEFAULT_SUPPS, SLOTS, CARDIO_MODES } from './data.js';
 
 /* ---------- config ---------- */
@@ -42,6 +42,7 @@ const editDate = () => { const g = now().hour < 3 ? C.addDays(today(), -1) : nul
 const uid = () => S.user && S.user.uid;
 const up = p => `users/${uid()}/${p}`;
 const kc = v => Math.round(v || 0);
+const P0 = date => C.pillars(S.settings, S.days[date] || {}, date);
 const buzz = p => { try { if (S.settings && S.settings.haptics === false) return; if (navigator.vibrate) navigator.vibrate(p); } catch (e) { } };
 
 /* ---------- writes (debounced, one per document, queued offline by Firestore) ---------- */
@@ -104,6 +105,7 @@ function draw() {
   if (!S.got.settings) { $('top').innerHTML = topIdle(); m.innerHTML = `<div class="card hint">Loading your challenge…</div>`; return; }
   if (!S.settings) { $('top').innerHTML = topIdle(); m.innerHTML = welcomeHTML(); return; }
   if (S.quickWater && S.got.days) { S.quickWater = false; const dd = dayDoc(today()); dd.water = (dd.water || 0) + 250; saveDay(today()); S.view = 'today'; history.replaceState(null, '', '#today'); toast(`+250 ml · ${L(C.waterTotal(dd))} L today`); }
+  if (S.quickSport && S.got.days) { S.quickSport = false; S.view = 'today'; history.replaceState(null, '', '#today'); setTimeout(openSport, 50); }
   const R = C.computeRun(S.settings, S.days, now());
   $('top').innerHTML = topHTML(R);
   boardOn(); boardPublish(R);
@@ -111,7 +113,7 @@ function draw() {
   if (S.view === 'progress') photosOn();
   m.innerHTML = bannersHTML(R) + (S.view === 'train' ? trainHTML(R) : S.view === 'progress' ? progressHTML(R) : S.view === 'setup' ? setupHTML(R) : todayHTML(R));
 }
-const topIdle = () => `<div class="top-row"><div><div class="daylabel">90-day challenge</div><div class="daynum">LOCK IN</div></div></div>`;
+const topIdle = () => `<div class="top-row"><div class="brand"><img src="icons/logo.svg" alt=""><div><div class="daylabel">90-day challenge</div><div class="daynum">LOCK IN</div></div></div></div>`;
 function syncChip() {
   if (!S.online) return `<span class="chip sync off">Offline · saved on phone</span>`;
   if (S.pend.s || S.pend.d || Object.keys(timers).length) return `<span class="chip sync pend">Syncing</span>`;
@@ -148,7 +150,7 @@ function bannersHTML(R) {
 
 /* ---------- sign-in and welcome ---------- */
 function signinHTML() {
-  return `<section class="signin"><h1>LOCK<br><span>IN 90</span></h1><p class="hint">Sign in once. After that the app works offline and syncs when you’re back online.</p>
+  return `<section class="signin"><img class="signin-logo" src="icons/logo.svg" alt=""><h1>LOCK<br><span>IN 90</span></h1><p class="hint">Sign in once. After that the app works offline and syncs when you’re back online.</p>
   <button class="btn primary block" data-act="signin">Sign in with Google</button>
   <span class="sub">or with email (works in every browser, best on iPhone)</span>
   <form class="form" id="email-form" style="text-align:left"><label class="full">Email<input class="in" id="si-email" type="email" autocomplete="email" required></label>
@@ -177,6 +179,58 @@ function newSettings(o = {}) {
     meals: clone(COACH_MEALS), planLog: { [o.startDate || today()]: clone(COACH_MEALS) }, supps: clone(DEFAULT_SUPPS), stamina: { on: true, days: [1, 3, 5] },
     reminders: Object.fromEntries(REMINDERS.map(r => [r[0], r[0] !== 'meals'])), created: new Date().toISOString()
   };
+}
+
+/* ---------- sports ---------- */
+function curWeight(before) {
+  const pts = [];
+  if (S.settings.startWeight) pts.push([S.settings.startDate, S.settings.startWeight]);
+  Object.values(S.checkins).forEach(c => c.weight && pts.push([c.date, c.weight]));
+  Object.keys(S.days).forEach(k => S.days[k].weight && pts.push([k, S.days[k].weight]));
+  const ok = pts.filter(p => !before || p[0] <= before).sort((a, b) => a[0] < b[0] ? -1 : 1);
+  return ok.length ? ok[ok.length - 1][1] : null;
+}
+const prof = () => ({ age: S.settings.age || null, sex: S.settings.sex || 'm' });
+const LVL_HINT = ['Relaxed, lots of breaks, you can chat easily', 'A proper game: breathing hard at times', 'Competitive, full pace, you can barely talk'];
+function openSport() {
+  const P = P0(editDate()), d = S.days[editDate()] || {};
+  SH = { scope: 'sport', sp: (S.settings.lastSport || 'football'), min: 60, lvl: 1, hr: null, counts: false, canCount: P.tt !== 'rest' && !d.trainingDone };
+  $('sheet').hidden = false; drawSport();
+}
+function drawSport() {
+  const s = SH, sp = C.sportById(s.sp), kg = curWeight(editDate()) || 80, kcal = C.sportKcal({ sport: s.sp, min: s.min, lvl: s.lvl, hr: s.hr }, kg, prof());
+  const usingHR = s.hr >= 90 && s.hr <= 200 && S.settings.age;
+  $('sheet').innerHTML = `<div class="sheet" role="dialog" aria-modal="true" aria-label="Log a sport"><div class="spread"><h2>Log a sport</h2><button class="x" data-act="closesheet" aria-label="Close">×</button></div>
+  <div class="sgrid">${C.SPORTS.map(x => `<button class="sp" data-act="sppick" data-v="${x.id}" aria-pressed="${x.id === s.sp}"><span>${x.ic}</span>${esc(x.name)}</button>`).join('')}</div>
+  <span class="sub">How long</span><div class="row">${[30, 45, 60, 90, 120].map(m => `<button class="btn small" data-act="spmin" data-v="${m}" aria-pressed="${s.min === m}">${{ 30: '30 min', 45: '45 min', 60: '1 h', 90: '1 h 30', 120: '2 h' }[m]}</button>`).join('')}<label class="g">or <input class="in sm" id="sp-min" type="number" inputmode="numeric" min="5" max="600" value="${s.min}"> min</label></div>
+  <span class="sub">How hard</span><div class="seg wide" role="group" aria-label="Intensity">${C.LEVELS.map((l, i) => `<button data-act="splvl" data-v="${i}" aria-pressed="${s.lvl === i}">${l}</button>`).join('')}</div><p class="hint">${LVL_HINT[s.lvl]}.</p>
+  <label class="full-note">Average heart rate (optional, from your watch)<input class="in" id="sp-hr" type="number" inputmode="numeric" min="60" max="210" placeholder="e.g. 145" value="${s.hr || ''}"></label>
+  ${s.hr && !S.settings.age ? '<p class="hint">Add your age in Setup to use heart rate. Until then it uses the sport and intensity.</p>' : ''}
+  ${s.canCount ? `<label class="chk"><input type="checkbox" id="sp-count" ${s.counts ? 'checked' : ''}> Count this as today’s training</label>` : ''}
+  <div class="spest"><b class="num">≈ ${kc(kcal)} kcal</b><span>${esc(sp.name)} · ${s.min} min · ${C.LEVELS[s.lvl].toLowerCase()} · ${usingHR ? `heart rate ${s.hr} bpm` : `${C.round(kg, 1)} kg`}</span></div>
+  <button class="btn primary block" data-act="spsave">Save</button></div>`;
+}
+function sportsListHTML(date, d) {
+  const list = d.sports || [];
+  if (!list.length) return `<button class="btn small" data-act="sport">+ Played a sport? Log it</button>`;
+  const min = list.reduce((a, s) => a + (s.min || 0), 0), kcal = list.reduce((a, s) => a + (s.kcal || 0), 0), extraL = Math.round(min / 60 * 0.6 * 4) / 4;
+  return `<div class="sgrp"><span class="sub">Sports today · ${min} min · ≈ ${kc(kcal)} kcal</span><div class="acts">${list.map((s, i) => { const sp = C.sportById(s.sport); return `<div class="act"><span>${sp.ic} <b>${esc(sp.name)}</b> · ${s.min} min · ${C.LEVELS[s.lvl ?? 1].toLowerCase()}${s.counts ? ' · counts as training' : ''}</span><span class="num">${kc(s.kcal)} kcal <button class="x" data-act="sprm" data-v="${i}" aria-label="Remove ${esc(sp.name)}">×</button></span></div>`; }).join('')}</div>
+  ${extraL >= 0.25 ? `<p class="hint">You sweat a lot in ${min} minutes: drink about ${L(extraL * 1000)} L on top of your usual water today.</p>` : ''}
+  <button class="btn small" data-act="sport">+ Log another</button></div>`;
+}
+function activityWeek() {
+  const t = today(); let min = 0, kcal = 0, mod = 0, n = 0;
+  for (let i = 0; i < 7; i++) { const d = S.days[C.addDays(t, -i)]; (d && d.sports || []).forEach(s => { n++; min += s.min || 0; kcal += s.kcal || 0; mod += C.sportModMin(s); }); }
+  const from = C.addDays(t, -6);
+  stamSessions(from, t).forEach(s => { min += s.min || 0; mod += (s.min || 0) * (s.kind === 'intervals' ? 2 : 1); });
+  return { n, min, kcal, mod };
+}
+function openQuick() {
+  SH = { scope: 'quick' }; $('sheet').hidden = false;
+  $('sheet').innerHTML = `<div class="sheet" role="dialog" aria-modal="true" aria-label="Quick add"><div class="spread"><h2>Quick add</h2><button class="x" data-act="closesheet" aria-label="Close">×</button></div>
+  <div class="qgrid"><button class="qbtn wat" data-act="qwater" data-v="250"><span class="qi">💧</span>+ 250 ml</button><button class="qbtn wat" data-act="qwater" data-v="500"><span class="qi">💧</span>+ 500 ml</button><button class="qbtn wat" data-act="qwater" data-v="1000"><span class="qi">💧</span>+ 1 L</button>
+  <button class="qbtn" data-act="qsport"><span class="qi">⚽</span>Sport</button><button class="qbtn" data-act="qextra"><span class="qi">🍎</span>Food or drink</button><button class="qbtn" data-act="qfocus" data-v="b-weight"><span class="qi">⚖️</span>Weight</button>
+  <button class="qbtn" data-act="qtab" data-v="train"><span class="qi">💪</span>Calisthenics</button><button class="qbtn" data-act="qstam"><span class="qi">🚴</span>Cardio</button><button class="qbtn" data-act="qfocus" data-v="b-note"><span class="qi">📝</span>Note</button></div></div>`;
 }
 
 /* ---------- celebration + share card ---------- */
@@ -233,6 +287,40 @@ function commitHTML(R, d, date) {
 
 /* ---------- TODAY ---------- */
 function arc(cx, cy, r, a0, a1) { const R2 = a => a * Math.PI / 180; const x0 = cx + r * Math.cos(R2(a0)), y0 = cy + r * Math.sin(R2(a0)), x1 = cx + r * Math.cos(R2(a1)), y1 = cy + r * Math.sin(R2(a1)); return `M${x0.toFixed(2)},${y0.toFixed(2)} A${r},${r} 0 ${a1 - a0 > 180 ? 1 : 0} 1 ${x1.toFixed(2)},${y1.toFixed(2)}`; }
+function ringsSVG(parts, mealsBad) {
+  const cls = ['meal', 'water', 'train', 'supp'], R0 = [66, 52, 38, 24], sw = 11;
+  let s = `<svg viewBox="0 0 160 160" aria-hidden="true">`;
+  parts.forEach((pt, i) => {
+    const r = R0[i], c = 2 * Math.PI * r, v = Math.min(1, Math.max(0, pt.v));
+    s += `<circle cx="80" cy="80" r="${r}" fill="none" class="rtrack ${cls[i]}" stroke-width="${sw}"/>`;
+    if (v > 0) s += `<circle cx="80" cy="80" r="${r}" fill="none" class="rfill ${cls[i]}${i === 0 && mealsBad ? ' bad' : ''}" stroke-width="${sw}" stroke-linecap="round" stroke-dasharray="${(c * v).toFixed(1)} ${c.toFixed(1)}" transform="rotate(-90 80 80)"/>`;
+  });
+  return s + `</svg>`;
+}
+function upNextHTML(R, d, date, P) {
+  const ev = R.todayEval && date === today() ? R.todayEval : C.evalDay(S.settings, d, date), n = now();
+  const mins = date === today() ? n.hour * 60 + n.minute : 24 * 60;
+  const card = (title, body, actions, kind = '') => `<section class="card upnext ${kind}"><span class="sub">${kind === 'done' ? 'Today' : 'Up next'}</span><h3>${title}</h3>${body ? `<p class="hint">${body}</p>` : ''}${actions ? `<div class="row">${actions}</div>` : ''}</section>`;
+  if (ev.complete) return card('Locked in. This day counts.', `Streak ${R.done}. Rest well, tomorrow is a separate problem.`, `<button class="btn" data-act="sharecard">Share image</button><button class="btn ghost" data-act="sport">+ Log a sport</button>`, 'done');
+  const meals = d.meals || {}, tm = m => { const [a, b] = String(m.time || '').split(':').map(Number); return isNaN(a) ? null : a * 60 + (b || 0); };
+  const open = P.pm.filter(m => !(meals[m.id] && meals[m.id].status));
+  const due = open.filter(m => tm(m) != null && tm(m) <= mins).sort((a, b) => tm(a) - tm(b))[0];
+  const mealCard = (m, early) => { const s = C.sumItems(m.items); return card(`${esc(m.name)} · ${esc(m.time || '')}${early ? ' (coming up)' : ''}`, `${esc(m.items.map(x => x.name.split(',')[0]).join(', '))} · ${kc(s.k)} kcal · ${C.round(s.p, 1)} g protein`, `<button class="btn good" data-act="meal" data-id="${m.id}" data-v="plan">Ate it as planned</button><button class="btn" data-act="meal" data-id="${m.id}" data-v="swap">Changed</button>`); };
+  if (due) return mealCard(due);
+  const expected = P.goal * Math.min(1, Math.max(0, (mins - 480) / 840)), behind = expected - P.w;
+  if (behind >= 500) return card(`Water: ${L(Math.round(behind / 250) * 250)} L behind pace`, `${L(P.w)} of ${L(P.goal)} L so far. Aim for about ${L(Math.round(expected / 250) * 250)} L by now.`, `<button class="btn wat" data-act="water" data-n="500">+ 500 ml</button><button class="btn" data-act="water" data-n="250">+ 250 ml</button>`);
+  const trainCard = () => P.tt === 'cali' ? card(C.TT.cali.label, 'Your no-bar session. Log your sets in Train.', `<button class="btn primary" data-act="tab" data-v="train">Open Train</button>`) : card(C.TT[P.tt].label, C.TT[P.tt].sub, `<button class="btn primary" data-act="train">Mark done</button><button class="btn ghost" data-act="sport">Played a sport instead?</button>`);
+  if (!P.trained && mins >= 17 * 60) return trainCard();
+  const left = P.req.filter(s => !(d.supps || {})[s.id]);
+  if (left.length && mins >= 12 * 60) return card(`Supplements: ${left.length} left`, esc(left.map(s => s.name).join(', ')), `<button class="btn primary" data-act="suppall">I took them</button>`);
+  const next = open.filter(m => tm(m) != null).sort((a, b) => tm(a) - tm(b))[0];
+  if (next) return mealCard(next, true);
+  if (P.w < P.goal) return card(`Water: ${L(P.goal - P.w)} L to go`, '', `<button class="btn wat" data-act="water" data-n="500">+ 500 ml</button><button class="btn" data-act="water" data-n="250">+ 250 ml</button>`);
+  if (!P.trained) return trainCard();
+  if (left.length) return card(`Supplements: ${left.length} left`, esc(left.map(s => s.name).join(', ')), `<button class="btn primary" data-act="suppall">I took them</button>`);
+  if (open.length) return mealCard(open[0]);
+  return '';
+}
 function todayHTML(R) {
   const t = today(), n = now(), grace = n.hour < 3 ? C.addDays(t, -1) : null, date = editDate();
   const st = S.settings, d = S.days[date] || {}, ev = C.evalDay(st, d, date), P = ev.P;
@@ -245,21 +333,21 @@ function todayHTML(R) {
     { v: P.req.length ? P.sDone / P.req.length : 1, c: P.sDone === P.req.length ? 'done' : '' }
   ];
   const pdone = [P.mealsOk, P.w >= P.goal, P.trained, P.sDone === P.req.length].filter(Boolean).length;
-  let ring = `<svg viewBox="0 0 150 150" aria-hidden="true">`;
-  parts.forEach((pt, i) => { const a0 = -90 + i * 90 + 7, a1 = a0 + 76; ring += `<path class="rt" d="${arc(75, 75, 62, a0, a1)}"/>`; if (pt.v > 0) ring += `<path class="rf ${pt.c}" d="${arc(75, 75, 62, a0, a0 + Math.max(.5, (a1 - a0) * Math.min(1, pt.v)))}"/>`; });
-  ring += `</svg>`;
   let h = '';
   h += commitHTML(R, d, date);
   if (grace) h += `<div class="phases" role="group" aria-label="Day being edited"><button data-act="editdate" data-v="${grace}" aria-pressed="${date === grace}">Yesterday · until 3 AM</button><button data-act="editdate" data-v="${t}" aria-pressed="${date === t}">Today</button></div>`;
-  h += `<section class="card"><div class="hero-in"><div class="ringbox">${ring}<div class="ringc"><b class="num">${pdone}<span style="font-size:20px;color:var(--muted)">/4</span></b><span>${ev.complete ? 'locked in' : 'done'}</span></div></div>
-  <div class="hero-side"><span class="sub">${esc(C.DAYNAMES[C.weekday(date)])} · ${fmt(date)}</span><p class="quote">${esc(line)}</p>${d.commit ? `<span class="committed">Committed at ${esc(d.commit)}</span>` : ''}</div></div>
-  <div class="legend">
-   <button data-act="jump" data-v="sec-meals" class="${mealsBad ? 'no' : P.mealsOk ? 'ok' : ''}"><b>Meals</b><span class="num">${P.clean}/${P.pm.length}</span></button>
-   <button data-act="jump" data-v="sec-water" class="${P.w >= P.goal ? 'ok' : 'wt'}"><b>Water</b><span class="num">${L(P.w)}/${L(P.goal)} L</span></button>
-   <button data-act="jump" data-v="sec-train" class="${P.trained ? 'ok' : ''}"><b>Train</b><span>${P.tt === 'rest' ? 'Rest' : P.trained ? 'Done' : 'To do'}</span></button>
-   <button data-act="jump" data-v="sec-supps" class="${P.sDone === P.req.length ? 'ok' : 'pr'}"><b>Supps</b><span class="num">${P.sDone}/${P.req.length}</span></button>
-  </div>
-  ${ev.complete ? `<div class="lockline spread"><span>Every box is checked. This day counts.</span><button class="link" data-act="sharecard">Share image</button></div>` : `<ul class="missing">${ev.missing.map(x => `<li>${esc(x)}</li>`).join('')}</ul>`}</section>`;
+  // hero: four concentric rings (one per pillar), the pillar list, then the single most useful next step
+  const supLeft = P.req.filter(s => !(d.supps || {})[s.id]).map(s => s.name);
+  const rows = [
+    { k: 'meals', jump: 'sec-meals', name: 'Meals', ok: P.mealsOk, bad: mealsBad, val: mealsBad ? 'Off-plan logged' : `${P.clean} / ${P.pm.length} on plan` },
+    { k: 'water', jump: 'sec-water', name: 'Water', ok: P.w >= P.goal, val: `${L(P.w)} / ${L(P.goal)} L` },
+    { k: 'train', jump: 'sec-train', name: 'Training', ok: P.trained, val: P.tt === 'rest' ? 'Rest day' : P.trained ? 'Done' : C.TT[P.tt].label },
+    { k: 'supps', jump: 'sec-supps', name: 'Supplements', ok: P.sDone === P.req.length, val: P.sDone === P.req.length ? `${P.req.length} / ${P.req.length} core` : `${supLeft.join(', ')} left` }
+  ];
+  h += `<section class="card hero2${ev.complete ? ' locked' : ''}"><div class="hero2-in"><div class="rings">${ringsSVG(parts, mealsBad)}<div class="rings-c"><b class="num">${pdone}</b><span>of 4</span></div></div>
+  <div class="prows">${rows.map(r => `<button class="prow ${r.k}${r.ok ? ' ok' : ''}${r.bad ? ' bad' : ''}" data-act="jump" data-v="${r.jump}"><i aria-hidden="true">${r.ok ? '✓' : ''}</i><span><b>${r.name}</b><small class="num">${esc(r.val)}</small></span></button>`).join('')}</div></div>
+  <div class="hero2-f"><span class="sub">${esc(C.DAYNAMES[C.weekday(date)])} · ${fmt(date)}${d.commit ? ` · <span class="committed">committed ${esc(d.commit)}</span>` : ''}</span><p class="quote">${esc(line)}</p></div></section>`;
+  h += upNextHTML(R, d, date, P);
   h += friendsLineHTML();
   // time-aware order: weigh-in first in the morning, missing pillars first in the evening
   const body = { ok: true, opt: true, html: () => bodyHTML(date, d) };
@@ -338,6 +426,7 @@ function trainCardHTML(date, d, P) {
   if (P.tt === 'rest') h += `<p class="hint">${C.TT.rest.sub}. Change your weekly plan in Setup.</p>`;
   else h += `<button class="check" data-act="train" aria-pressed="${!!d.trainingDone}"><span class="box"></span><span><b>${C.TT[P.tt].label}</b><span>${C.TT[P.tt].sub}</span></span></button>${P.tt === 'cali' ? `<button class="btn primary block" data-act="tab" data-v="train">Open today’s session</button>` : ''}`;
   if (acts.length) h += `<div class="acts">${acts.map(a => `<div class="act"><span><b>${esc(a.name || a.type)}</b> · from Strava</span><span class="num">${a.min} min${a.dist ? ' · ' + C.round(a.dist / 1000, 2) + ' km' : ''}</span></div>`).join('')}</div>`;
+  h += sportsListHTML(date, d);
   h += `<div class="spread"><span class="hint">Gym time today</span><div class="seg" role="group" aria-label="Gym time"><button data-act="gymtime" data-v="am" aria-pressed="${gym === 'am'}">Morning</button><button data-act="gymtime" data-v="pm" aria-pressed="${gym === 'pm'}">Night</button></div></div></section>`;
   return h;
 }
@@ -473,6 +562,7 @@ function progressHTML(R) {
   <div><b class="num">${rv.cardio} min</b><span>Cardio</span></div>
   <div><b class="num">${rv.sleep ? C.round(rv.sleep, 1) + ' h' : '—'}</b><span>Avg sleep</span></div>
   <div><b class="num">${rv.wDelta == null ? '—' : (rv.wDelta > 0 ? '+' : '') + C.round(rv.wDelta, 1) + ' kg'}</b><span>Weight trend (7-day avg)</span></div></div>
+  ${(() => { const aw = activityWeek(), pct = Math.min(100, aw.mod / 150 * 100); return `<div class="actweek"><div class="spread"><span><b>Activity</b> · ${aw.min} min${aw.n ? ` · ${aw.n} sport session${aw.n === 1 ? '' : 's'} · ≈ ${kc(aw.kcal)} kcal` : ''}</span><span class="num">${kc(aw.mod)} / 150</span></div><div class="mbar"><i style="width:${pct}%"></i></div><p class="hint">Sports and cardio, as moderate-effort minutes (hard minutes count double). The WHO recommends 150–300 a week on top of strength training.</p></div>`; })()}
   <button class="btn" data-act="share">Share this week with my coach</button></section>`;
   h += `<div class="stats"><div class="stat feature"><div class="big num">${R.done}</div><span>Days locked in</span></div><div class="stat"><div class="big num">${Math.min(R.dayNum, 90)}</div><span>Day now</span></div><div class="stat"><div class="big num">${R.best}</div><span>Best streak</span></div><div class="stat"><div class="big num">${Math.floor(R.done / 7)}</div><span>Perfect weeks</span></div></div>`;
   const ms = C.MILES.map(m => m[0]);
@@ -598,6 +688,7 @@ async function shareWeek() {
   if (rv.kcal) lines.push(`Avg calories: ${kc(rv.kcal)}${rv.tk ? ` (plan ${kc(rv.tk)})` : ''} · protein ${kc(rv.prot)} g${rv.tp ? ` (plan ${kc(rv.tp)} g)` : ''}`);
   if (rv.past) lines.push(`Meals on plan ${hit('Meals')}/${rv.past} · water ${hit('Water')}/${rv.past} · training ${hit('Training')}/${rv.past} · supplements ${hit('Supplements')}/${rv.past}`);
   lines.push(`Cardio: ${rv.cardio} min${rv.sleep ? ` · avg sleep ${C.round(rv.sleep, 1)} h` : ''}`);
+  { const aw = activityWeek(); if (aw.n) lines.push(`Sports: ${aw.n} session${aw.n === 1 ? '' : 's'} · ≈ ${kc(aw.kcal)} kcal`); }
   const text = lines.join('\n');
   try { if (navigator.share) { await navigator.share({ text }); return; } } catch (e) { if (e && e.name === 'AbortError') return; }
   try { await navigator.clipboard.writeText(text); toast('Summary copied. Paste it into your chat with your coach.'); } catch (e) { toast('Couldn’t share from here.'); }
@@ -612,6 +703,8 @@ function setupHTML(R) {
   ${wg > 5000 ? '<p class="safety">Above 5 L, spread it out: no more than about 1 L per hour, and add salt or electrolytes on heavy-sweat days.</p>' : ''}
   <div class="setup-r"><label for="s-sw">Start weight (kg)</label><input class="in" id="s-sw" type="number" inputmode="decimal" step="0.1" data-setting="startWeight" value="${st.startWeight || ''}"></div>
   <div class="setup-r"><label for="s-gw">Goal weight (kg)</label><input class="in" id="s-gw" type="number" inputmode="decimal" step="0.1" data-setting="goalWeight" value="${st.goalWeight || ''}"></div>
+  <div class="setup-r"><label for="s-age">Age (optional)</label><input class="in" id="s-age" type="number" inputmode="numeric" min="16" max="90" data-setting="age" placeholder="for heart-rate calories" value="${st.age || ''}"></div>
+  <div class="setup-r"><span>Calorie formula</span><div class="seg" role="group" aria-label="Sex for calorie formula"><button data-act="sex" data-v="m" aria-pressed="${st.sex !== 'f'}">Male</button><button data-act="sex" data-v="f" aria-pressed="${st.sex === 'f'}">Female</button></div></div>
   <div class="setup-r"><span>Usual gym time</span><div class="seg"><button data-act="defgym" data-v="am" aria-pressed="${(st.gymTime || 'am') === 'am'}">Morning</button><button data-act="defgym" data-v="pm" aria-pressed="${st.gymTime === 'pm'}">Night</button></div></div></section>`;
   // meal plan
   const planTot = C.sumItems((st.meals || []).flatMap(m => m.items || []));
@@ -876,6 +969,28 @@ document.addEventListener('click', async ev => {
     }
   }
   if (act === 'closesheet') return closeSheet();
+  if (SH && SH.scope === 'sport') {
+    if (act === 'sppick') { SH.sp = v; return drawSport(); }
+    if (act === 'spmin') { SH.min = +v; return drawSport(); }
+    if (act === 'splvl') { SH.lvl = +v; return drawSport(); }
+    if (act === 'spsave') {
+      const date = editDate(), dd = dayDoc(date), kg = curWeight(date) || 80, s = SH;
+      if (!(s.min > 0)) return toast('Enter how many minutes you played.');
+      const rec = { sport: s.sp, min: s.min, lvl: s.lvl, ...(s.hr ? { hr: s.hr } : {}), kcal: Math.round(C.sportKcal({ sport: s.sp, min: s.min, lvl: s.lvl, hr: s.hr }, kg, prof())), counts: !!(s.counts && s.canCount), at: `${C.pad(now().hour)}:${C.pad(now().minute)}` };
+      dd.sports = [...(dd.sports || []), rec];
+      if (rec.counts) { dd.trainingDone = true; dd.trainingSource = 'sport'; }
+      S.settings.lastSport = s.sp; saveSettings(); saveDay(date); closeSheet(); buzz([20, 40, 60]);
+      toast(`${C.sportById(s.sp).name} logged: ${s.min} min, about ${rec.kcal} kcal`); return draw();
+    }
+  }
+  if (SH && SH.scope === 'quick') {
+    if (act === 'qwater') { const date = editDate(), dd = dayDoc(date); dd.water = Math.max(0, Math.min(12000, (dd.water || 0) + +v)); saveDay(date); closeSheet(); toast(`+${+v >= 1000 ? '1 L' : v + ' ml'} · ${L(C.waterTotal(dd))} L today`); return draw(); }
+    if (act === 'qsport') return openSport();
+    if (act === 'qextra') { closeSheet(); return openSheet('extra'); }
+    if (act === 'qtab') { closeSheet(); return go(v); }
+    if (act === 'qstam') { closeSheet(); S.trainTab = 'stamina'; return go('train'); }
+    if (act === 'qfocus') { closeSheet(); if (S.view !== 'today') go('today'); setTimeout(() => { const el = $(v); if (el) { el.scrollIntoView({ block: 'center' }); el.focus(); } }, 80); return; }
+  }
   if (act === 'copypick' && SH && SH.scope === 'copy') {
     const src = SH.list[+v], id = SH.mealId, date = editDate(), dd = dayDoc(date);
     dd.meals[id] = { status: src.status, items: clone(src.items), note: '' }; saveDay(date);
@@ -991,6 +1106,11 @@ document.addEventListener('click', async ev => {
     case 'water': { const dd = d(); dd.water = Math.max(0, Math.min(12000, (dd.water || 0) + (+b.dataset.n))); saveDay(D); break; }
     case 'train': { const dd = d(); dd.trainingDone = !dd.trainingDone; dd.trainingSource = dd.trainingDone ? 'manual' : null; saveDay(D); break; }
     case 'gymtime': d().gymTime = v; saveDay(D); break;
+    case 'sport': return openSport();
+    case 'quick': return openQuick();
+    case 'sex': S.settings.sex = v; saveSettings(); break;
+    case 'sprm': { const dd = d(), s = dd.sports.splice(+v, 1)[0]; if (s && s.counts && dd.trainingSource === 'sport' && !dd.sports.some(x => x.counts)) { dd.trainingDone = false; dd.trainingSource = null; } saveDay(D); break; }
+    case 'suppall': { const dd = d(); P0(D).req.forEach(s => dd.supps[s.id] = true); saveDay(D); toast('Core supplements ticked.'); break; }
     case 'supp': { const dd = d(); dd.supps[b.dataset.id] = !dd.supps[b.dataset.id]; saveDay(D); break; }
     case 'energy': { const dd = d(); dd.energy = dd.energy === +v ? null : +v; saveDay(D); break; }
     case 'traintab': S.trainTab = v; break;
@@ -1055,6 +1175,7 @@ document.addEventListener('input', ev => {
 document.addEventListener('change', ev => {
   const t = ev.target;
   if (t.id === 'imp-file' || t.id === 'imp-file2') return importBackup(t.files[0]);
+  if (SH && SH.scope === 'sport' && (t.id === 'sp-min' || t.id === 'sp-hr' || t.id === 'sp-count')) { if (t.id === 'sp-min') SH.min = Math.max(0, Math.min(600, parseInt(t.value, 10) || 0)); else if (t.id === 'sp-hr') SH.hr = parseInt(t.value, 10) || null; else SH.counts = t.checked; return drawSport(); }
   if (t.id === 'ck-photo') { const f = t.files && t.files[0], n = $('ck-photo-name'); if (n) n.textContent = f ? 'Photo ready: ' + f.name.slice(0, 28) : 'Take or choose a photo'; return; }
   if (t.id === 'fs-drink' && SH) { SH.drink = t.checked; if (SH.scope === 'extra') SH.off = !(SH.drink && (SH.picked.per.k || 0) < 5); return drawPicked(); }
   if (t.dataset && t.dataset.grams && S.settings) { const v = t.dataset.grams, i = v.lastIndexOf(':'), it = itemList(v.slice(0, i))[+v.slice(i + 1)]; if (C.isDrink(it)) return draw(); }
@@ -1227,12 +1348,12 @@ onAuthStateChanged(auth, u => {
   draw();
 });
 function go(v) { S.view = VIEWS.includes(v) ? v : 'today'; if (location.hash !== '#' + S.view) history.replaceState(null, '', '#' + S.view); window.scrollTo(0, 0); draw(); }
-window.addEventListener('hashchange', () => { const v = location.hash.slice(1); if (v === 'water') { S.quickWater = true; return draw(); } if (VIEWS.includes(v) && v !== S.view) { S.view = v; draw(); } });
+window.addEventListener('hashchange', () => { const v = location.hash.slice(1); if (v === 'water') { S.quickWater = true; return draw(); } if (v === 'sport') { S.quickSport = true; return draw(); } if (VIEWS.includes(v) && v !== S.view) { S.view = v; draw(); } });
 window.addEventListener('online', () => { S.online = true; render(); });
 window.addEventListener('offline', () => { S.online = false; render(); });
 document.addEventListener('visibilitychange', () => { if (!document.hidden) render(); });
 setInterval(render, 60000);
-{ const h = location.hash.slice(1); if (VIEWS.includes(h)) S.view = h; if (h === 'water') S.quickWater = true; }
+{ const h = location.hash.slice(1); if (VIEWS.includes(h)) S.view = h; if (h === 'water') S.quickWater = true; if (h === 'sport') S.quickSport = true; }
 draw();
 // updates: check whenever the app is opened; when a new version takes over, reload once so it shows straight away
 if ('serviceWorker' in navigator) {

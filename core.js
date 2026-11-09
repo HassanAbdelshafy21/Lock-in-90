@@ -115,6 +115,40 @@ export function evalDay(settings, day, date) {
   return { complete: missing.length === 0, missing, offPlan: P.off.length > 0 || P.offExtra.length > 0, P };
 }
 
+/* sports: MET values from the 2024 Adult Compendium of Physical Activities (easy / normal / hard).
+   Padel has no Compendium entry; it uses paddleball casual (6.0) and competitive tennis-like effort. */
+export const SPORTS = [
+  { id: 'football', name: 'Football', ic: '⚽', met: [7.0, 8.0, 9.5] },
+  { id: 'padel', name: 'Padel', ic: '🎾', met: [6.0, 7.0, 8.0] },
+  { id: 'tennis', name: 'Tennis', ic: '🎾', met: [6.0, 6.8, 8.0] },
+  { id: 'basketball', name: 'Basketball', ic: '🏀', met: [6.0, 7.5, 8.0] },
+  { id: 'volleyball', name: 'Volleyball', ic: '🏐', met: [3.0, 4.0, 6.0] },
+  { id: 'squash', name: 'Squash', ic: '🎾', met: [7.3, 9.0, 12.0] },
+  { id: 'badminton', name: 'Badminton', ic: '🏸', met: [5.5, 7.0, 9.0] },
+  { id: 'tabletennis', name: 'Table tennis', ic: '🏓', met: [3.5, 4.0, 5.0] },
+  { id: 'handball', name: 'Handball', ic: '🤾', met: [8.0, 10.0, 12.0] },
+  { id: 'swim', name: 'Swimming', ic: '🏊', met: [5.8, 7.0, 9.8] },
+  { id: 'boxing', name: 'Boxing / MMA', ic: '🥊', met: [5.8, 7.8, 12.3] },
+  { id: 'run', name: 'Running', ic: '🏃', met: [7.0, 8.3, 9.8] },
+  { id: 'cycle', name: 'Cycling', ic: '🚴', met: [4.0, 7.5, 10.0] },
+  { id: 'walk', name: 'Walking', ic: '🚶', met: [3.0, 3.5, 5.0] },
+  { id: 'hike', name: 'Hiking', ic: '🥾', met: [5.3, 6.0, 7.8] },
+  { id: 'other', name: 'Other sport', ic: '➕', met: [4.0, 6.0, 8.0] }
+];
+export const LEVELS = ['Easy', 'Normal', 'Hard'];
+export const sportById = id => SPORTS.find(s => s.id === id) || SPORTS[SPORTS.length - 1];
+// kcal for one session. With an average heart rate and age it uses Keytel et al. (2005); otherwise MET × kg × hours.
+export function sportKcal(s, kg, prof) {
+  const min = s.min || 0;
+  if (s.hr >= 90 && s.hr <= 200 && prof && prof.age >= 16 && kg > 0) {
+    const kj = prof.sex === 'f' ? -20.4022 + 0.4472 * s.hr - 0.1263 * kg + 0.074 * prof.age : -55.0969 + 0.6309 * s.hr + 0.1988 * kg + 0.2017 * prof.age;
+    return Math.max(0, kj / 4.184 * min);
+  }
+  return sportById(s.sport).met[s.lvl ?? 1] * (kg || 80) * min / 60;
+}
+// moderate-equivalent minutes (WHO: vigorous minutes count double; MET >= 6 is vigorous)
+export const sportModMin = s => (s.min || 0) * (sportById(s.sport).met[s.lvl ?? 1] >= 6 ? 2 : 1);
+
 /* strict run: any closed day that is incomplete resets the attempt */
 export function computeRun(settings, days, now) {
   if (!settings || !settings.startDate) return null;
