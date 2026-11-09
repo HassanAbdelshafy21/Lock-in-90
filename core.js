@@ -192,7 +192,7 @@ export function computeRun(settings, days, now) {
   for (let d = attemptStart; d <= today; d = addDays(d, 1)) if (evalDay(settings, days[d], d).complete) done++;
   const todayEval = evalDay(settings, days[today], today);
   const best = Math.max(done, ...attempts.map(a => a.len), 0);
-  return { attemptStart, attempts, dayNum: diffDays(attemptStart, today) + 1, done, todayEval, best, grace, critical: lastFail === addDays(today, -1), attemptNo: attempts.length + 1, victory: done >= 90 };
+  return { attemptStart, attempts, dayNum: diffDays(attemptStart, today) + 1, done, todayEval, best, grace, critical: lastFail === addDays(today, -1), attemptNo: attempts.length + 1 + (settings.attemptBase || 0), victory: done >= 90 };
 }
 
 /* stamina program: 12 weeks, 3 sessions a week, low impact */

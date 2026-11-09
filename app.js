@@ -4,7 +4,7 @@ import { initializeFirestore, getFirestore, persistentLocalCache, persistentMult
 import * as C from './core.js';
 import { trText, addFoodNames } from './i18n.js';
 import * as TR from './train.js';
-const APP_VERSION = '17 · new Train + app notifications';
+const APP_VERSION = '18 · rest timer, ranks, league';
 import { EX, POSE, figSVG, YT, LINES, FOODS, COACH_MEALS, DEFAULT_SUPPS, SLOTS, CARDIO_MODES } from './data.js';
 addFoodNames(FOODS);
 
@@ -342,6 +342,84 @@ async function shareWeekImage() {
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = file.name; document.body.appendChild(a); a.click(); a.remove(); toast('Image saved. Send it from your gallery.');
 }
 
+/* ---------- monthly report ---------- */
+const prevMonth = () => { const d = C.parse(today()); d.setDate(0); return `${d.getFullYear()}-${C.pad(d.getMonth() + 1)}`; };
+const monthName = mk => new Date(+mk.slice(0, 4), +mk.slice(5, 7) - 1, 1).toLocaleDateString(LANG() === 'ar' ? 'ar-EG' : 'en-GB', { month: 'long' });
+function monthData(mk) {
+  const from = mk + '-01', end = (() => { const d = new Date(+mk.slice(0, 4), +mk.slice(5, 7), 0); return `${mk}-${C.pad(d.getDate())}`; })(), to = end > today() ? today() : end, st = S.settings;
+  let locked = 0, n = 0; const ws = [];
+  for (let d = from; d <= to; d = C.addDays(d, 1)) { if (d < st.startDate) continue; n++; if (C.evalDay(st, S.days[d], d).complete) locked++; if (S.days[d] && S.days[d].weight) ws.push(S.days[d].weight); }
+  const ms = TR.monthStats(from, to), r1 = TR.rankOf(C.addDays(to, 1)), r0 = TR.rankOf(from);
+  return { mk, from, to, locked, n, wDelta: ws.length > 1 ? C.round(ws[ws.length - 1] - ws[0], 1) : null, ...ms, rank: r1 && r1.name, rank0: r0 && r0.name };
+}
+function monthCardHTML() {
+  const mk = prevMonth(); if (mk + '-31' < S.settings.startDate) return '';
+  return `<section class="card monthcard"><div class="spread"><div><span class="sub">Monthly report</span><h3>${esc(monthName(mk))}</h3></div><button class="btn primary small" data-act="monthrep" data-v="${mk}">Share image</button></div></section>`;
+}
+async function shareMonthImage(mk) {
+  const m = monthData(mk), W = 1080, H = 1350, cv = document.createElement('canvas'); cv.width = W; cv.height = H; const g = cv.getContext('2d');
+  try { await document.fonts.load('800 40px Alexandria'); await document.fonts.ready; } catch (e) { }
+  const F = 'Alexandria,sans-serif', grd = g.createLinearGradient(0, 0, W, H); grd.addColorStop(0, '#1F2E52'); grd.addColorStop(1, '#14213D'); g.fillStyle = grd; g.fillRect(0, 0, W, H);
+  g.fillStyle = '#9FB0D0'; g.font = `500 30px ${F}`; g.fillText(`LOCK IN 90 · ${monthName(mk).toUpperCase()}`, 80, 110);
+  g.fillStyle = '#fff'; { const tt = `${boardName()}'s month`; let fs = 76; do { g.font = `800 ${fs}px ${F}`; fs -= 4; } while (g.measureText(tt).width > W - 160 && fs > 36); g.fillText(tt, 80, 205); }
+  const cells = [[`${m.locked}`, `Days locked in (of ${m.n})`], [`${m.wos}`, 'Workouts'], [`${C.round(m.vol / 1000, 1)} t`, 'Total lifted'], [m.wDelta == null ? '—' : `${m.wDelta > 0 ? '+' : ''}${m.wDelta} kg`, 'Weight change'], [`${m.cmin}`, 'Cardio and sport minutes'], [m.rank || '—', m.rank0 && m.rank0 !== m.rank ? `Strength rank (was ${m.rank0})` : 'Strength rank']];
+  cells.forEach(([v, k], i) => { const x = 80 + (i % 2) * 470, y = 270 + Math.floor(i / 2) * 200; g.fillStyle = 'rgba(255,255,255,.08)'; rr(g, x, y, 450, 176, 26); g.fill(); g.fillStyle = '#fff'; let fs = 72; do { g.font = `800 ${fs}px ${F}`; fs -= 4; } while (g.measureText(v).width > 390 && fs > 30); g.fillText(v, x + 30, y + 98); g.fillStyle = '#9FB0D0'; g.font = `500 26px ${F}`; g.fillText(k, x + 30, y + 145); });
+  let y = 900; g.fillStyle = 'rgba(242,179,61,.16)'; rr(g, 80, y, 920, 190, 26); g.fill(); g.fillStyle = '#F2B33D'; g.font = `800 40px ${F}`; g.fillText(`${m.recs} new record${m.recs === 1 ? '' : 's'}`, 112, y + 62);
+  g.fillStyle = '#fff'; g.font = `500 28px ${F}`; (m.best3.length ? m.best3 : ['Keep logging your sets']).forEach((t, i) => { let s = t; while (g.measureText(s).width > 850 && s.length > 4) s = s.slice(0, -2); g.fillText(s, 112, y + 110 + i * 36); });
+  y = 1140; g.fillStyle = '#C9D3E8'; g.font = `500 28px ${F}`; if (m.most.length) g.fillText(`Most trained: ${m.most.join(', ').toLowerCase()}`, 80, y); g.fillText(`Least trained: ${m.least.join(', ').toLowerCase()}`, 80, y + 44);
+  g.fillStyle = '#F2B33D'; rr(g, 80, 1240, 250, 64, 32); g.fill(); g.fillStyle = '#14213D'; g.font = `800 30px ${F}`; g.fillText(`Day ${Math.min(C.computeRun(S.settings, S.days, now()).dayNum, 90)}`, 112, 1283);
+  const blob = await new Promise(r => cv.toBlob(r, 'image/png')), file = new File([blob], `lock-in-${mk}.png`, { type: 'image/png' });
+  try { if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], text: `${monthName(mk)} on Lock In 90` }); return; } } catch (e) { if (e && e.name === 'AbortError') return; }
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = file.name; document.body.appendChild(a); a.click(); a.remove(); toast('Image saved. Send it from your gallery.');
+}
+
+/* ---------- start over (choose what to clear) ---------- */
+function openStartOver() { S.so = { preset: 'attempt', days: false, wo: false, body: false, plans: false, tell: !!S.settings.group, typed: '' }; drawStartOver(); }
+function soCounts() {
+  const t = today(); let days = 0, wos = 0;
+  Object.entries(S.days).forEach(([k, d]) => { if (k > t) return; if ((d.meals && Object.keys(d.meals).length) || d.water || (d.extras || []).length) days++; if (d.wo) wos++; });
+  return { days, wos, photos: Object.keys(S.photos || {}).length, checkins: Object.keys(S.checkins || {}).length };
+}
+function drawStartOver() {
+  const o = S.so, R = C.computeRun(S.settings, S.days, now()), del = o.days || o.wo || o.body || o.plans, n = soCounts();
+  const ck = (k, l, d) => `<button class="ck" data-act="so-tog" data-v="${k}" aria-pressed="${!!o[k]}"><i>${o[k] ? '✓' : ''}</i><span><b>${l}</b><small>${d}</small></span></button>`;
+  SH = { scope: 'so' }; $('sheet').hidden = false;
+  $('sheet').innerHTML = `<div class="sheet" role="dialog" aria-modal="true" aria-label="Start over"><div class="grab" aria-hidden="true"></div><div class="spread"><h2>Start over</h2><button class="x" data-act="closesheet" aria-label="Close">×</button></div><p class="hint">Pick what to clear. You’re on attempt ${R.attemptNo}, day ${Math.min(R.dayNum, 90)}.</p>
+  <div class="pre"><button data-act="so-pre" data-v="attempt" aria-pressed="${o.preset === 'attempt'}"><b>New attempt</b><small>Day 1 again, keep all history</small></button><button data-act="so-pre" data-v="clean" aria-pressed="${o.preset === 'clean'}"><b>Clean slate</b><small>Clear everything except your group</small></button></div>
+  <div class="ck lockd"><i>✓</i><span><b>Restart the 90 days</b><small>Day 1 starts today. Always included.</small></span></div>
+  ${ck('days', 'Logged days', 'Meals, water, supplements, notes, sleep')}${ck('wo', 'Workouts', 'Sets, records, cardio and sports')}${ck('body', 'Body', 'Weight, measurements, check-ins and progress photos')}${ck('plans', 'My plans', 'Meal plan, supplements, training plan, if-then plans')}
+  ${S.settings.group ? ck('tell', 'Tell my group', `Friends see “${esc(boardName())} started over” and get a notification`) : ''}
+  <div class="keep"><b>Always kept:</b> your account, ${S.settings.group ? `group ${esc(S.settings.group)} and friends, ` : ''}notifications, language and coach link.</div>
+  ${del ? `<p class="hint danger-t"><b>This deletes ${[o.days && `${n.days} logged days`, o.wo && `${n.wos} workouts`, o.body && `${n.photos} photos and ${n.checkins} check-ins`, o.plans && 'your plans'].filter(Boolean).join(', ')} for good.</b> <button class="link" data-act="export">Download a backup first</button></p><input class="in" id="so-type" placeholder="Type DELETE to confirm" autocomplete="off" autocapitalize="characters" value="${esc(o.typed)}">` : ''}
+  <button class="btn ${del ? 'danger' : 'primary'} block" data-act="so-go" ${del && o.typed.trim().toUpperCase() !== 'DELETE' ? 'disabled' : ''} id="so-go">${del ? 'Delete and start over' : `Start attempt ${R.attemptNo + 1}`}</button></div>`;
+}
+async function startOverAct(act, v) {
+  const o = S.so; if (!o) return;
+  if (act === 'so-pre') { Object.assign(o, v === 'clean' ? { preset: 'clean', days: true, wo: true, body: true, plans: true } : { preset: 'attempt', days: false, wo: false, body: false, plans: false }); o.typed = ''; return drawStartOver(); }
+  if (act === 'so-tog') { o[v] = !o[v]; o.preset = o.days && o.wo && o.body && o.plans ? 'clean' : !o.days && !o.wo && !o.body && !o.plans ? 'attempt' : 'custom'; return drawStartOver(); }
+  if (act !== 'so-go') return;
+  const del = o.days || o.wo || o.body || o.plans; if (del && o.typed.trim().toUpperCase() !== 'DELETE') return;
+  const R = C.computeRun(S.settings, S.days, now()), st = S.settings, t = today(), writes = [];
+  if (o.days || o.wo || o.body) {
+    Object.entries(S.days).forEach(([k, d]) => {
+      const nd = { date: k };
+      const KEEP_WO = ['wo', 'stamina', 'sports', 'cali'], KEEP_BODY = ['weight', 'waist', 'rhr'];
+      if (!o.days) Object.keys(d).forEach(f => { if (!KEEP_WO.includes(f) && !KEEP_BODY.includes(f)) nd[f] = d[f]; });
+      if (!o.wo) KEEP_WO.forEach(f => { if (d[f] != null) nd[f] = d[f]; });
+      if (!o.body) KEEP_BODY.forEach(f => { if (d[f] != null) nd[f] = d[f]; });
+      S.days[k] = nd; writes.push(['days/' + k, nd]);
+    });
+  }
+  if (o.body) { Object.keys(S.checkins || {}).forEach(k => { writes.push(['checkins/' + k, { deleted: true }]); delete S.checkins[k]; }); Object.keys(S.photos || {}).forEach(k => { writes.push(['photos/' + k, { deleted: true }]); delete S.photos[k]; }); }
+  if (o.plans) { st.meals = []; st.supps = []; st.train = null; st.ifthen = []; st.focus = {}; st.planNoted = false; }
+  st.attemptBase = (st.attemptBase || 0) + R.attemptNo; st.startDate = t; delete st.attemptStart;
+  if (o.tell && st.group) st.resetNote = { date: t, attempt: R.attemptNo + 1 }; else delete st.resetNote;
+  for (let i = 0; i < writes.length; i += 400) { const bt = writeBatch(db); writes.slice(i, i + 400).forEach(([p, v]) => bt.set(doc(db, up(p)), stamp(p, clone(v)))); try { await bt.commit(); } catch (e) { toast('Part of the reset didn’t save. Try again online.'); } }
+  saveSettings();
+  if (o.tell && st.group) { Object.keys(S.board || {}).filter(id => id !== uid()).forEach(id => setDoc(doc(db, `groups/${st.group}/members/${id}/cheers/${uid()}_${t}_reset`), { from: uid(), name: boardName(), kind: 'reset', date: t, at: Date.now(), pushed: false, attempt: R.attemptNo + 1 }).catch(() => { })); S.boardLast = null; }
+  S.so = null; closeSheet(); toast(`Attempt ${R.attemptNo + 1}. Day 1 is today.`); go('today');
+}
+
 /* ---------- if-then plans (implementation intentions) + reflection after a miss ---------- */
 const IFT_SUGGEST = [
   ['there’s a family lunch or an invitation', 'I eat my plan portion first, take one small plate and skip seconds'],
@@ -434,6 +512,7 @@ const FOCUS = {
   craving: { name: 'Use the craving tool instead of giving in', target: 3, count: ds => ds.reduce((s, [, d]) => s + (d.cravings || []).filter(c => c.out === 'passed').length, 0) }
 };
 function focusWeek() { const w = weekNo(), [from, to] = stamWeekRange(w); const ds = []; for (let dt = from; dt <= to; dt = C.addDays(dt, 1)) ds.push([dt, S.days[dt] || {}]); return { w, from, to, ds, key: 'w' + w }; }
+function focusHit(from) { const end = C.addDays(from, 6) > today() ? today() : C.addDays(from, 6), w = Math.floor(C.diffDays(S.settings.startDate, end) / 7) + 1, [a, b] = stamWeekRange(w), cur = (S.settings.focus || {})['w' + w], f = cur && FOCUS[cur.id]; if (!f) return false; const ds = []; for (let dt = a; dt <= b; dt = C.addDays(dt, 1)) ds.push([dt, S.days[dt] || {}]); return f.count(ds, a, b) >= f.target; }
 function focusSuggest() {
   const t = today(), last = []; for (let i = 1; i <= 7; i++) last.push(S.days[C.addDays(t, -i)] || {});
   const sl = last.filter(d => d.sleep); if (!sl.length || sl.reduce((a, d) => a + d.sleep, 0) / sl.length < 7) return 'sleep';
@@ -578,7 +657,7 @@ function ramadanHTML(date) {
 
 /* ---------- page shells ---------- */
 const pageHead = (title, R) => `<header class="ph"><h1>${esc(title)}</h1><span class="hero-chips">${syncDot()}${flameChip(R)}</span></header>`;
-const PTABS = [['week', 'Week'], ['body', 'Body'], ['chain', 'Chain'], ['friends', 'Friends']];
+const PTABS = [['week', 'Week'], ['muscles', 'Muscles'], ['body', 'Body'], ['chain', 'Chain'], ['friends', 'Friends']];
 function progressShell(G) {
   const tab = PTABS.some(p => p[0] === S.ptab) ? S.ptab : 'week';
   return `<div class="seg wide ptabs" role="tablist" aria-label="Progress sections">${PTABS.map(([k, l]) => `<button role="tab" data-act="ptab" data-v="${k}" aria-pressed="${tab === k}">${l}</button>`).join('')}</div>` + (G[tab] || '');
@@ -814,6 +893,7 @@ function todayNotesHTML(R) {
   if (ev.complete && m) out.push(['good', `Milestone: Day ${m[0]}`, `${m[1]}. Keep the chain going.`]);
   const rcp = [30, 60].find(c => R.dayNum === c + 1 || (R.dayNum === c && ev.complete));
   if (rcp) out.push(['good', `Your Day ${rcp} recap is ready`, 'See it in Progress.']);
+  if (+today().slice(8) <= 3 && prevMonth() + '-31' >= S.settings.startDate) out.push(['good', `Your ${monthName(prevMonth())} report is ready`, 'Progress → Week → Share image.']);
   return out.map(([k, t, b]) => `<div class="note2 ${k}"><b>${esc(t)}</b><span>${esc(b)}</span></div>`).join('');
 }
 function todayListHTML(R, date, d, P, line, shown) {
@@ -1036,7 +1116,7 @@ function weekReview() {
 }
 function progressHTML(R) {
   const st = S.settings, t = today(), rv = weekReview();
-  const G = { friends: friendsHTML() };
+  const G = { friends: friendsTabsHTML() };
   let h = recapHTML(R) + `<section class="card"><div class="card-h"><h2>Last 7 days</h2>${pill(rv.locked === rv.n ? 'done' : 'todo', `${rv.locked} / ${rv.n} locked in`)}</div>
   <div class="review"><div><b>${rv.worst && rv.worst[1] ? esc(rv.worst[0]) : 'None'}</b><span>${rv.worst && rv.worst[1] ? `Most missed (${rv.worst[1]} day${rv.worst[1] === 1 ? '' : 's'})` : 'Nothing missed'}</span></div>
   <div><b class="num">${rv.prot ? kc(rv.prot) + ' g' : '—'}</b><span>Avg protein${rv.tp ? ` · plan ${kc(rv.tp)} g` : ''}</span></div>
@@ -1046,7 +1126,8 @@ function progressHTML(R) {
   <div><b class="num">${rv.wDelta == null ? '—' : (rv.wDelta > 0 ? '+' : '') + C.round(rv.wDelta, 1) + ' kg'}</b><span>Weight trend (7-day avg)</span></div></div>
   ${(() => { const aw = activityWeek(), pct = Math.min(100, aw.mod / 150 * 100); return `<div class="actweek"><div class="spread"><span><b>Activity</b> · ${aw.min} min${aw.n ? ` · ${aw.n} sport session${aw.n === 1 ? '' : 's'} · ≈ ${kc(aw.kcal)} kcal` : ''}</span><span class="num">${kc(aw.mod)} / 150</span></div><div class="mbar"><i style="width:${pct}%"></i></div><p class="hint">Sports and cardio, as moderate-effort minutes (hard minutes count double). The WHO recommends 150–300 a week on top of strength training.</p></div>`; })()}
   <div class="row"><button class="btn primary" data-act="shareweekimg">Send coach report (image)</button><button class="btn" data-act="share">As text</button></div></section>` + insightsHTML();
-  G.week = h; h = '';
+  G.week = monthCardHTML() + h; h = '';
+  { const ws = weekStart(today()); TR.setMuscleWeek(ws, C.addDays(ws, 6)); G.muscles = TR.musclesHTML(ws, C.addDays(ws, 6)); }
   h += `<div class="stats"><div class="stat feature"><div class="big num">${R.done}</div><span>Days locked in</span></div><div class="stat"><div class="big num">${Math.min(R.dayNum, 90)}</div><span>Day now</span></div><div class="stat"><div class="big num">${R.best}</div><span>Best streak</span></div><div class="stat"><div class="big num">${Math.floor(R.done / 7)}</div><span>Perfect weeks</span></div></div>`;
   const ms = C.MILES.map(m => m[0]);
   h += `<section class="card"><div class="card-h"><h2>The chain</h2><span class="hint">Tap a day to see it</span></div><div class="grid90">${Array.from({ length: 90 }, (_, i) => { const dt = C.addDays(R.attemptStart, i); let c = ''; if (dt <= t && C.evalDay(st, S.days[dt], dt).complete) c = 'done'; else if (dt === t) c = 'today'; else if (dt === R.grace) c = 'open'; if (ms.includes(i + 1)) c += ' m'; return dt <= t ? `<button class="${c}" data-act="dayview" data-v="${dt}" aria-label="Day ${i + 1}, ${fmt(dt)}">${i + 1}</button>` : `<i class="${c}" title="Day ${i + 1} · ${fmt(dt)}">${i + 1}</i>`; }).join('')}</div></section>`;
@@ -1240,8 +1321,7 @@ function setupHTML(R) {
   <div class="setup-r"><span>Language</span><div class="seg" role="group" aria-label="Language"><button data-act="lang" data-v="en" aria-pressed="${LANG() !== 'ar'}">English</button><button data-act="lang" data-v="ar" aria-pressed="${LANG() === 'ar'}">العربية</button></div></div>
   <div class="setup-r"><span>Vibration on taps</span><div class="seg" role="group" aria-label="Vibration"><button data-act="haptics" data-v="1" aria-pressed="${st.haptics !== false}">On</button><button data-act="haptics" data-v="0" aria-pressed="${st.haptics === false}">Off</button></div></div>
   </section>`;
-  h += `<section class="card"><div class="card-h"><h2>Restart</h2></div><p class="hint">Starts a fresh 90 days from today and clears the attempt history. Logged days stay saved.</p>
-  ${S.confirm === 'restart' ? `<div class="wbtns"><button class="btn danger" data-act="restart2">Yes, restart today</button><button class="btn ghost" data-act="cancel">Cancel</button></div>` : `<button class="btn danger" data-act="restart1">Restart challenge</button>`}</section>`;
+  h += `<section class="card"><div class="card-h"><h2>Restart</h2></div><p class="hint">Start a new attempt, or clear exactly what you want. Your group and account always stay.</p><button class="btn danger block" data-act="startover">Start over…</button></section>`;
   return h;
 }
 
@@ -1262,7 +1342,7 @@ function shoppingHTML(st) {
 
 /* ---------- food sheet ---------- */
 let SH = null; // {scope, picked, results, off}
-TR.initTrain({ get S() { return S; }, esc, toast, draw: () => draw(), saveDay: d => saveDay(d), saveSettings: () => saveSettings(), dayDoc: d => dayDoc(d), editDate: () => editDate(), today: () => today(), fmt: d => fmt(d), openTimer: (m, sec, e) => openTimer(m, sec, e), buzz: p => buzz(p), staminaHTML: () => staminaHTML(), setSH: o => { if (SH && SH.iv) clearInterval(SH.iv); SH = o; }, closeSheet: () => closeSheet() });
+TR.initTrain({ get S() { return S; }, esc, toast, draw: () => draw(), saveDay: d => saveDay(d), saveSettings: () => saveSettings(), dayDoc: d => dayDoc(d), editDate: () => editDate(), today: () => today(), fmt: d => fmt(d), openTimer: (m, sec, e) => openTimer(m, sec, e), buzz: p => buzz(p), staminaHTML: () => staminaHTML(), beep: n => beep(n), curWeight: d => curWeight(d), isOwner: () => !!(S.user && (S.user.email || '').toLowerCase() === OWNER), focusHit: f => focusHit(f), setSH: o => { if (SH && SH.iv) clearInterval(SH.iv); SH = o; }, closeSheet: () => closeSheet() });
 function openSheet(scope) {
   SH = { scope, picked: null, results: [], off: scope === 'extra', mode: 'search', usda: [], stream: null };
   $('sheet').hidden = false;
@@ -1476,6 +1556,14 @@ document.addEventListener('click', async ev => {
   if (act === 'ptab') { S.ptab = v; S.panel = null; if (S.view !== 'progress') return go('progress'); window.scrollTo(0, 0); return draw(); }
   if (act === 'mesec') { S.meSec = v || null; window.scrollTo(0, 0); return draw(); }
   if (act === 'closesheet') return closeSheet();
+  if (act === 'ftab') { S.ftab = v; return draw(); }
+  if (act === 'fstr') { S.fstr = v; return draw(); }
+  if (act === 'lghelp') return leagueHelp();
+  if (act === 'rankvis') { S.settings.hideRank = v === '0'; saveSettings(); S.boardLast = null; return draw(); }
+  if (act === 'showkg') { S.settings.showKg = v === '1'; saveSettings(); S.boardLast = null; return draw(); }
+  if (act === 'monthrep') return shareMonthImage(v);
+  if (act === 'startover') return openStartOver();
+  if (act.startsWith('so-')) return startOverAct(act, v, b);
   if (act === 'pushon') return pushOn();
   if (act === 'pushoff') return pushOff();
   if (act === 'pushtest') return pushTest();
@@ -1705,6 +1793,7 @@ document.addEventListener('click', async ev => {
 document.addEventListener('input', ev => {
   const t = ev.target; if (!S.settings) return;
   if (TR.input(t)) return;
+  if (t.id === 'so-type' && S.so) { S.so.typed = t.value; const bt = $('so-go'); if (bt) bt.disabled = t.value.trim().toUpperCase() !== 'DELETE'; return; }
   if (SH && SH.recipe && (t.id === 'rc-n' || t.id === 'rc-w' || t.id === 'rc-s' || t.dataset.rcg)) {
     const r = SH.recipe;
     if (t.id === 'rc-n') r.name = t.value; else if (t.id === 'rc-w') r.total = parseFloat(t.value) || null; else if (t.id === 'rc-s') r.serv = parseInt(t.value, 10) || null; else r.items[+t.dataset.rcg].g = Math.max(0, parseFloat(t.value) || 0);
@@ -1883,7 +1972,7 @@ function boardPublish(R) {
   if (!code || !S.got.days || !R) return;
   const ev = R.todayEval, P = ev.P;
   const doneDates = []; for (let i = 0; i < 30; i++) { const dt = C.addDays(today(), -i); if (C.evalDay(S.settings, S.days[dt], dt).complete) doneDates.push(dt); }
-  const sum = { doneDates, wk: myWeekStats(), name: boardName(), day: Math.min(R.dayNum, 90), streak: R.done, best: R.best, attempt: R.attemptNo, parts: [P.mealsOk, P.w >= P.goal, P.trained, P.sDone === P.req.length].filter(Boolean).length, done: ev.complete, date: today(), victory: !!R.victory };
+  const sum = { doneDates, wk: myWeekStats(), name: boardName(), day: Math.min(R.dayNum, 90), streak: R.done, best: R.best, attempt: R.attemptNo, parts: [P.mealsOk, P.w >= P.goal, P.trained, P.sDone === P.req.length].filter(Boolean).length, done: ev.complete, date: today(), victory: !!R.victory, ...leagueSummary(R) };
   const key = code + JSON.stringify(sum);
   if (key === S.boardLast) return;
   S.boardLast = key; clearTimeout(boardT);
@@ -1901,7 +1990,7 @@ function friendRows() {
   const t = today();
   return Object.entries(S.board).map(([id, m]) => ({ id, ...m, me: id === uid(), fresh: m.date === t })).sort((a, b) => (b.fresh && b.done) - (a.fresh && a.done) || b.streak - a.streak || a.name.localeCompare(b.name));
 }
-const CHEER_TXT = { cheer: '👏 Keep going!', nudge: '⏰ Finish today, you’ve got this', fire: '🔥 Locked in, respect' };
+const CHEER_TXT = { cheer: '👏 Keep going!', nudge: '⏰ Finish today, you’ve got this', fire: '🔥 Locked in, respect', reset: '↺ Started over today. Send a cheer?' };
 function cheersHTML() {
   const list = Object.entries(S.cheers || {}).sort((a, b) => (b[1].at || 0) - (a[1].at || 0));
   if (!list.length) return '';
@@ -1913,6 +2002,7 @@ async function sendCheer(to, kind) {
   try {
     await setDoc(doc(db, `groups/${code}/members/${to}/cheers/${uid()}_${today()}_${kind}`), { from: uid(), name: boardName(), kind, date: today(), at: Date.now(), pushed: false });
     try { localStorage.setItem(key, '1'); } catch (e) { }
+    { const c = S.settings.cheered = S.settings.cheered || {}; c[today()] = true; Object.keys(c).filter(k => k < C.addDays(today(), -14)).forEach(k => delete c[k]); saveSettings(); }
     buzz(20); toast(kind === 'nudge' ? 'Nudge sent.' : 'Sent 👏'); draw();
   } catch (e) { toast(e && e.code === 'permission-denied' ? 'Cheers need the updated Firestore rules (see the README).' : 'Couldn’t send that. Try again online.'); }
 }
@@ -1925,6 +2015,60 @@ function friendsLineHTML() {
   const gs = groupStreak();
   return `<button class="friendline" data-act="tab" data-v="progress"><b>Friends</b><span>${done} of ${fr.length} locked in today${gs && gs.n ? ` · group chain ${gs.n}` : ''}</span>${fr.slice(0, 5).map(m => `<i class="${m.fresh && m.done ? 'd' : m.fresh ? 'p' : ''}" title="${esc(m.name)}">${esc((m.name || '?').slice(0, 1).toUpperCase())}</i>`).join('')}</button>`;
 }
+/* ---------- weekly league, strength boards (friends) ---------- */
+const SEASON0 = '2026-01-03'; // a Saturday; seasons are 4 weeks
+const seasonOf = from => Math.floor(C.diffDays(SEASON0, from) / 28);
+function leagueSummary(R) {
+  const st = S.settings; if (st.hideRank) return { lg: null, lgh: null, rk: null, dt: null, imp: null, reset: st.resetNote || null };
+  const from = weekStart(today()), lg = { k: from, ...TR.leagueWeek(from) }, lgh = {};
+  for (let i = 1; i <= 8; i++) { const f = C.addDays(from, -7 * i); if (f < C.addDays(st.startDate, -7) && i > 1) break; lgh[f] = TR.leagueWeek(f).pts; }
+  lgh[from] = lg.pts;
+  const rk = TR.rankOf(), ms = today().slice(0, 8) + '01', rk0 = TR.rankOf(ms), dt = {};
+  if (rk) rk.list.forEach(l => { if (['bench', 'squat', 'dead'].includes(l.k)) dt[l.k] = { d: l.dots, ...(st.showKg ? { kg: l.e1 } : {}) }; });
+  return { lg, lgh, rk: rk ? { score: rk.score, name: rk.name, ti: rk.ti } : null, dt, imp: rk && rk0 && rk0.score ? Math.round((rk.score - rk0.score) / rk0.score * 100) : rk && !rk0 ? null : 0, reset: st.resetNote || null };
+}
+const FTABS = [['league', 'League'], ['strength', 'Strength'], ['improved', 'Improved'], ['board', 'Board']];
+function friendsTabsHTML() {
+  if (!S.settings.group) return friendsHTML();
+  const tab = FTABS.some(f => f[0] === S.ftab) ? S.ftab : 'league';
+  let h = `<div class="seg wide ftabs" role="tablist" aria-label="Friends sections">${FTABS.map(([k, l]) => `<button role="tab" data-act="ftab" data-v="${k}" aria-pressed="${tab === k}">${l}</button>`).join('')}</div>`;
+  if (tab === 'board') return h + friendsHTML();
+  const rows = friendRows(), from = weekStart(today()), av = m => `<span class="av">${esc((m.name || '?').slice(0, 1).toUpperCase())}${m.rk ? `<em style="background:${TR.TIER_C[m.rk.ti]}">${esc(TR.TIERS[m.rk.ti][0])}</em>` : ''}</span>`;
+  const hidden = S.settings.hideRank;
+  if (tab === 'league') {
+    const pts = m => m.lg && m.lg.k === from ? m.lg.pts : 0, list = rows.filter(m => !(m.me && hidden)).sort((a, b) => pts(b) - pts(a)), ends = 6 - C.diffDays(from, today());
+    const sn = seasonOf(from), sFrom = C.addDays(SEASON0, sn * 28), wkIn = Math.floor(C.diffDays(sFrom, from) / 7) + 1;
+    const seasonPts = m => Object.entries(m.lgh || {}).reduce((a, [k, v]) => a + (seasonOf(k) === sn ? v : 0), 0);
+    const prevW = (() => { const ps = sn - 1, tot = rows.map(m => [m, Object.entries(m.lgh || {}).reduce((a, [k, v]) => a + (seasonOf(k) === ps ? v : 0), 0)]).sort((a, b) => b[1] - a[1]); return tot[0] && tot[0][1] > 0 ? tot[0][0].id : null; })();
+    const me = list.findIndex(m => m.me), above = me > 0 ? list[me - 1] : null;
+    h += `<section class="card"><div class="spread"><div><h2 style="margin:0">Week ${wkIn} of 4 · season ${sn + 1}</h2><span class="sub">Ends ${ends ? `in ${ends} day${ends > 1 ? 's' : ''}` : 'tonight'} (Friday 23:59)</span></div><button class="btn small ghost" data-act="lghelp">Points</button></div>
+    ${list.map((m, i) => `<div class="lg${m.me ? ' me' : ''}"><span class="n${i === 0 && pts(m) ? ' first' : ''}">${i + 1}</span>${av(m)}<span><b>${esc(m.name)}${m.me ? ' (you)' : ''}${m.id === prevW ? ' 🏆' : ''}</b><small>${m.lg && m.lg.k === from ? `${m.lg.days} day${m.lg.days === 1 ? '' : 's'} locked in · ${m.lg.wo} workout${m.lg.wo === 1 ? '' : 's'}${m.lg.rec ? ` · ${m.lg.rec} record${m.lg.rec > 1 ? 's' : ''}` : ''}` : 'No points yet this week'}</small></span><span class="pts num">${pts(m)}<small>${seasonPts(m)} season</small></span></div>`).join('')}</section>
+    ${above && pts(above) > pts(list[me]) ? `<section class="card"><p class="hint"><b style="color:var(--ink)">${pts(above) - pts(list[me]) + 1} points to pass ${esc(above.name)}.</b> A locked-in day is worth 10.</p></section>` : me === 0 && list.length > 1 && pts(list[0]) ? `<section class="card"><p class="hint"><b style="color:var(--ink)">You're leading this week.</b> Keep locking in.</p></section>` : ''}
+    ${prevW ? `<p class="hint center">🏆 ${esc((rows.find(m => m.id === prevW) || {}).name || '')} won last season.</p>` : ''}`;
+  }
+  if (tab === 'strength') {
+    const k = S.fstr || 'all', chips = [['all', 'Overall'], ['bench', 'Bench'], ['squat', 'Squat'], ['dead', 'Deadlift']];
+    const val = m => k === 'all' ? (m.rk ? m.rk.score : -1) : (m.dt && m.dt[k] ? m.dt[k].d : -1);
+    const list = rows.filter(m => val(m) >= 0).sort((a, b) => val(b) - val(a));
+    h += `<section class="card"><div class="chips">${chips.map(([c, l]) => `<button data-act="fstr" data-v="${c}" aria-pressed="${k === c}">${l}</button>`).join('')}</div>
+    <p class="hint">${k === 'all' ? 'Strength rank from each person’s main lifts, relative to bodyweight.' : 'Compared by DOTS score, so bodyweight is taken into account. Weights show only if a friend chooses to share them.'}</p>
+    ${list.length ? list.map((m, i) => `<div class="lg${m.me ? ' me' : ''}"><span class="n">${i + 1}</span>${av(m)}<span><b>${esc(m.name)}${m.me ? ' (you)' : ''}</b><small>${m.rk ? esc(m.rk.name) : ''}${k !== 'all' && m.dt[k].kg ? ` · ${m.dt[k].kg} kg 1-rep max` : ''}</small></span><span class="pts num">${val(m)}</span></div>`).join('') : `<p class="hint">Nobody has logged ${k === 'all' ? 'a main lift' : 'this lift'} yet.</p>`}</section>`;
+  }
+  if (tab === 'improved') {
+    const list = rows.filter(m => m.imp != null && m.rk).sort((a, b) => b.imp - a.imp);
+    h += `<section class="card"><h2>Most improved · ${new Date().toLocaleDateString(LANG() === 'ar' ? 'ar-EG' : 'en-GB', { month: 'long' })}</h2><p class="hint">Strength score gained this month. Fair for every level.</p>
+    ${list.length ? list.map((m, i) => `<div class="lg${m.me ? ' me' : ''}"><span class="n">${i + 1}</span>${av(m)}<span><b>${esc(m.name)}${m.me ? ' (you)' : ''}</b><small>${esc(m.rk.name)}</small></span><span class="pts num ${m.imp > 0 ? 'up' : ''}">${m.imp > 0 ? '+' : ''}${m.imp}%</span></div>`).join('') : `<p class="hint">Starts once friends have logged main lifts.</p>`}</section>`;
+  }
+  h += `<section class="card"><div class="setup-r"><span>Show me in leagues and ranks</span><div class="seg"><button data-act="rankvis" data-v="1" aria-pressed="${!hidden}">On</button><button data-act="rankvis" data-v="0" aria-pressed="${!!hidden}">Off</button></div></div>
+  ${hidden ? '' : `<div class="setup-r"><span>Show my weights to friends</span><div class="seg"><button data-act="showkg" data-v="1" aria-pressed="${!!S.settings.showKg}">On</button><button data-act="showkg" data-v="0" aria-pressed="${!S.settings.showKg}">Off</button></div></div>`}</section>`;
+  return h;
+}
+function leagueHelp() {
+  SH = { scope: 'lg' }; $('sheet').hidden = false;
+  $('sheet').innerHTML = `<div class="sheet" role="dialog" aria-modal="true" aria-label="How league points work"><div class="grab" aria-hidden="true"></div><div class="spread"><h2>How league points work</h2><button class="x" data-act="closesheet" aria-label="Close">×</button></div><p class="hint">Same rules for everyone. Weeks run Saturday to Friday; a season is 4 weeks.</p>
+  <div class="prow"><span>Locked-in day (all four pillars)</span><b>+10</b></div><div class="prow"><span>Finished workout</span><b>+5</b></div><div class="prow"><span>Cardio after lifting, or a sport (once a day)</span><b>+2</b></div><div class="prow"><span>New record (normal sets, max 3 a workout)</span><b>+3</b></div><div class="prow"><span>Hit this week’s focus</span><b>+5</b></div><div class="prow"><span>Cheer a friend (once a day)</span><b>+1</b></div>
+  <p class="hint" style="margin-top:10px">Imported workouts don’t earn points. You can hide yourself from leagues and ranks at the bottom of the Friends tab.</p><button class="btn primary block" data-act="closesheet">Got it</button></div>`;
+}
 function friendsHTML() {
   const st = S.settings;
   if (!st.group) return `<section class="card" id="sec-friends"><div class="card-h"><h2>Friends</h2></div>
@@ -1935,7 +2079,7 @@ function friendsHTML() {
   const rows = friendRows(), t = today(), gs = groupStreak();
   return `<section class="card" id="sec-friends"><div class="card-h"><h2>Friends</h2><span class="state s-opt num">${esc(st.group)}</span></div>
   ${challengeHTML()}${gs ? `<div class="gchain${gs.todayAll ? ' all' : ''}"><b class="num">${gs.n}</b><span>${gs.n === 1 ? 'day' : 'days'} in a row that <em>everyone</em> locked in${gs.todayAll ? ' · all of you are done today' : ''}</span></div>` : ''}
-  <div class="board">${rows.length ? rows.map(m => `<div class="brow${m.me ? ' me' : ''}"><div class="bn"><b>${esc(m.name)}${m.me ? ' (you)' : ''}</b><small class="num">Day ${m.day} · streak ${m.streak}${m.attempt > 1 ? ` · attempt ${m.attempt}` : ''}</small></div>
+  <div class="board">${rows.length ? rows.map(m => `<div class="brow${m.me ? ' me' : ''}"><div class="bn"><b>${esc(m.name)}${m.me ? ' (you)' : ''}</b><small class="num">${m.reset && m.reset.date === t ? `Started over today · attempt ${m.reset.attempt} · ` : ''}Day ${m.day} · streak ${m.streak}${m.attempt > 1 && !(m.reset && m.reset.date === t) ? ` · attempt ${m.attempt}` : ''}</small></div>
     <div class="bend">${m.victory ? pill('done', '90 days done') : !m.fresh ? `<span class="state s-todo">Last seen ${m.date ? fmt(m.date) : '—'}</span>` : m.done ? pill('done', 'Locked in') : `<span class="state s-todo num">${m.parts}/4 today</span>`}
     ${m.me ? '' : `<div class="cbtns">${m.fresh && m.done ? `<button class="cb" data-act="cheer" data-v="${m.id}:fire" ${cheerSent(m.id, 'fire') ? 'disabled' : ''} aria-label="Send respect to ${esc(m.name)}">🔥</button>` : `<button class="cb" data-act="cheer" data-v="${m.id}:cheer" ${cheerSent(m.id, 'cheer') ? 'disabled' : ''} aria-label="Cheer ${esc(m.name)}">👏</button>`}${!m.done ? `<button class="cb" data-act="cheer" data-v="${m.id}:nudge" ${cheerSent(m.id, 'nudge') ? 'disabled' : ''} aria-label="Nudge ${esc(m.name)} to finish today">⏰</button>` : ''}</div>`}</div></div>`).join('') : '<p class="hint">Loading the board… (needs internet the first time)</p>'}</div>
   <div class="row"><button class="btn" data-act="grpinvite">Invite friends</button><button class="link" data-act="grpleave">Leave group</button></div>
@@ -1947,6 +2091,11 @@ function photosOn() {
   S.photosOn = true;
   syncCol('photos', qs => { qs.docs.forEach(x => { const v = x.data(); if (v.deleted || !v.data) delete S.photos[x.id]; else S.photos[x.id] = v; }); if (S.view === 'progress') render(); });
 }
+// buttons on the workout notification (Android)
+let pendingWo = new URLSearchParams(location.search).get('wo');
+if (pendingWo) history.replaceState(null, '', location.pathname + location.hash);
+if ('serviceWorker' in navigator) navigator.serviceWorker.addEventListener('message', e => { if (e.data && e.data.wo) { if (S.settings && S.got.days) TR.notifAction(e.data.wo); else pendingWo = e.data.wo; } });
+setInterval(() => { if (pendingWo && S.settings && S.got.days) { const a = pendingWo; pendingWo = null; TR.notifAction(a); } }, 500);
 onAuthStateChanged(auth, u => {
   S.user = u; S.authReady = true;
   if (u) subscribe(); else { S.settings = null; S.days = {}; S.got = { settings: false, days: false }; }

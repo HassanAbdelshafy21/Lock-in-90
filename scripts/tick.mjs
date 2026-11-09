@@ -174,7 +174,7 @@ async function pushCheers(uid, settings) {
   const snap = await db.collection(`groups/${settings.group}/members/${uid}/cheers`).where('pushed', '==', false).get();
   if (snap.empty) return;
   const ar = settings.lang === 'ar';
-  const TXT = { cheer: ar ? 'كمّل! 👏' : 'Keep going! 👏', nudge: ar ? 'أكمل اليوم، تقدر ⏰' : 'Finish today, you’ve got this ⏰', fire: ar ? 'مكتمل، احترامي 🔥' : 'Locked in, respect 🔥' };
+  const TXT = { cheer: ar ? 'كمّل! 👏' : 'Keep going! 👏', nudge: ar ? 'أكمل اليوم، تقدر ⏰' : 'Finish today, you’ve got this ⏰', fire: ar ? 'مكتمل، احترامي 🔥' : 'Locked in, respect 🔥', reset: ar ? 'بدأ من جديد اليوم. ابعت له تشجيع؟' : 'started over today. Send a cheer?' };
   for (const d of snap.docs) {
     const c = d.data();
     await ntfy(`${c.name || (ar ? 'صديق' : 'A friend')}`, TXT[c.kind] || TXT.cheer, { tags: c.kind === 'nudge' ? 'alarm_clock' : 'clap', priority: c.kind === 'nudge' ? 4 : 3 });

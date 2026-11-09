@@ -1,5 +1,5 @@
 // Offline support: app files are served from cache and refreshed in the background.
-const VERSION = 'lockin-v17';
+const VERSION = 'lockin-v18';
 const EXC = 'lockin-ex-1'; // exercise photos and data: kept across app updates
 const FB = '10.14.1';
 const SHELL = ['./', './index.html', './styles.css', './app.js', './core.js', './data.js', './i18n.js', './train.js', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png', './icons/maskable-192.png', './icons/maskable-512.png', './icons/favicon.png', './icons/apple-touch-icon.png', './icons/logo.svg', './fonts/Alexandria.ttf'];
@@ -58,10 +58,20 @@ self.addEventListener('push', e => {
   e.waitUntil(self.registration.showNotification(m.title || 'Lock In 90', { body: m.body || '', icon: './icons/icon-192.png', badge: './icons/favicon.png', tag: m.tag || 'lockin', renotify: true, data: { url: m.url || './' } }));
 });
 self.addEventListener('notificationclick', e => {
-  e.notification.close();
+  const n = e.notification, a = e.action;
+  // workout controls: pass the button to the open app without opening it
+  if (n.tag === 'wo' && a && a !== 'open') {
+    e.waitUntil((async () => {
+      const all = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+      if (all.length) all.forEach(c => c.postMessage({ wo: a }));
+      else await self.clients.openWindow('./?wo=' + a + '#train');
+    })());
+    return;
+  }
+  n.close();
   e.waitUntil((async () => {
     const all = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
     for (const c of all) if ('focus' in c) { await c.focus(); return; }
-    await self.clients.openWindow((e.notification.data && e.notification.data.url) || './');
+    await self.clients.openWindow((n.data && n.data.url) || './');
   })());
 });
