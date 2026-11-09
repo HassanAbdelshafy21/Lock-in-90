@@ -1,8 +1,8 @@
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js';
 import { getAuth, GoogleAuthProvider, signInWithPopup, getRedirectResult, onAuthStateChanged, signOut, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js';
-import { initializeFirestore, getFirestore, persistentLocalCache, persistentMultipleTabManager, doc, collection, onSnapshot, setDoc, deleteDoc, writeBatch } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
+import { initializeFirestore, getFirestore, persistentLocalCache, persistentMultipleTabManager, doc, collection, onSnapshot, setDoc, getDoc, deleteDoc, writeBatch } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
 import * as C from './core.js';
-const APP_VERSION = '7 · drinks count as water';
+const APP_VERSION = '8 · recent foods + friends board';
 import { EX, POSE, figSVG, YT, LINES, FOODS, COACH_MEALS, DEFAULT_SUPPS, SLOTS, CARDIO_MODES } from './data.js';
 
 /* ---------- config ---------- */
@@ -29,7 +29,7 @@ catch (e) { db = getFirestore(fbApp); }
 const S = {
   user: null, authReady: false, settings: null, days: {}, checkins: {}, foods: {}, acts: {}, photos: {}, meta: {},
   got: { settings: false, days: false }, pend: { s: false, d: false }, online: navigator.onLine,
-  view: 'today', trainTab: 'cali', phase: null, editDate: null, openMeal: null, confirm: null, deferred: false, unsub: [], photosOn: false, cut: 50
+  view: 'today', trainTab: 'cali', phase: null, editDate: null, openMeal: null, confirm: null, deferred: false, unsub: [], photosOn: false, cut: 50, board: {}, boardCode: null, boardUnsub: null, boardLast: null
 };
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -105,6 +105,7 @@ function draw() {
   if (S.quickWater && S.got.days) { S.quickWater = false; const dd = dayDoc(today()); dd.water = (dd.water || 0) + 250; saveDay(today()); S.view = 'today'; history.replaceState(null, '', '#today'); toast(`+250 ml · ${L(C.waterTotal(dd))} L today`); }
   const R = C.computeRun(S.settings, S.days, now());
   $('top').innerHTML = topHTML(R);
+  boardOn(); boardPublish(R);
   if (S.view === 'progress') photosOn();
   m.innerHTML = bannersHTML(R) + (S.view === 'train' ? trainHTML(R) : S.view === 'progress' ? progressHTML(R) : S.view === 'setup' ? setupHTML(R) : todayHTML(R));
 }
@@ -195,6 +196,7 @@ function todayHTML(R) {
    <button data-act="jump" data-v="sec-supps" class="${P.sDone === P.req.length ? 'ok' : 'pr'}"><b>Supps</b><span class="num">${P.sDone}/${P.req.length}</span></button>
   </div>
   ${ev.complete ? `<div class="lockline">Every box is checked. This day counts.</div>` : `<ul class="missing">${ev.missing.map(x => `<li>${esc(x)}</li>`).join('')}</ul>`}</section>`;
+  h += friendsLineHTML();
   h += mealsHTML(date, d, P);
   h += waterHTML(P);
   h += trainCardHTML(date, d, P);
@@ -384,7 +386,7 @@ function weekReview() {
 }
 function progressHTML(R) {
   const st = S.settings, t = today(), rv = weekReview();
-  let h = `<section class="card"><div class="card-h"><h2>Last 7 days</h2>${pill(rv.locked === rv.n ? 'done' : 'todo', `${rv.locked} / ${rv.n} locked in`)}</div>
+  let h = friendsHTML() + `<section class="card"><div class="card-h"><h2>Last 7 days</h2>${pill(rv.locked === rv.n ? 'done' : 'todo', `${rv.locked} / ${rv.n} locked in`)}</div>
   <div class="review"><div><b>${rv.worst && rv.worst[1] ? esc(rv.worst[0]) : 'None'}</b><span>${rv.worst && rv.worst[1] ? `Most missed (${rv.worst[1]} day${rv.worst[1] === 1 ? '' : 's'})` : 'Nothing missed'}</span></div>
   <div><b class="num">${rv.prot ? kc(rv.prot) + ' g' : '—'}</b><span>Avg protein${rv.tp ? ` · plan ${kc(rv.tp)} g` : ''}</span></div>
   <div><b class="num">${rv.kcal ? kc(rv.kcal) : '—'}</b><span>Avg calories${rv.tk ? ` · plan ${kc(rv.tk)}` : ''}</span></div>
@@ -546,23 +548,45 @@ function openSheet(scope) {
   setTimeout(() => $('fs-q') && $('fs-q').focus(), 50);
 }
 function closeSheet() { stopCam(); SH = null; $('sheet').hidden = true; $('sheet').innerHTML = ''; }
-function libMatches(q) {
-  const all = [...Object.values(S.foods).map(f => ({ ...f, src: 'custom' })), ...FOODS];
-  if (!q) return all.slice(0, 30);
-  const ql = q.toLowerCase();
-  return all.filter(f => f.name.toLowerCase().includes(ql) || (f.ar && f.ar.includes(q))).slice(0, 40);
+/* favourites (starred) and recent foods: foods you logged yourself in changed/off-plan meals and extras, newest first, with the amount you used last time */
+const favs = () => (S.settings && S.settings.favFoods) || [];
+const isFav = f => favs().some(x => x.id === f.id);
+function recentFoods() {
+  const map = {};
+  Object.values(S.days).forEach(d => {
+    const add = it => { if (!it || !it.name || !it.per) return; const k = it.fid || it.name, r = map[k] || (map[k] = { n: 0, last: '', it }); r.n++; if ((d.date || '') >= r.last) { r.last = d.date || ''; r.it = it; } };
+    const plan = S.settings ? C.mealsOn(S.settings, d.date) : [];
+    Object.entries(d.meals || {}).forEach(([id, md]) => {
+      if (!md || (md.status !== 'swap' && md.status !== 'off')) return;
+      const pm = (plan.find(m => m.id === id) || {}).items || [];
+      (md.items || []).forEach(it => { if (!pm.some(p => p.fid === it.fid && p.name === it.name && p.g === it.g)) add(it); }); // skip untouched plan foods
+    });
+    (d.extras || []).forEach(add);
+  });
+  return Object.values(map).sort((a, b) => b.last.localeCompare(a.last) || b.n - a.n).slice(0, 15).map(r => {
+    const it = r.it, base = (it.fid && (S.foods[it.fid] ? { ...S.foods[it.fid], src: 'custom' } : FOODS.find(f => f.id === it.fid))) || { id: it.fid || 'r_' + it.name, name: it.name, per: it.per, units: [], src: 'recent' };
+    return { ...base, drink: C.isDrink(it), lastG: it.g, recent: true };
+  });
 }
-function resRow(f, i, src) { return `<button class="res" data-act="pick" data-v="${src}:${i}"><span><b>${esc(f.name)}</b><small>${src === 'usda' ? 'USDA' : f.src === 'custom' ? 'your food' : f.ar || ''}</small></span><span class="k num">${kc(f.per.k)} kcal · ${C.round(f.per.p, 1)} P<br><small>per 100 g</small></span></button>`; }
+function libMatches(q) {
+  const fv = favs().map(f => ({ ...f, fav: true })), rc = recentFoods().filter(f => !fv.some(x => x.id === f.id));
+  const all = [...Object.values(S.foods).map(f => ({ ...f, src: 'custom' })), ...FOODS];
+  const seen = new Set([...fv, ...rc].map(f => f.id));
+  const ql = (q || '').toLowerCase(), hit = f => !q || f.name.toLowerCase().includes(ql) || (f.ar && f.ar.includes(q));
+  const tag = (arr, sec) => arr.map(f => ({ ...f, sec }));
+  return [...tag(fv.filter(hit), 'Favourites'), ...tag(rc.filter(hit).slice(0, q ? 15 : 8), 'Recent'), ...tag(all.filter(f => !seen.has(f.id) && hit(f)).slice(0, q ? 40 : 30), q ? 'Library' : 'All foods')];
+}
+function resRow(f, i, src) { const sub = src === 'usda' ? 'USDA' : [f.fav ? '★ favourite' : '', f.recent && f.lastG ? `last time ${C.round(f.lastG, 1)} ${f.drink ? 'ml' : 'g'}` : '', f.src === 'custom' ? 'your food' : f.ar || ''].filter(Boolean).join(' · '); return `<button class="res" data-act="pick" data-v="${src}:${i}"><span><b>${esc(f.name)}</b><small>${esc(sub)}</small></span><span class="k num">${kc(f.per.k)} kcal · ${C.round(f.per.p, 1)} P<br><small>per 100 g</small></span></button>`; }
 function sheetSearch() {
   if (!SH) return;
   SH.results = libMatches(($('fs-q') || {}).value || '');
   if (SH.picked) return drawPicked();
-  $('fs-body').innerHTML = `<div class="results">${SH.results.map((f, i) => resRow(f, i, 'lib')).join('') || '<p class="hint">Nothing in the library. Try “Search online”.</p>'}${SH.usda.length ? '<span class="sub">USDA results</span>' + SH.usda.map((f, i) => resRow(f, i, 'usda')).join('') : ''}</div>`;
+  $('fs-body').innerHTML = `<div class="results">${SH.results.map((f, i) => (f.sec && (i === 0 || SH.results[i - 1].sec !== f.sec) ? `<span class="sub">${f.sec}</span>` : '') + resRow(f, i, 'lib')).join('') || '<p class="hint">Nothing in the library. Try “Search online”.</p>'}${SH.usda.length ? '<span class="sub">USDA results</span>' + SH.usda.map((f, i) => resRow(f, i, 'usda')).join('') : ''}</div>`;
 }
 function drawPicked() {
   const f = SH.picked, g = SH.g;
   const m = C.itemMacros({ g, per: f.per });
-  $('fs-body').innerHTML = `<div class="picked"><div><b>${esc(f.name)}</b><div class="hint num">Per 100 g: ${kc(f.per.k)} kcal · ${C.round(f.per.p, 1)} P · ${C.round(f.per.c, 1)} C · ${C.round(f.per.f, 1)} F</div></div>
+  $('fs-body').innerHTML = `<div class="picked"><div><div class="spread"><b>${esc(f.name)}</b><button class="star" data-act="fav" aria-pressed="${isFav(f)}" aria-label="${isFav(f) ? 'Remove from favourites' : 'Add to favourites'}">${isFav(f) ? '★' : '☆'}</button></div><div class="hint num">Per 100 g: ${kc(f.per.k)} kcal · ${C.round(f.per.p, 1)} P · ${C.round(f.per.c, 1)} C · ${C.round(f.per.f, 1)} F</div></div>
   <div class="row"><label class="g" style="display:flex;gap:6px;align-items:center">${SH.drink ? 'Millilitres' : 'Grams'} <input class="in sm" id="fs-g" type="number" inputmode="decimal" step="any" value="${C.round(g, 1)}"></label>${(f.units || []).map(u => `<button class="btn small" data-act="unit" data-v="${u[1]}">1 ${esc(u[0])} · ${u[1]} ${SH.drink ? 'ml' : 'g'}</button>`).join('')}</div>
   <div class="hint num" id="fs-m">${kc(m.k)} kcal · ${C.round(m.p, 1)} g protein · ${C.round(m.c, 1)} g carbs · ${C.round(m.f, 1)} g fat</div>
   <label class="chk"><input type="checkbox" id="fs-drink" ${SH.drink ? 'checked' : ''}> It’s a drink: count it toward my water</label>
@@ -672,7 +696,7 @@ document.addEventListener('click', async ev => {
     case 'signin': return signin();
     case 'signup': return emailAuth(true);
     case 'resetpw': { const em = ($('si-email') && $('si-email').value || '').trim(); if (!em) return toast('Type your email above first.'); try { await sendPasswordResetEmail(auth, em); toast('Reset link sent. Check your email.'); } catch (e) { toast(AUTH_MSG[e && e.code] || 'Couldn’t send the reset email.'); } return; }
-    case 'signout': S.unsub.forEach(u => u()); S.unsub = []; S.photosOn = false; S.photos = {}; await signOut(auth); return;
+    case 'signout': S.unsub.forEach(u => u()); S.unsub = []; S.photosOn = false; S.photos = {}; if (S.boardUnsub) S.boardUnsub(); S.boardUnsub = null; S.boardCode = null; S.board = {}; S.boardLast = null; await signOut(auth); return;
     case 'tab': return go(v);
     case 'jump': { const el = $(v); if (el) el.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' }); return; }
     case 'start': {
@@ -694,8 +718,13 @@ document.addEventListener('click', async ev => {
     S.foods[f.id] = f; setDoc(doc(db, up('foods/' + f.id)), clone(f)).catch(() => { });
     SH.picked = f; SH.drink = !!f.drink; SH.g = f.units[0] ? f.units[0][1] : 100; return drawPicked();
   }
-  if (act === 'pick') { const [src, i] = v.split(':'); SH.picked = (src === 'usda' ? SH.usda : SH.results)[+i]; SH.drink = !!SH.picked.drink; if (SH.scope === 'extra') SH.off = !(SH.drink && (SH.picked.per.k || 0) < 5); SH.g = SH.picked.units && SH.picked.units[0] ? SH.picked.units[0][1] : 100; return drawPicked(); }
+  if (act === 'pick') { const [src, i] = v.split(':'); SH.picked = (src === 'usda' ? SH.usda : SH.results)[+i]; SH.drink = !!SH.picked.drink; if (SH.scope === 'extra') SH.off = !(SH.drink && (SH.picked.per.k || 0) < 5); SH.g = SH.picked.units && SH.picked.units[0] ? SH.picked.units[0][1] : 100; if (SH.picked.lastG) SH.g = SH.picked.lastG; return drawPicked(); }
   if (act === 'unpick') { SH.picked = null; return sheetSearch(); }
+  if (act === 'fav') {
+    const f = SH.picked, list = favs().filter(x => x.id !== f.id);
+    if (!isFav(f)) list.unshift({ id: f.id, name: f.name, per: { ...f.per }, units: f.units || [], drink: !!SH.drink, ...(f.ar ? { ar: f.ar } : {}) });
+    S.settings.favFoods = list.slice(0, 30); saveSettings(); toast(isFav(f) ? 'Added to favourites' : 'Removed from favourites'); return drawPicked();
+  }
   if (act === 'unit') { SH.g = +v; return drawPicked(); }
   if (act === 'extraoff') { SH.off = v === '1'; return drawPicked(); }
   if (act === 'savefood') { const f = { ...SH.picked, drink: !!SH.drink, id: 'c' + Date.now().toString(36), src: 'custom' }; S.foods[f.id] = f; setDoc(doc(db, up('foods/' + f.id)), clone(f)).catch(() => { }); return toast('Saved to your foods.'); }
@@ -721,6 +750,32 @@ document.addEventListener('click', async ev => {
     case 'openmeal': S.openMeal = v; break;
     case 'allplan': { const dd = d(); C.mealsOn(S.settings, D).forEach(m => { if (!dd.skip[m.id] && !(dd.meals[m.id] && dd.meals[m.id].status)) dd.meals[m.id] = { status: 'plan', items: clone(m.items), note: '' }; }); saveDay(D); toast('Meals logged as planned.'); break; }
     case 'share': return shareWeek();
+    case 'grpnew': {
+      if (!navigator.onLine) return toast('Creating a group needs internet.');
+      const code = newCode();
+      try { await setDoc(doc(db, `groups/${code}`), { owner: uid(), created: new Date().toISOString() }); }
+      catch (e) { return toast(e && e.code === 'permission-denied' ? 'The Firestore rules need publishing first (see the README).' : 'Couldn’t create the group. Try again.'); }
+      S.settings.group = code; saveSettings(); toast(`Group ${code} created. Tap Invite friends.`); break;
+    }
+    case 'grpjoin': {
+      const code = (($('fb-code') || {}).value || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+      if (code.length !== 6) return toast('Group codes are 6 letters and numbers.');
+      if (!navigator.onLine) return toast('Joining a group needs internet.');
+      try { const g = await getDoc(doc(db, `groups/${code}`)); if (!g.exists()) return toast('No group with that code. Check it with your friend.'); }
+      catch (e) { return toast(e && e.code === 'permission-denied' ? 'The Firestore rules need publishing first (see the README).' : 'Couldn’t check that code. Try again.'); }
+      S.settings.group = code; saveSettings(); toast('Joined. Your friends can see you now.'); break;
+    }
+    case 'grpinvite': {
+      const text = `Join my Lock In 90 group. Open the app, go to Progress → Friends → Join, and enter the code ${S.settings.group}\n${location.origin + location.pathname}`;
+      try { if (navigator.share) { await navigator.share({ text }); return; } } catch (e) { if (e && e.name === 'AbortError') return; }
+      try { await navigator.clipboard.writeText(text); toast('Invite copied. Paste it in WhatsApp.'); } catch (e) { toast(`Your group code is ${S.settings.group}`); }
+      return;
+    }
+    case 'grpleave': {
+      const code = S.settings.group; if (!code) return;
+      deleteDoc(doc(db, `groups/${code}/members/${uid()}`)).catch(() => { });
+      S.settings.group = null; saveSettings(); toast('You left the group.'); break;
+    }
     case 'closemeal': S.openMeal = null; break;
     case 'skip': d().skip[v] = true; saveDay(D); break;
     case 'unskip': delete d().skip[v]; saveDay(D); break;
@@ -790,6 +845,7 @@ document.addEventListener('change', ev => {
   if (t.dataset.dayfield) { const v = parseFloat(t.value); dayDoc(D)[t.dataset.dayfield] = isNaN(v) ? null : v; saveDay(D); return; }
   if (t.dataset.plan !== undefined) { S.settings.plan = { ...(S.settings.plan || C.DEFAULT_PLAN), [t.dataset.plan]: t.value }; saveSettings(); return; }
   if (t.dataset.setting) { const v = parseFloat(t.value); S.settings[t.dataset.setting] = isNaN(v) ? null : v; saveSettings(); if (t.dataset.setting === 'waterGoal') { t.blur(); draw(); } return; }
+  if (t.id === 'fb-name') { S.settings.boardName = t.value.trim().slice(0, 24) || null; saveSettings(); S.boardLast = null; return draw(); }
   if (t.dataset.topic) { S.settings.ntfyTopic = t.value.trim().replace(/[^A-Za-z0-9_-]/g, '').slice(0, 64); saveSettings(); return; }
   if (t.dataset.target) { const v = parseFloat(t.value); S.settings.targets = { ...(S.settings.targets || {}), [t.dataset.target]: isNaN(v) ? null : v }; saveSettings(); return; }
   if (t.dataset.mealtime) { S.settings.meals.find(x => x.id === t.dataset.mealtime).time = t.value; savePlan(); return; }
@@ -874,6 +930,54 @@ function subscribe() {
   S.unsub.push(onSnapshot(collection(db, up('foods')), qs => { qs.docs.forEach(x => S.foods[x.id] = x.data()); }));
   S.unsub.push(onSnapshot(collection(db, up('activities')), qs => { qs.docs.forEach(x => S.acts[x.id] = x.data()); render(); }));
   S.unsub.push(onSnapshot(collection(db, up('meta')), qs => { qs.docs.forEach(x => S.meta[x.id] = x.data()); render(); }));
+}
+/* friends board: a group is a short code; each member publishes a small summary (name, day, streak, today) to groups/{code}/members/{uid} */
+const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+const newCode = () => Array.from(crypto.getRandomValues(new Uint8Array(6)), b => CODE_CHARS[b % CODE_CHARS.length]).join('');
+const boardName = () => (S.settings && S.settings.boardName) || (S.user && (S.user.displayName || '').split(' ')[0]) || (S.user && (S.user.email || '').split('@')[0]) || 'Me';
+function boardOn() {
+  const code = S.settings && S.settings.group;
+  if (code === S.boardCode) return;
+  if (S.boardUnsub) S.boardUnsub();
+  S.boardUnsub = null; S.board = {}; S.boardCode = code || null; S.boardLast = null;
+  if (!code) return;
+  S.boardUnsub = onSnapshot(collection(db, `groups/${code}/members`), qs => { S.board = {}; qs.docs.forEach(x => S.board[x.id] = x.data()); if (S.view === 'progress' || S.view === 'today') render(); }, () => { });
+}
+let boardT;
+function boardPublish(R) {
+  const code = S.settings && S.settings.group;
+  if (!code || !S.got.days || !R) return;
+  const ev = R.todayEval, P = ev.P;
+  const sum = { name: boardName(), day: Math.min(R.dayNum, 90), streak: R.done, best: R.best, attempt: R.attemptNo, parts: [P.mealsOk, P.w >= P.goal, P.trained, P.sDone === P.req.length].filter(Boolean).length, done: ev.complete, date: today(), victory: !!R.victory };
+  const key = code + JSON.stringify(sum);
+  if (key === S.boardLast) return;
+  S.boardLast = key; clearTimeout(boardT);
+  boardT = setTimeout(() => setDoc(doc(db, `groups/${code}/members/${uid()}`), { ...sum, updated: Date.now() }).catch(e => { S.boardLast = null; if (e && e.code === 'permission-denied') toast('Friends board refused the update. The Firestore rules need publishing.'); }), 1500);
+}
+function friendRows() {
+  const t = today();
+  return Object.entries(S.board).map(([id, m]) => ({ id, ...m, me: id === uid(), fresh: m.date === t })).sort((a, b) => (b.fresh && b.done) - (a.fresh && a.done) || b.streak - a.streak || a.name.localeCompare(b.name));
+}
+function friendsLineHTML() {
+  if (!S.settings.group) return '';
+  const fr = friendRows().filter(m => !m.me);
+  if (!fr.length) return '';
+  const done = fr.filter(m => m.fresh && m.done).length;
+  return `<button class="friendline" data-act="tab" data-v="progress"><b>Friends</b><span>${done} of ${fr.length} locked in today</span>${fr.slice(0, 5).map(m => `<i class="${m.fresh && m.done ? 'd' : m.fresh ? 'p' : ''}" title="${esc(m.name)}">${esc((m.name || '?').slice(0, 1).toUpperCase())}</i>`).join('')}</button>`;
+}
+function friendsHTML() {
+  const st = S.settings;
+  if (!st.group) return `<section class="card" id="sec-friends"><div class="card-h"><h2>Friends</h2></div>
+  <p class="hint">Make a group, send the code to your friends, and you all see each other’s day count, streak and whether today is locked in. Only those numbers are shared, never your food, weight or photos.</p>
+  <div class="setup-r"><label for="fb-name">Your name on the board</label><input class="in" id="fb-name" maxlength="24" value="${esc(boardName())}"></div>
+  <div class="row"><button class="btn primary" data-act="grpnew">Create a group</button></div>
+  <div class="row"><input class="in grow" id="fb-code" maxlength="8" placeholder="Friend’s group code" autocapitalize="characters" autocomplete="off"><button class="btn" data-act="grpjoin">Join</button></div></section>`;
+  const rows = friendRows(), t = today();
+  return `<section class="card" id="sec-friends"><div class="card-h"><h2>Friends</h2><span class="state s-opt num">${esc(st.group)}</span></div>
+  <div class="board">${rows.length ? rows.map(m => `<div class="brow${m.me ? ' me' : ''}"><div class="bn"><b>${esc(m.name)}${m.me ? ' (you)' : ''}</b><small class="num">Day ${m.day} · streak ${m.streak}${m.attempt > 1 ? ` · attempt ${m.attempt}` : ''}</small></div>
+    ${m.victory ? pill('done', '90 days done') : !m.fresh ? `<span class="state s-todo">Last seen ${m.date ? fmt(m.date) : '—'}</span>` : m.done ? pill('done', 'Locked in') : `<span class="state s-todo num">${m.parts}/4 today</span>`}</div>`).join('') : '<p class="hint">Loading the board… (needs internet the first time)</p>'}</div>
+  <div class="row"><button class="btn" data-act="grpinvite">Invite friends</button><button class="link" data-act="grpleave">Leave group</button></div>
+  <div class="setup-r"><label for="fb-name">Your name on the board</label><input class="in" id="fb-name" maxlength="24" value="${esc(boardName())}"></div></section>`;
 }
 // photos are large: load them only when Progress is opened
 function photosOn() {

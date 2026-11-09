@@ -288,3 +288,13 @@ h1,h2,h3{text-wrap:balance}
 @media (max-width:380px){.hero-in{grid-template-columns:120px minmax(0,1fr)}.ringbox{width:120px;height:120px}.ringc b{font-size:36px}.quote{font-size:18px}.legend{grid-template-columns:repeat(2,minmax(0,1fr))}.macros{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media (min-width:520px){.stats{grid-template-columns:repeat(4,minmax(0,1fr))}}
 @media (prefers-reduced-motion: reduce){*{transition:none!important;scroll-behavior:auto!important}}
+/* favourites + friends board */
+.star{background:none;border:0;font-size:24px;line-height:1;color:var(--accent);padding:2px 6px;cursor:pointer}
+.friendline{display:flex;align-items:center;gap:8px;width:100%;padding:12px 14px;margin:0 0 14px;border:1px solid var(--line);border-radius:14px;background:var(--surface);color:var(--ink);font:inherit;text-align:left;cursor:pointer}
+.friendline b{font-size:14px}.friendline span{flex:1;font-size:13px;color:var(--ink-2)}
+.friendline i{display:grid;place-items:center;width:26px;height:26px;border-radius:50%;font-style:normal;font-size:12px;font-weight:700;background:var(--surface-2);color:var(--ink-2)}
+.friendline i.d{background:var(--good);color:#fff}.friendline i.p{background:var(--accent-soft);color:var(--accent-strong)}
+.board{display:flex;flex-direction:column;gap:8px;margin:4px 0 12px}
+.brow{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 12px;border-radius:12px;background:var(--surface-2)}
+.brow.me{outline:1.5px solid var(--accent)}
+.bn{display:flex;flex-direction:column;gap:2px;min-width:0}.bn b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.bn small{color:var(--ink-2);font-size:12.5px}
