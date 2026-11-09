@@ -1,5 +1,5 @@
 // Offline support: app files are served from cache and refreshed in the background.
-const VERSION = 'lockin-v6';
+const VERSION = 'lockin-v7';
 const FB = '10.14.1';
 const SHELL = ['./', './index.html', './styles.css', './app.js', './core.js', './data.js', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png'];
 const SDK = ['firebase-app', 'firebase-auth', 'firebase-firestore'].map(n => `https://www.gstatic.com/firebasejs/${FB}/${n}.js`);
@@ -8,7 +8,7 @@ const LIVE = ['firestore.googleapis.com', 'identitytoolkit.googleapis.com', 'sec
 self.addEventListener('install', e => {
   e.waitUntil((async () => {
     const c = await caches.open(VERSION);
-    await c.addAll(SHELL);
+    await c.addAll(SHELL.map(u => new Request(u, { cache: 'reload' })));
     await Promise.all(SDK.map(u => fetch(u, { mode: 'cors' }).then(r => r.ok && c.put(u, r)).catch(() => {})));
     self.skipWaiting();
   })());
@@ -31,7 +31,7 @@ self.addEventListener('fetch', e => {
     const c = await caches.open(VERSION);
     const key = req.mode === 'navigate' ? './index.html' : req;
     const hit = await c.match(key, { ignoreSearch: req.mode === 'navigate' });
-    const net = fetch(req).then(r => { if (r && (r.ok || r.type === 'opaque')) c.put(key, r.clone()); return r; }).catch(() => null);
+    const net = (sameOrigin ? fetch(req.mode === 'navigate' ? './index.html' : req.url, { cache: 'no-cache' }) : fetch(req)).then(r => { if (r && (r.ok || r.type === 'opaque')) c.put(key, r.clone()); return r; }).catch(() => null);
     if (hit) { if (sameOrigin) e.waitUntil(net); return hit; }
     const r = await net;
     return r || (req.mode === 'navigate' ? c.match('./index.html') : new Response('', { status: 504 }));

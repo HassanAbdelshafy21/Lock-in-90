@@ -2,6 +2,7 @@ import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.14.1/fireba
 import { getAuth, GoogleAuthProvider, signInWithPopup, getRedirectResult, onAuthStateChanged, signOut, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js';
 import { initializeFirestore, getFirestore, persistentLocalCache, persistentMultipleTabManager, doc, collection, onSnapshot, setDoc, deleteDoc, writeBatch } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
 import * as C from './core.js';
+const APP_VERSION = '7 · drinks count as water';
 import { EX, POSE, figSVG, YT, LINES, FOODS, COACH_MEALS, DEFAULT_SUPPS, SLOTS, CARDIO_MODES } from './data.js';
 
 /* ---------- config ---------- */
@@ -510,7 +511,7 @@ function setupHTML(R) {
   // account and data
   h += `<section class="card"><div class="card-h"><h2>Data</h2></div>
   <div class="row"><button class="btn" data-act="export">Export backup</button><label class="btn" for="imp-file2">Import backup</label><input id="imp-file2" type="file" accept="application/json,.json" hidden></div>
-  <p class="hint">Signed in as ${esc(S.user.email || '')}. <button class="link" data-act="signout">Sign out</button></p></section>`;
+  <p class="hint">Signed in as ${esc(S.user.email || '')}. <button class="link" data-act="signout">Sign out</button></p><p class="hint num">App version ${APP_VERSION}</p></section>`;
   h += `<section class="card"><div class="card-h"><h2>Restart</h2></div><p class="hint">Starts a fresh 90 days from today and clears the attempt history. Logged days stay saved.</p>
   ${S.confirm === 'restart' ? `<div class="wbtns"><button class="btn danger" data-act="restart2">Yes, restart today</button><button class="btn ghost" data-act="cancel">Cancel</button></div>` : `<button class="btn danger" data-act="restart1">Restart challenge</button>`}</section>`;
   return h;
@@ -893,4 +894,12 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden) rend
 setInterval(render, 60000);
 { const h = location.hash.slice(1); if (VIEWS.includes(h)) S.view = h; if (h === 'water') S.quickWater = true; }
 draw();
-if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(() => { });
+// updates: check whenever the app is opened; when a new version takes over, reload once so it shows straight away
+if ('serviceWorker' in navigator) {
+  const hadCtl = !!navigator.serviceWorker.controller;
+  let reloaded = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => { if (hadCtl && !reloaded) { reloaded = true; location.reload(); } });
+  navigator.serviceWorker.register('./sw.js', { updateViaCache: 'none' }).then(reg => {
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) reg.update().catch(() => { }); });
+  }).catch(() => { });
+}
