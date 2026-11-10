@@ -4,8 +4,8 @@ import { initializeFirestore, getFirestore, persistentLocalCache, persistentMult
 import * as C from './core.js';
 import { trText, addFoodNames } from './i18n.js';
 import * as TR from './train.js';
-const APP_VERSION = '20 · reuse past meals in your plan';
-import { EX, POSE, figSVG, YT, LINES, FOODS, COACH_MEALS, DEFAULT_SUPPS, SLOTS, CARDIO_MODES } from './data.js';
+const APP_VERSION = '21 · restore your meal plan';
+import { EX, POSE, figSVG, YT, LINES, FOODS, COACH_MEALS, DEFAULT_SUPPS, COACH_ENC, SLOTS, CARDIO_MODES } from './data.js';
 addFoodNames(FOODS);
 
 /* ---------- config ---------- */
@@ -121,10 +121,32 @@ function savePlan() {
   else { st.planLog = st.planLog || {}; st.planLog[today()] = clone(st.meals); }
   saveSettings();
 }
+const planHasFood = ms => (ms || []).some(m => (m.items || []).length);
+// the most recent saved plan that actually had food in it (kept in the person's own account data)
+function lastFullPlan(st) { const log = st.planLog || {}, k = Object.keys(log).sort().reverse().find(d => planHasFood(log[d])); return k ? { k, meals: log[k] } : null; }
+async function coachPlan() {
+  try {
+    const [iv, ct] = COACH_ENC.split('.').map(b => Uint8Array.from(atob(b), c => c.charCodeAt(0)));
+    const key = await crypto.subtle.importKey('raw', await crypto.subtle.digest('SHA-256', new TextEncoder().encode(S.user.email.trim().toLowerCase() + '|lockin-coach-v1')), 'AES-GCM', false, ['decrypt']);
+    return JSON.parse(new TextDecoder().decode(await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, ct)));
+  } catch (e) { return null; }
+}
+async function restoreCoach() {
+  const c = isOwner() && await coachPlan(); if (!c) return toast('Couldn’t unlock the coach plan on this account.');
+  if (planHasFood(S.settings.meals) && !confirm('Replace your current meal plan with your coach’s plan?')) return;
+  S.settings.meals = c.meals; S.settings.planNoted = true; if (!(S.settings.supps || []).length) S.settings.supps = c.supps;
+  savePlan(); toast('Your coach’s meal plan is back' + ((S.settings.supps || []).length ? ', with your supplements.' : '.')); draw();
+}
+function restorePlanCard(st) {
+  if (editingRamadan() || planHasFood(st.meals)) return '';
+  const lp = lastFullPlan(st); if (!lp) return isOwner() ? `<div class="note2 good restore"><b>Bring back your coach’s plan?</b><span>Your 5 meals and supplement stack, stored privately for your account.</span><button class="btn primary small" data-act="coachrestore">Restore it</button></div>` : '';
+  const s = C.sumItems(lp.meals.flatMap(m => m.items || []));
+  return `<div class="note2 good restore"><b>Bring back your previous plan?</b><span>${lp.meals.length} meals · ${kc(s.k)} kcal · ${kc(s.p)} g protein, saved ${fmt(lp.k)}</span><button class="btn primary small" data-act="planrestore" data-v="${lp.k}">Restore it</button></div>`;
+}
 function planHistoryHTML(st) {
-  const keys = Object.keys(st.planLog || {}).sort();
-  if (keys.length < 2) return '';
-  return `<details><summary class="hint">Plan history (${keys.length} versions)</summary><ul class="list">${keys.slice().reverse().map(k => { const s = C.sumItems((st.planLog[k] || []).flatMap(m => m.items || [])); return `<li><span>From ${fmt(k)}</span><span class="num">${(st.planLog[k] || []).length} meals · ${kc(s.k)} kcal · ${kc(s.p)} g protein</span></li>`; }).join('')}</ul></details>`;
+  const keys = Object.keys(st.planLog || {}).filter(k => planHasFood(st.planLog[k])).sort();
+  if (!keys.length || (keys.length < 2 && planHasFood(st.meals))) return '';
+  return `<details><summary class="hint">Plan history (${keys.length} version${keys.length > 1 ? 's' : ''})</summary><ul class="list">${keys.slice().reverse().map(k => { const s = C.sumItems((st.planLog[k] || []).flatMap(m => m.items || [])); return `<li><span>From ${fmt(k)}<small class="sub" style="display:block">${(st.planLog[k] || []).length} meals · ${kc(s.k)} kcal · ${kc(s.p)} g protein</small></span><button class="btn small" data-act="planrestore" data-v="${k}">Use this</button></li>`; }).join('')}</ul></details>`;
 }
 
 /* ---------- ui helpers ---------- */
@@ -415,7 +437,7 @@ async function startOverAct(act, v) {
   }
   if (o.wo) { Object.keys(S.acts || {}).forEach(k => { deleteDoc(doc(db, up('activities/' + k))).catch(() => { }); delete S.acts[k]; }); }
   if (o.body) { Object.keys(S.checkins || {}).forEach(k => { writes.push(['checkins/' + k, { deleted: true }]); delete S.checkins[k]; }); Object.keys(S.photos || {}).forEach(k => { writes.push(['photos/' + k, { deleted: true }]); delete S.photos[k]; }); }
-  if (o.plans) { st.meals = []; st.supps = []; st.train = null; st.ifthen = []; st.focus = {}; st.planNoted = false; }
+  if (o.plans) { st.meals = BLANK_MEALS(); st.planLog = { ...(st.planLog || {}), [t]: BLANK_MEALS() }; st.supps = []; st.train = null; st.ifthen = []; st.focus = {}; st.planNoted = false; }
   st.attemptBase = (st.attemptBase || 0) + R.attemptNo; st.startDate = t; delete st.attemptStart;
   if (o.tell && st.group) st.resetNote = { date: t, attempt: R.attemptNo + 1 }; else delete st.resetNote;
   for (let i = 0; i < writes.length; i += 400) { const bt = writeBatch(db); writes.slice(i, i + 400).forEach(([p, v]) => bt.set(doc(db, up(p)), stamp(p, clone(v)))); try { await bt.commit(); } catch (e) { toast('Part of the reset didn’t save. Try again online.'); } }
@@ -878,7 +900,7 @@ function todayHTML(R) {
   ${commitHTML(R, d, date)}</section>`;
   // one lifted card: the most useful thing to do right now
   let lift = date === t ? reflectHTML(R) : '';
-  if (!lift && !st.planNoted && P.pm.length && P.pm.every(m => !(m.items || []).length)) lift = `<section class="card setupnudge"><h3>Add your ${C.inRamadan(st, date) ? 'Ramadan ' : ''}meal plan</h3><p class="hint">Add your coach’s plan or your own in Me → Meal plan. Then one tap logs a meal and your calorie targets appear. No plan? Log what you eat in each meal.</p><div class="row"><button class="btn primary" data-act="planset">Set up my plan</button><button class="btn ghost" data-act="plannoted">I’ll log as I go</button></div></section>`;
+  if (!lift && !st.planNoted && P.pm.length && P.pm.every(m => !(m.items || []).length)) lift = !C.inRamadan(st, date) && !lastFullPlan(st) && isOwner() ? `<section class="card setupnudge"><h3>Your meal plan is empty</h3><p class="hint">Bring back your coach’s plan (5 meals and your supplements) in one tap.</p><div class="row"><button class="btn primary" data-act="coachrestore">Restore my coach’s plan</button><button class="btn ghost" data-act="planset">Set up a new one</button></div></section>` : !C.inRamadan(st, date) && lastFullPlan(st) ? `<section class="card setupnudge"><h3>Your meal plan is empty</h3><p class="hint">Bring back the plan you saved on ${fmt(lastFullPlan(st).k)} (${lastFullPlan(st).meals.length} meals), or set up a new one.</p><div class="row"><button class="btn primary" data-act="planrestore" data-v="${lastFullPlan(st).k}">Restore my plan</button><button class="btn ghost" data-act="planset">Set up a new one</button></div></section>` : `<section class="card setupnudge"><h3>Add your ${C.inRamadan(st, date) ? 'Ramadan ' : ''}meal plan</h3><p class="hint">Add your coach’s plan or your own in Me → Meal plan. Then one tap logs a meal and your calorie targets appear. No plan? Log what you eat in each meal.</p><div class="row"><button class="btn primary" data-act="planset">Set up my plan</button><button class="btn ghost" data-act="plannoted">I’ll log as I go</button></div></section>`;
   const next = upNextHTML(R, d, date, P);
   h += `<div class="lift">${lift || next}</div>`;
   if (lift && next) h += next;
@@ -1286,6 +1308,7 @@ function setupHTML(R) {
   const PM = planMeals(), planTot = C.sumItems(PM.flatMap(m => m.items || []));
   h += `<section class="card" id="sec-plan"><div class="card-h"><h2>Meal plan</h2>${pill('todo', `${kc(planTot.k)} kcal · ${kc(planTot.p)} g protein`)}</div>
   ${(st.ramadan && st.ramadan.on) || editingRamadan() ? `<div class="seg wide" role="group" aria-label="Which plan"><button data-act="planedit" data-v="normal" aria-pressed="${!editingRamadan()}">Normal days</button><button data-act="planedit" data-v="ramadan" aria-pressed="${editingRamadan()}">Ramadan</button></div>` : ''}<p class="hint">${isOwner() ? 'Your coach’s plan' : 'Your meal plan (from your coach, or your own)'}, in cooked weights. Add the foods and grams for each meal; the totals become your daily calorie and protein targets. When your coach changes it, edit it here: the change applies from today, and earlier days keep the plan they had.</p>${planHistoryHTML(st)}`;
+  h += restorePlanCard(st);
   PM.forEach((m, i) => {
     const s = C.sumItems(m.items);
     h += `<div class="planmeal"><div class="row"><input class="in grow" id="pm-n-${m.id}" data-mealname="${m.id}" value="${esc(m.name)}" aria-label="Meal name"><input class="in sm" id="pm-t-${m.id}" type="time" data-mealtime="${m.id}" value="${esc(m.time || '')}" aria-label="Time" style="width:110px"></div>
@@ -1634,6 +1657,8 @@ document.addEventListener('click', async ev => {
     if (act === 'qfocus') { closeSheet(); if (S.view !== 'today') go('today'); setTimeout(() => { const el = $(v); if (el) { el.scrollIntoView({ block: 'center' }); el.focus(); } }, 80); return; }
   }
   if (act === 'plancopy') return openPlanCopy(v);
+  if (act === 'coachrestore') return restoreCoach();
+  if (act === 'planrestore') { const src = (S.settings.planLog || {})[v]; if (!planHasFood(src)) return; if (planHasFood(S.settings.meals) && !confirm('Replace your current meal plan with this one?')) return; S.settings.meals = clone(src); S.settings.planNoted = true; savePlan(); toast(`Meal plan restored from ${fmt(v)}.`); return draw(); }
   if (act === 'plancopymode' && SH && SH.scope === 'plancopy') { SH.mode = v; return drawPlanCopy(); }
   if (act === 'plancopypick' && SH && SH.scope === 'plancopy') {
     const src = SH.list[+v], m = planMeals().find(x => x.id === SH.mealId); if (!src || !m) return;
