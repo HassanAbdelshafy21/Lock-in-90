@@ -4,7 +4,7 @@ import { initializeFirestore, getFirestore, persistentLocalCache, persistentMult
 import * as C from './core.js';
 import { trText, addFoodNames } from './i18n.js';
 import * as TR from './train.js';
-const APP_VERSION = '24 · coach link fix';
+const APP_VERSION = '25 · new coach page';
 import { EX, POSE, figSVG, YT, LINES, FOODS, COACH_MEALS, DEFAULT_SUPPS, COACH_ENC, SLOTS, CARDIO_MODES } from './data.js';
 addFoodNames(FOODS);
 
@@ -628,18 +628,25 @@ function challengeHTML() {
 
 /* ---------- coach live link: a read-only summary at shares/{token} ---------- */
 let coachT;
+function coachWo(d, dt) {
+  const w = d.wo; if (!w || !(w.t1 || w.imported) || !w.ex) return null;
+  let sets = 0, vol = 0; w.ex.forEach(e => (e.sets || []).forEach(x => { if (x.done && x.t !== 'w') { sets++; vol += (x.kg || 0) * (x.r || 0); } }));
+  return { n: w.name, m: w.t1 && w.t0 ? Math.round((w.t1 - w.t0) / 60000) : null, s: sets, v: Math.round(vol), pr: w.imported ? 0 : TR.prCount(dt), cali: w.rid === 'cali' };
+}
 function coachData(R) {
   const st = S.settings, t = today(), days = [];
   for (let i = 13; i >= 0; i--) {
     const dt = C.addDays(t, -i); if (dt < st.startDate) continue;
     const d = S.days[dt] || {}, ev = C.evalDay(st, d, dt), P = ev.P, tot = C.dayTotals(st, d), tg = C.planTargets(st, d, dt);
-    days.push({ d: dt, now: dt === t, ok: ev.complete, k: Math.round(tot.k), p: Math.round(tot.p), tk: Math.round(tg.k), tp: Math.round(tg.p), w: C.round(P.w / 1000, 2), wg: C.round(P.goal / 1000, 2), tr: P.tt === 'rest' ? 'rest' : d.trainingDone ? 'done' : 'no', tt: C.TT[P.tt].label, sup: [P.sDone, P.req.length], wt: d.weight || null, sl: d.sleep || null, sp: (d.sports || []).reduce((s, x) => s + (x.min || 0), 0), off: P.off.length + P.offExtra.length, miss: ev.complete ? [] : ev.missing, ...(st.coach && st.coach.notes && d.note ? { note: d.note } : {}) });
+    days.push({ d: dt, now: dt === t, ok: ev.complete, k: Math.round(tot.k), p: Math.round(tot.p), tk: Math.round(tg.k), tp: Math.round(tg.p), w: C.round(P.w / 1000, 2), wg: C.round(P.goal / 1000, 2), tr: P.tt === 'rest' ? 'rest' : d.trainingDone ? 'done' : 'no', tt: C.TT[P.tt].label, sup: [P.sDone, P.req.length], wt: d.weight || null, sl: d.sleep || null, sp: (d.sports || []).reduce((s, x) => s + (x.min || 0), 0), off: P.off.length + P.offExtra.length, miss: ev.complete ? [] : ev.missing, ...(st.coach && st.coach.notes && d.note ? { note: d.note } : {}),
+      ms: !P.pm.length ? 'none' : P.off.length || P.offExtra.length ? 'off' : P.mealsOk ? 'ok' : P.clean ? 'part' : 'none', sw: Object.values(d.meals || {}).filter(m => m && m.status === 'swap').length,
+      ss: !P.req.length ? 'none' : P.sDone >= P.req.length ? 'ok' : P.sDone ? 'part' : 'miss', wo: coachWo(d, dt), cd: (d.stamina || []).reduce((a, x) => a + (x.min || 0), 0), spl: (d.sports || []).map(x => ({ n: (C.SPORTS.find(z => z.id === x.sport) || {}).name || x.name || 'Sport', m: x.min || 0, k: Math.round(x.kcal || 0) })) });
   }
   const pts = []; if (st.startWeight) pts.push([st.startDate, st.startWeight]);
   Object.values(S.checkins).forEach(c => c.weight && pts.push([c.date, c.weight])); Object.keys(S.days).forEach(k => S.days[k].weight && pts.push([k, S.days[k].weight]));
   pts.sort((a, b) => a[0] < b[0] ? -1 : 1);
   const cks = Object.values(S.checkins).sort((a, b) => a.date < b.date ? -1 : 1).slice(-6).map(c => ({ date: c.date, waist: c.waist || null, chest: c.chest || null, arm: c.arm || null, hips: c.hips || null, neck: c.neck || null, weight: c.weight || null }));
-  return { name: boardName(), lang: LANG(), day: Math.min(R.dayNum, 90), streak: R.done, best: R.best, attempt: R.attemptNo, startDate: st.startDate, startWeight: st.startWeight || null, goalWeight: st.goalWeight || null, height: st.height || null, days, weights: pts.slice(-90).map(([d, w]) => ({ d, w })), checkins: cks };
+  return { name: boardName(), lang: LANG(), day: Math.min(R.dayNum, 90), streak: R.done, best: R.best, attempt: R.attemptNo, startDate: st.startDate, startWeight: st.startWeight || null, goalWeight: st.goalWeight || null, height: st.height || null, sleepGoal: st.sleepGoal || 7.5, rank: (() => { const r = TR.rankOf(); return r ? r.name : null; })(), days, weights: pts.slice(-90).map(([d, w]) => ({ d, w })), checkins: cks };
 }
 function coachPublish(R) {
   const c = S.settings && S.settings.coach;
@@ -1296,6 +1303,7 @@ function setupHTML(R) {
   const st = S.settings, plan = st.plan || C.DEFAULT_PLAN, wg = st.waterGoal || 3500, sta = st.stamina || { on: true, days: [] };
   let h = `<section class="card"><div class="card-h"><h2>Challenge</h2></div>
   <div class="setup-r"><span>Started</span><span class="num">${fmt(st.startDate)} · attempt ${R.attemptNo}</span></div>
+  <div class="setup-r"><label for="fb-name">Your name<small class="sub" style="display:block">Shown to friends and your coach</small></label><input class="in" id="fb-name" maxlength="24" value="${esc(st.boardName || '')}" placeholder="${esc(boardName())}" style="max-width:160px"></div>
   <div class="setup-r"><label for="s-water">Water goal</label>${waterSelect('s-water', 'data-setting="waterGoal"', wg)}</div>
   ${wg > 5000 ? '<p class="safety">Above 5 L, spread it out: no more than about 1 L per hour, and add salt or electrolytes on heavy-sweat days.</p>' : ''}
   <div class="setup-r"><label for="s-sw">Start weight (kg)</label><input class="in" id="s-sw" type="number" inputmode="decimal" step="0.1" data-setting="startWeight" value="${st.startWeight || ''}"></div>
