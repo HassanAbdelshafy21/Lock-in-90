@@ -16,7 +16,12 @@ A 90-day challenge tracker for food, water, training and supplements. Miss one a
 One screen for the day. A navy scoreboard shows four rings around the day number, one each for meals, water, training and supplements. Below it sit one "Up next" card with the single most useful thing to do now, and a short list of the rest. Tap any pillar for its details. Light and dark mode follow the phone, and the whole app also works in Arabic, right to left.
 
 - **Every day needs all four:** every planned meal on plan, the water goal, that day's training and the core supplements. Miss one and the counter resets to Day 1. The day after a miss is flagged "Never miss twice."
-- **Food:** your coach's meal plan or your own, one-tap "As planned", and calories and macros from a built-in library (Egyptian staples included, cooked weights). Also USDA search, barcode scan, custom foods and recipes. Drinks count toward water.
+- **Food:** your coach's meal plan or your own, one-tap "As planned", and calories and macros from a built-in library (Egyptian staples included, cooked weights). Drinks count toward water.
+  - **Egyptian brands:** popular packaged products (Balance, Juhayna, Domty, Almarai, Lamar, Rich Bake, Abu Auf, Molto and more) checked against their labels, plus McDonald's Egypt from its published tables. Anything else sold in Egypt can be searched on Open Food Facts, and entries whose calories don't add up are left out.
+  - **Servings, not just grams:** pack, slice, cup, bar and so on, with a ½-step amount. The app remembers what you used last time.
+  - **More nutrients:** sodium (and salt), sugar, saturated fat, fiber, potassium and calcium for each food and for the day, against WHO limits, with the foods that gave you the most sodium.
+  - **Add from a label:** per 100 g or per serving, sodium or salt, your own servings, and a check that catches typos. You can photograph the nutrition table and the phone reads the numbers (on the phone itself, English and Arabic). Also barcode scan, USDA search and recipes.
+  - **Friends' foods:** share a food you added and everyone in your group can log it.
 - **Habits:** a morning commitment, if-then plans for risky moments, a 3-tap reflection after a missed day, a 10-minute craving tool, a sleep goal with a bedtime reminder, and one weekly focus goal.
 - **Ramadan mode:** a Suhoor / Iftar / after-Taraweeh plan, water paced from iftar to fajr, and an iftar countdown.
 
@@ -71,7 +76,7 @@ One screen for the day. A navy scoreboard shows four rings around the day number
 - **Friends:** create a group and share the 6-letter code.
   - **Weekly league:** points come from discipline, not raw strength, so a beginner can win. A locked-in day is +10, a workout +5, a record +3.
   - **Other boards:** a strength board that compares fairly across bodyweights (DOTS), a most-improved board, and the board with cheers and nudges.
-  - **Privacy:** only these numbers are shared, never food, weight or photos. Anyone can hide themselves.
+  - **Privacy:** only these numbers are shared, never what you ate, your weight or photos (foods you add can be shared with the group if you choose). Anyone can hide themselves.
 - **Coach link:** a private read-only page for your coach that updates by itself.
 - **Start over your way:** a new attempt that keeps history, or clear exactly what you choose. Your group always stays, and friends can be told.
 
@@ -89,10 +94,11 @@ _Screenshots use a demo account with made-up data._
 
 - The repo is public, so nothing private lives in it: no keys, no personal plans, no emails. The Firebase web config and the push public key are designed to be public; access is controlled by `firestore.rules` (each person can only read and write their own data).
 - Keys for the reminder job live only in encrypted GitHub Actions secrets, never in the code.
-- The friends board shares only day count, streak, today's status, league points and rank; never food, weight or photos.
+- The friends board shares only day count, streak, today's status, league points and rank; never what you ate, your weight or photos. A food you add is shared with your group only if you tick "Share with my group".
 
 ## Credits
 
 - Exercises and photos: [free-exercise-db](https://github.com/yuhonas/free-exercise-db), public domain (`ex/LICENSE-free-exercise-db.md`).
+- Food data: [Open Food Facts](https://world.openfoodfacts.org) (ODbL), [USDA FoodData Central](https://fdc.nal.usda.gov) (public domain), McDonald's Egypt published nutrition tables. Label reading: [Tesseract.js](https://github.com/naptha/tesseract.js) (Apache 2.0), loaded only when you use it.
 - Font: [Alexandria](https://fonts.google.com/specimen/Alexandria), SIL Open Font License (`fonts/OFL-Alexandria.txt`).
 - Sports calories: 2024 Adult Compendium of Physical Activities. Body numbers: NICE 2022 waist-to-height bands and the US Navy body-fat formula.

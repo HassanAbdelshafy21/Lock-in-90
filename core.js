@@ -34,6 +34,64 @@ export function itemMacros(it) {
   const f = (it.g || 0) / 100, p = it.per || {};
   return { k: (p.k || 0) * f, p: (p.p || 0) * f, c: (p.c || 0) * f, f: (p.f || 0) * f };
 }
+/* ---------- more nutrients ---------- */
+// daily guides: WHO (sodium < 2,000 mg; free sugars and saturated fat each < 10% of calories; potassium >= 3,510 mg),
+// fiber 30 g (EFSA/WHO adult range 25-38 g), calcium 1,000 mg (adult RDA)
+export const MICROS = [
+  { k: 'na', name: 'Sodium', u: 'mg', max: () => 2000 },
+  { k: 'fib', name: 'Fiber', u: 'g', min: () => 30 },
+  { k: 'sug', name: 'Sugar', u: 'g', max: kc => Math.round((kc || 2000) * 0.1 / 4) },
+  { k: 'sat', name: 'Saturated fat', u: 'g', max: kc => Math.round((kc || 2000) * 0.1 / 9) },
+  { k: 'pot', name: 'Potassium', u: 'mg', min: () => 3500 },
+  { k: 'ca', name: 'Calcium', u: 'mg', min: () => 1000 },
+];
+export const saltFromNa = mg => mg * 2.5 / 1000; // g of salt
+export const naFromSalt = g => g / 2.5 * 1000;   // mg of sodium
+// label sanity: do the calories match protein, carbs and fat? (4/4/9 kcal per g; fiber may or may not be in carbs)
+export function checkPer(per) {
+  const k = +per.k || 0, p = +per.p || 0, c = +per.c || 0, f = +per.f || 0, a = 4 * p + 4 * c + 9 * f;
+  if (k <= 0 && a <= 0) return { level: 'bad', calc: 0 };
+  if (p + c + f > 105) return { level: 'bad', calc: Math.round(a) };
+  if (k < 8 && a < 12) return { level: 'ok', calc: Math.round(a) }; // water, tea, diet drinks
+  const r = Math.abs(a - k) / Math.max(a, k, 1);
+  return { level: r > 0.35 ? 'bad' : r > 0.2 ? 'warn' : 'ok', calc: Math.round(a) };
+}
+// drop nutrient values that can't be right (more saturated fat than fat, more sugar or fiber than carbs, zero sodium on a protein food)
+export function cleanPer(per) {
+  const o = { ...per };
+  if (o.sat != null && o.sat > (o.f || 0) + 0.5) delete o.sat;
+  if (o.sug != null && o.sug > (o.c || 0) + 0.5) delete o.sug;
+  if (o.fib != null && o.fib > (o.c || 0) + 0.5 && (o.c || 0) > 0) delete o.fib;
+  if (o.na != null && (o.na < 0 || o.na > 40000 || (o.na === 0 && (o.p || 0) > 2))) delete o.na;
+  ['na', 'sug', 'sat', 'fib', 'pot', 'ca'].forEach(m => { if (o[m] != null && !isFinite(o[m])) delete o[m]; });
+  return o;
+}
+// read a nutrition table from OCR text (English or Arabic). Takes the first number on each line, which on
+// Egyptian packs is usually the per-100 g column. Returns { vals: {k,p,c,f,na,salt,sug,sat,fib,pot,ca}, per100, serv }.
+export function parseLabel(text) {
+  const t = String(text || '').replace(/[٠-٩]/g, d => String('٠١٢٣٤٥٦٧٨٩'.indexOf(d))).replace(/[۰-۹]/g, d => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d))).replace(/٫/g, '.').replace(/(\d),(\d)/g, '$1.$2');
+  const KEYS = [
+    ['sat', /saturat|مشبع/i], ['trans', /trans|متحول/i], ['sug', /sugar|سكر|سكريات/i], ['fib', /fib(re|er)|ألياف|الياف/i], ['na', /sodium|صوديوم/i], ['salt', /\bsalt\b|ملح/i],
+    ['pot', /potassium|بوتاسيوم/i], ['ca', /calcium|كالسيوم/i], ['p', /protein|بروتين/i], ['c', /carbohydrate|carbs|كربوهيدرات|نشويات/i], ['f', /\bfats?\b|total fat|دهون|الدهون/i], ['k', /energy|calories|kcal|طاقة|الطاقة|سعرات|السعرات/i]];
+  const vals = {}, num = s => { const m = s.match(/\d+(?:\.\d+)?/); return m ? +m[0] : null; };
+  t.split(/\n+/).forEach(line => {
+    const key = KEYS.find(([, re]) => re.test(line)); if (!key || key[0] === 'trans' || vals[key[0]] != null) return;
+    const k = key[0], after = line.slice(line.search(key[1]));
+    if (k === 'k') {
+      const kc = after.match(/(\d+(?:\.\d+)?)\s*(k?cal|سعر|كيلو\s*سعر)/i), kj = after.match(/(\d+(?:\.\d+)?)\s*(kj|كيلو\s*جول)/i);
+      const v = kc ? +kc[1] : kj ? Math.round(+kj[1] / 4.184) : num(after); if (v != null && v < 1000) vals.k = v; else if (v != null && kj) vals.k = Math.round(v / 4.184);
+      return;
+    }
+    if (k === 'na' || k === 'pot' || k === 'ca') {
+      const m = after.match(/(\d+(?:\.\d+)?)\s*(mg|ملجم|مجم|مللي?جرام|g\b|جم|جرام|غ)?/i); if (!m) return;
+      const g = m[2] && !/^m|^م/i.test(m[2]); vals[k] = g ? Math.round(+m[1] * 1000) : +m[1]; return;
+    }
+    const v = num(after); if (v != null && v < 100) vals[k] = v;
+  });
+  const per100 = /100\s*(g|ml|gm|جم|جرام|غ|مل)/i.test(t);
+  const sm = t.match(/(serving|portion|حصة|الحصة|وجبة)[^\d\n]{0,25}(\d+(?:\.\d+)?)\s*(g|ml|gm|جم|جرام|غ|مل)/i);
+  return { vals, per100, serv: sm ? +sm[2] : null };
+}
 export function sumItems(items) {
   const t = { k: 0, p: 0, c: 0, f: 0 };
   (items || []).forEach(it => { const m = itemMacros(it); t.k += m.k; t.p += m.p; t.c += m.c; t.f += m.f; });

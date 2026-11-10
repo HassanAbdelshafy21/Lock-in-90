@@ -853,3 +853,36 @@ label.tst b{font-size:14.5px;display:block}label.tst small{font-size:12px;color:
 .tierhd{display:flex;gap:12px;align-items:center}.tierhd .badge{margin:0}
 .need{display:grid;grid-template-columns:1fr auto auto;gap:10px;align-items:center;padding:10px 0;border-bottom:1px solid var(--line);font-size:14px}.need:last-child{border:0}.need .sub{font-size:12px}
 .exthumb.none{display:grid;place-items:center;color:var(--muted);font-size:16px}
+/* foods v3: brands, servings, more nutrients, label form */
+.fchips{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0}
+.fchips button{border:0;border-radius:99px;padding:6px 11px;font:600 12px var(--f-body);background:var(--surface-2);color:var(--ink-2);min-height:32px}
+.fchips button[aria-pressed="true"]{background:var(--primary);color:var(--on-primary)}
+.ok-b,.warn-b{font:700 9.5px var(--f-body);border-radius:6px;padding:2px 5px;margin-inline-start:4px;vertical-align:1px;white-space:nowrap}
+.ok-b{background:var(--good-soft);color:var(--good)}.warn-b{background:var(--warn-soft);color:var(--warn)}
+.online{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.amt{display:flex;align-items:center;justify-content:space-between;background:var(--surface);border-radius:16px;padding:8px}
+.amt button{width:44px;height:44px;border-radius:12px;border:1px solid var(--line);background:var(--surface-2);font:700 22px var(--f-body);color:var(--ink)}
+.amt div{text-align:center;display:grid}.amt b{font-size:22px}.amt small{font-size:12px;color:var(--muted)}
+.amt-g{display:flex;gap:8px;align-items:center;font-size:14px}
+.units{display:flex;gap:6px;flex-wrap:wrap}
+.units button{border:1.5px solid var(--line);background:var(--surface);border-radius:12px;padding:7px 11px;font:600 12.5px var(--f-body);color:var(--ink-2);min-height:36px}
+.units button[aria-pressed="true"]{border-color:var(--primary);color:var(--ink);background:var(--accent-soft)}
+.mac4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
+.mac4 div{background:var(--surface);border-radius:12px;padding:8px 4px;text-align:center}.mac4 b{display:block;font-size:15px}.mac4 span{font-size:10.5px;color:var(--muted)}
+.mics{display:grid;gap:2px;margin-top:8px}
+.mic{display:grid;grid-template-columns:minmax(84px,auto) 1fr auto;gap:8px;align-items:center;font-size:12.5px;padding:5px 0}
+.mic i{height:7px;border-radius:7px;background:var(--surface-2);position:relative;overflow:hidden;display:block}
+.picked .mic i{background:var(--surface)}
+.mic i em{position:absolute;inset-block:0;inset-inline-start:0;border-radius:7px}
+.mic>span:last-child{text-align:end;white-space:nowrap}.mic small{color:var(--muted);font-weight:400}
+.mic.na>span:last-child{color:var(--muted);font-size:11.5px}
+.warnbox{background:var(--warn-soft);color:var(--ink);border-radius:12px;padding:9px 11px;font-size:12.5px;margin:0}
+.picked .src{font-size:11.5px;margin:0}
+#sec-nutri .nsrc{margin-top:8px}
+.sv{display:flex;justify-content:space-between;gap:10px;padding:7px 0;border-bottom:1px solid var(--line);font-size:13px}.sv:last-child{border:0}
+.lform .form label.fld{font-size:12px}
+.svs{display:grid;gap:6px}.svr{display:grid;grid-template-columns:1fr 84px auto;gap:6px;align-items:center}
+.btn.photo{cursor:pointer}
+details.why{margin-top:6px}
+.ntitle{margin:18px 0 4px;font-size:16px;font-weight:700;padding-top:14px;border-top:1px solid var(--line)}
+.card:not(.panelsheet .card)>.ntitle{border:0;padding:0;margin-top:0}

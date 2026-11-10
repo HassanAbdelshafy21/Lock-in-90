@@ -176,8 +176,32 @@ const RAW = [
   ['chocolate', 'Milk chocolate', 535, 7.7, 59, 30, [['bar 40 g', 40]], 'شوكولاتة'],
   ['basbousa', 'Basbousa (est.)', 350, 4, 55, 13, [['piece', 80]], 'بسبوسة']
 ];
+
+/* More nutrients per 100 g: [sodium mg, sugars g, saturated fat g, fiber g, potassium mg, calcium mg].
+   Plain foods follow USDA FoodData Central (SR Legacy) values, cooked without added salt.
+   Items marked (est.) in the library are typical Egyptian home or street versions, salted as usually served. */
+const MICRO = {
+  chicken_breast: [74, 0, 1, 0, 256, 15], chicken_thigh: [95, 0, 2.7, 0, 269, 12], chicken_fried: [450, 0.3, 4.5, 0.5, 250, 25], beef_lean: [65, 0, 6, 0, 320, 18], beef_mince: [75, 0, 6.6, 0, 300, 20],
+  kofta: [500, 0.5, 7, 0.5, 300, 25], liver: [79, 0, 1.6, 0, 351, 6], tuna_water: [247, 0, 0.2, 0, 237, 11], tuna_oil: [354, 0, 1.5, 0, 207, 13], salmon: [61, 0, 3.1, 0, 384, 15], tilapia: [56, 0, 0.9, 0, 380, 14],
+  shrimp: [111, 0, 0.1, 0, 259, 70], egg: [124, 1.1, 3.3, 0, 126, 50], egg_fried: [207, 0.4, 4.3, 0, 152, 62], egg_white: [166, 0.7, 0, 0, 163, 7], turkey: [1000, 3, 0.6, 0, 350, 10], whey: [300, 5, 3, 0, 500, 450],
+  yogurt_light: [70, 7, 0.1, 0, 234, 183], yogurt_full: [46, 4.7, 2.1, 0, 155, 121], greek_yogurt: [36, 3.2, 0.1, 0, 141, 110], milk_skim: [42, 5, 0.1, 0, 156, 122], milk_full: [43, 5, 1.9, 0, 132, 113],
+  cottage: [364, 2.7, 1.7, 0, 104, 83], areesh: [400, 3, 1.9, 0, 100, 90], domiati: [1200, 1, 13, 0, 80, 350], feta: [1116, 4.1, 15, 0, 62, 493], romy: [1300, 0.5, 19, 0, 90, 800], labneh: [350, 3, 8, 0, 150, 120],
+  rice_white: [1, 0.1, 0.1, 0.4, 35, 10], rice_brown: [5, 0.4, 0.2, 1.8, 86, 10], pasta: [1, 0.6, 0.2, 1.8, 44, 7], baladi: [470, 2, 0.3, 6, 200, 25], toast: [490, 5, 0.7, 2.7, 115, 150], toast_brown: [450, 4.4, 0.7, 6, 250, 160],
+  oats: [2, 1, 1.2, 10, 429, 54], potato: [5, 0.9, 0, 1.8, 379, 8], sweet_potato: [36, 6.5, 0.1, 3.3, 475, 38], fries: [280, 0.3, 2.3, 3.8, 580, 15], lentils: [2, 1.8, 0.1, 7.9, 369, 19],
+  foul: [300, 1, 0.1, 5.4, 250, 30], foul_oil: [350, 1, 0.9, 5, 240, 30], taameya: [450, 2, 2.5, 5, 500, 55], koshari: [350, 2, 0.5, 3.5, 180, 25], chickpeas: [7, 4.8, 0.3, 7.6, 291, 49], hummus: [379, 0.3, 1.4, 6, 228, 38],
+  salad: [20, 2, 0, 1.8, 220, 25], cucumber: [2, 1.7, 0, 0.5, 147, 16], tomato: [5, 2.6, 0, 1.2, 237, 10], lettuce: [10, 1.2, 0, 1.3, 194, 33], broccoli: [41, 1.4, 0.1, 3.3, 293, 40], carrot: [69, 4.7, 0, 2.8, 320, 33],
+  green_beans: [1, 1.5, 0.1, 3.2, 146, 44], zucchini: [3, 1.7, 0.1, 1, 264, 18], spinach: [79, 0.4, 0.1, 2.2, 558, 99], molokhia: [300, 1, 1.5, 2, 300, 120], vegetable_stew: [350, 3, 1, 2.5, 250, 30],
+  fruit_avg: [1, 10, 0, 2, 180, 10], apple: [1, 10.4, 0, 2.4, 107, 6], banana: [1, 12.2, 0.1, 2.6, 358, 5], orange: [0, 9.4, 0, 2.4, 181, 40], guava: [2, 8.9, 0.3, 5.4, 417, 18], mango: [1, 13.7, 0.1, 1.6, 168, 11],
+  strawberry: [1, 4.9, 0, 2, 153, 16], grapes: [2, 15.5, 0.1, 0.9, 191, 10], watermelon: [1, 6.2, 0, 0.4, 112, 7], pomegranate: [3, 13.7, 0.1, 4, 236, 10], kiwi: [3, 9, 0, 3, 312, 34], pear: [1, 9.8, 0, 3.1, 116, 9], dates: [2, 63, 0, 8, 656, 39],
+  chia: [16, 0, 3.3, 34.4, 407, 631], cacao: [21, 1.8, 8.1, 37, 1524, 128], olive_oil: [2, 0, 13.8, 0, 1, 1], oil: [0, 0, 12, 0, 0, 0], ghee: [2, 0, 62, 0, 5, 4], butter: [11, 0.1, 51, 0, 24, 24],
+  tahini: [115, 0.5, 7.5, 9.3, 414, 426], peanut_butter: [459, 9, 10, 6, 558, 49], almonds: [1, 4.4, 3.8, 12.5, 733, 269], walnuts: [2, 2.6, 6.1, 6.7, 441, 98], honey: [4, 82, 0, 0.2, 52, 6], sugar: [1, 100, 0, 0, 2, 1], mayo: [635, 0.6, 11.7, 0, 20, 8],
+  coffee: [2, 0, 0, 0, 49, 2], coffee_milk: [15, 2, 0.7, 0, 80, 35], tea: [3, 0, 0, 0, 37, 0], green_tea: [1, 0, 0, 0, 8, 0], cola: [4, 10.6, 0, 0, 2, 2], cola_zero: [12, 0, 0, 0, 8, 3], sparkling: [2, 0, 0, 0, 0, 3], juice_orange: [1, 8.4, 0, 0.2, 200, 11],
+  shawarma: [550, 2, 2.5, 1.5, 220, 40], burger: [500, 4, 4.5, 1.3, 220, 70], pizza: [600, 3.6, 4.5, 2.3, 180, 190], hawawshi: [550, 2, 6, 2, 220, 30], feteer: [300, 2, 13, 1.5, 80, 15], chocolate: [79, 52, 18.5, 3.4, 372, 189], basbousa: [150, 35, 6, 1, 80, 30]
+};
+export const MICRO_KEYS = ['na', 'sug', 'sat', 'fib', 'pot', 'ca'];
+export const microsFrom = a => a ? Object.fromEntries(MICRO_KEYS.map((k, i) => [k, a[i]])) : {};
 import { DRINK_IDS } from './core.js';
-export const FOODS = RAW.map(([id, name, k, p, c, f, units, ar]) => ({ id, name, per: { k, p, c, f }, units: units || [], ar: ar || '', src: 'lib', drink: DRINK_IDS.includes(id) }));
+export const FOODS = RAW.map(([id, name, k, p, c, f, units, ar]) => ({ id, name, per: { k, p, c, f, ...microsFrom(MICRO[id]) }, units: units || [], ar: ar || '', src: 'lib', drink: DRINK_IDS.includes(id) }));
 export const foodById = id => FOODS.find(f => f.id === id);
 const it = (id, g) => { const f = foodById(id); return { fid: id, name: f.name, g, per: { ...f.per } }; };
 

@@ -1,8 +1,8 @@
 // Offline support: app files are served from cache and refreshed in the background.
-const VERSION = 'lockin-v26';
+const VERSION = 'lockin-v27';
 const EXC = 'lockin-ex-1'; // exercise photos and data: kept across app updates
 const FB = '10.14.1';
-const SHELL = ['./', './index.html', './styles.css', './app.js', './core.js', './data.js', './i18n.js', './train.js', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png', './icons/maskable-192.png', './icons/maskable-512.png', './icons/favicon.png', './icons/apple-touch-icon.png', './icons/logo.svg', './fonts/Alexandria.ttf'];
+const SHELL = ['./', './index.html', './styles.css', './app.js', './core.js', './data.js', './i18n.js', './train.js', './brands.js', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png', './icons/maskable-192.png', './icons/maskable-512.png', './icons/favicon.png', './icons/apple-touch-icon.png', './icons/logo.svg', './fonts/Alexandria.ttf'];
 const SDK = ['firebase-app', 'firebase-auth', 'firebase-firestore', 'firebase-messaging'].map(n => `https://www.gstatic.com/firebasejs/${FB}/${n}.js`);
 const LIVE = ['firestore.googleapis.com', 'identitytoolkit.googleapis.com', 'securetoken.googleapis.com', 'www.googleapis.com', 'api.nal.usda.gov', 'world.openfoodfacts.org', 'firebaseapp.com', 'apis.google.com', 'accounts.google.com'];
 
