@@ -4,7 +4,7 @@ import { initializeFirestore, getFirestore, persistentLocalCache, persistentMult
 import * as C from './core.js';
 import { trText, addFoodNames } from './i18n.js';
 import * as TR from './train.js';
-const APP_VERSION = '19 · calisthenics, ranks page';
+const APP_VERSION = '20 · reuse past meals in your plan';
 import { EX, POSE, figSVG, YT, LINES, FOODS, COACH_MEALS, DEFAULT_SUPPS, SLOTS, CARDIO_MODES } from './data.js';
 addFoodNames(FOODS);
 
@@ -1291,6 +1291,7 @@ function setupHTML(R) {
     h += `<div class="planmeal"><div class="row"><input class="in grow" id="pm-n-${m.id}" data-mealname="${m.id}" value="${esc(m.name)}" aria-label="Meal name"><input class="in sm" id="pm-t-${m.id}" type="time" data-mealtime="${m.id}" value="${esc(m.time || '')}" aria-label="Time" style="width:110px"></div>
     <span class="hint num">${kc(s.k)} kcal · ${C.round(s.p, 1)} g protein · ${C.round(s.c, 1)} g carbs · ${C.round(s.f, 1)} g fat</span>
     ${itemsEditor(m.items || [], 'plan:' + m.id)}
+    <button class="btn small block" data-act="plancopy" data-v="${m.id}">↺ Use a meal you ate before</button>
     <div class="row"><button class="btn small" data-act="mealup" data-v="${m.id}" ${i === 0 ? 'disabled' : ''}>Move up</button><button class="btn small" data-act="mealdown" data-v="${m.id}" ${i === PM.length - 1 ? 'disabled' : ''}>Move down</button><button class="btn small danger" data-act="mealdel" data-v="${m.id}">Delete meal</button></div></div>`;
   });
   h += `<button class="btn" data-act="mealadd">+ Add a meal</button>${shoppingHTML({ meals: PM })}</section>`;
@@ -1359,9 +1360,9 @@ function openSheet(scope) {
   sheetSearch();
   setTimeout(() => $('fs-q') && $('fs-q').focus(), 50);
 }
-function pastMeals(mealId) {
+function pastMeals(mealId, back = 21, withToday) {
   const t = today(), out = [], seen = new Set();
-  for (let i = 1; i <= 21; i++) {
+  for (let i = withToday ? 0 : 1; i <= back; i++) {
     const dt = C.addDays(t, -i), d = S.days[dt]; if (!d || !d.meals) continue;
     const names = Object.fromEntries(C.mealsOn(S.settings, dt).map(m => [m.id, m.name]));
     Object.entries(d.meals).forEach(([id, md]) => {
@@ -1370,7 +1371,33 @@ function pastMeals(mealId) {
       out.push({ date: dt, id, name: names[id] || 'Meal', status: md.status, items: md.items, same: id === mealId });
     });
   }
-  return out.sort((a, b) => (b.same - a.same) || (a.date < b.date ? 1 : -1)).slice(0, 25);
+  return out.sort((a, b) => (b.same - a.same) || (a.date < b.date ? 1 : -1)).slice(0, back > 21 ? 60 : 25);
+}
+// meal plan: fill a planned meal from something you already ate (or another meal in the plan)
+function openPlanCopy(mealId) {
+  const PM = planMeals(), target = PM.find(m => m.id === mealId); if (!target) return;
+  const others = PM.filter(m => m.id !== mealId && (m.items || []).length).map(m => ({ name: m.name, items: m.items, plan: true }));
+  const past = pastMeals(mealId, 90, true).map(m => ({ name: `${m.name} · ${fmt(m.date)}`, items: m.items, off: m.status === 'off' }));
+  const extras = []; const seen = new Set();
+  for (let i = 0; i <= 30; i++) { const dt = C.addDays(today(), -i), d = S.days[dt]; ((d && d.extras) || []).forEach(x => { const k = x.fid || x.name; if (x.drink || seen.has(k)) return; seen.add(k); extras.push({ name: `${x.name.split(',')[0]} · ${fmt(dt)}`, items: [x], extra: true }); }); }
+  const list = [...others, ...past, ...extras.slice(0, 15)];
+  SH = { scope: 'plancopy', mealId, list, q: '' };
+  drawPlanCopy();
+}
+function drawPlanCopy(onlyRes) {
+  const { list, mealId, q } = SH, target = planMeals().find(m => m.id === mealId), qq = (q || '').toLowerCase().trim();
+  const row = (m, i) => { const sm = C.sumItems(m.items); return `<button class="res" data-act="plancopypick" data-v="${i}"><span><b>${esc(m.name)}</b><small>${esc(m.items.map(x => x.name.split(',')[0]).join(', '))}${m.off ? ' · off-plan' : ''}</small></span><span class="k num">${kc(sm.k)} kcal</span></button>`; };
+  const pick = (f) => list.map((m, i) => [m, i]).filter(([m]) => f(m) && (!qq || m.name.toLowerCase().includes(qq) || m.items.some(x => x.name.toLowerCase().includes(qq))));
+  const grp = (t, rows) => rows.length ? `<h3 class="grp">${t}</h3><div class="results">${rows.map(([m, i]) => row(m, i)).join('')}</div>` : '';
+  const g1 = pick(m => m.plan), g2 = pick(m => !m.plan && !m.extra), g3 = pick(m => m.extra);
+  const res = `${grp('Other meals in your plan', g1)}${grp('Meals you logged (last 90 days)', g2)}${grp('Single foods you added', g3)}${!g1.length && !g2.length && !g3.length ? `<p class="hint">${qq ? 'Nothing matches.' : 'Nothing yet. When you log a meal as “Changed” or “Off-plan”, it shows up here to reuse.'}</p>` : ''}`;
+  if (onlyRes && $('plancopy-res')) { $('plancopy-res').innerHTML = res; return; }
+  $('sheet').hidden = false;
+  $('sheet').innerHTML = `<div class="sheet" role="dialog" aria-modal="true" aria-label="Use a meal you ate before"><div class="grab" aria-hidden="true"></div><div class="spread"><h2>Fill ${esc(target.name)}</h2><button class="x" data-act="closesheet" aria-label="Close">×</button></div>
+  <p class="hint">Pick a meal and its foods and grams go into ${esc(target.name)} in your plan. ${(target.items || []).length ? 'Choose to replace what’s there or add to it.' : ''} You can edit the grams after.</p>
+  ${(target.items || []).length ? `<div class="seg wide" role="group" aria-label="Replace or add"><button data-act="plancopymode" data-v="replace" aria-pressed="${SH.mode !== 'add'}">Replace</button><button data-act="plancopymode" data-v="add" aria-pressed="${SH.mode === 'add'}">Add to it</button></div>` : ''}
+  <input class="in" id="plancopy-q" type="search" placeholder="Search meals or foods" value="${esc(q || '')}" autocomplete="off">
+  <div id="plancopy-res">${res}</div></div>`;
 }
 function openCopy(mealId) {
   const list = pastMeals(mealId);
@@ -1606,6 +1633,14 @@ document.addEventListener('click', async ev => {
     if (act === 'qstam') { closeSheet(); S.trainTab = 'stamina'; return go('train'); }
     if (act === 'qfocus') { closeSheet(); if (S.view !== 'today') go('today'); setTimeout(() => { const el = $(v); if (el) { el.scrollIntoView({ block: 'center' }); el.focus(); } }, 80); return; }
   }
+  if (act === 'plancopy') return openPlanCopy(v);
+  if (act === 'plancopymode' && SH && SH.scope === 'plancopy') { SH.mode = v; return drawPlanCopy(); }
+  if (act === 'plancopypick' && SH && SH.scope === 'plancopy') {
+    const src = SH.list[+v], m = planMeals().find(x => x.id === SH.mealId); if (!src || !m) return;
+    const items = clone(src.items).map(x => { const y = { ...x }; delete y.done; return y; });
+    const add = SH.mode === 'add' && (m.items || []).length; m.items = add ? [...(m.items || []), ...items] : items; savePlan();
+    closeSheet(); toast(`${add ? 'Added to' : 'Filled'} ${m.name} from ${src.name.split(' · ')[0]}. Edit grams any time.`); return draw();
+  }
   if (act === 'copypick' && SH && SH.scope === 'copy') {
     const src = SH.list[+v], id = SH.mealId, date = editDate(), dd = dayDoc(date);
     dd.meals[id] = { status: src.status, items: clone(src.items), note: '' }; saveDay(date);
@@ -1800,6 +1835,7 @@ document.addEventListener('click', async ev => {
 document.addEventListener('input', ev => {
   const t = ev.target; if (!S.settings) return;
   if (TR.input(t)) return;
+  if (t.id === 'plancopy-q' && SH && SH.scope === 'plancopy') { SH.q = t.value; drawPlanCopy(true); return; }
   if (t.id === 'so-type' && S.so) { S.so.typed = t.value; const bt = $('so-go'); if (bt) bt.disabled = t.value.trim().toUpperCase() !== 'DELETE'; return; }
   if (SH && SH.recipe && (t.id === 'rc-n' || t.id === 'rc-w' || t.id === 'rc-s' || t.dataset.rcg)) {
     const r = SH.recipe;
