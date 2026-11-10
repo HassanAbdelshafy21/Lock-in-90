@@ -43,7 +43,7 @@ const ARS = {
   'On plan': 'على الخطة', 'Off target': 'بعيد عن الهدف', 'Off plan': 'خارج الخطة', 'Today': 'اليوم', 'No food logged yet.': 'لم يُسجل طعام بعد.',
   'Last 7 days · {0} sessions · {1} cardio min': 'آخر 7 أيام · {0} جلسات · {1} دقيقة كارديو', '{0} min': '{0} دقيقة', '{0} sets': '{0} مجموعة', '{0} t': '{0} طن', '+ {0} min cardio': '+ {0} دقيقة كارديو', '~{0} kcal': '~{0} سعرة',
   'Marked done': 'تم التعليم كمكتمل', 'Not done': 'لم يتم', 'Missed': 'فات', '{0} records': '{0} أرقام', '1 record': 'رقم جديد', 'Cardio': 'كارديو', 'Calisthenics': 'كاليسثينكس', 'Nothing logged in the last 7 days.': 'لا شيء مسجل في آخر 7 أيام.',
-  '{0}-day overview': 'نظرة {0} يوم', 'Each square is one day. Tap a day for details.': 'كل مربع يوم. اضغط على يوم للتفاصيل.', 'Done': 'تم', 'Partly': 'جزئيًا', 'Rest / not logged': 'راحة / غير مسجل', 'Sleep {0} h': 'النوم {0} س',
+  '{0}-day overview': 'نظرة {0} يوم', 'Each square is one day. Tap a day for details.': 'كل مربع يوم. اضغط على يوم للتفاصيل.', 'Done': 'تم', 'Partly': 'جزئيًا', 'Rest / not logged': 'راحة / غير مسجل', 'Before the start': 'قبل البداية', 'Sleep {0} h': 'النوم {0} س',
   'Locked in': 'مكتمل', 'In progress': 'جارٍ', 'Missed: {0}': 'فات: {0}', 'note': 'ملاحظة', 'Latest note': 'آخر ملاحظة',
   '{0} / {1} kcal': '{0} / {1} سعرة', '{0} kcal': '{0} سعرة', '{0} g protein': '{0} جم بروتين', '{0} / {1} g protein': '{0} / {1} جم بروتين', '{0} / {1} L water': '{0} / {1} لتر مياه', 'Rest day': 'يوم راحة', 'Supps {0}/{1}': 'المكملات {0}/{1}', '{0} h sleep': '{0} ساعة نوم', '{0} kg': '{0} كجم', '{0} g': '{0} جم',
   'Measurements': 'القياسات', '{0} check-ins': '{0} متابعات', '1 check-in': 'متابعة واحدة', 'waist': 'الوسط', 'chest': 'الصدر', 'hips': 'الأرداف', 'arm': 'الذراع', 'neck': 'الرقبة', 'waist ÷ height': 'الوسط ÷ الطول', 'under 0.5 is healthy': 'أقل من 0.5 صحي', '{0} cm': '{0} سم',
@@ -150,12 +150,12 @@ function weightCard(s, wts) {
 }
 
 function foodCard(days) {
-  const n = days.length, W = 640, H = 150, base = 124, top = 10, slot = W / n, bw = Math.min(28, slot * 0.6);
+  const n = days.length, off = Math.max(0, 14 - n), W = 640, H = 150, base = 124, top = 10, slot = W / Math.max(14, n), bw = Math.min(28, slot * 0.6);
   const kmax = Math.max(500, ...days.map(d => Math.max(d.k, d.tk))) * 1.1, pmax = Math.max(50, ...days.map(d => Math.max(d.p, d.tp))) * 1.1;
   const yk = v => base - v / kmax * (base - top), yp = v => base - v / pmax * (base - top);
   let g = '';
   days.forEach((d, i) => {
-    const cx = slot * i + slot / 2, x = cx - bw / 2, live = d.now && !d.ok;
+    const cx = slot * (i + off) + slot / 2, x = cx - bw / 2, live = d.now && !d.ok;
     const col = !d.k ? 'var(--line)' : live ? 'var(--line)' : d.ms === 'off' ? 'var(--bad)' : d.tk && Math.abs(d.k - d.tk) / d.tk > 0.1 ? 'var(--gold)' : 'var(--good)';
     const h = Math.max(d.k ? 3 : 2, base - yk(d.k));
     g += `<g><title>${wd(d.d)} ${fmt(d.d)} · ${d.tk ? t('{0} / {1} kcal', nf(d.k), nf(d.tk)) : t('{0} kcal', nf(d.k))} · ${d.tp ? t('{0} / {1} g protein', d.p, d.tp) : t('{0} g protein', d.p)}</title>
@@ -166,8 +166,8 @@ function foodCard(days) {
   });
   const lg = days.filter(d => d.k > 0 && (!d.now || d.ok)), tk = avg(lg.map(d => d.tk).filter(Boolean)), tp = avg(lg.map(d => d.tp).filter(Boolean));
   const offN = days.reduce((a, d) => a + (d.off || 0), 0);
-  return `<section class="card span2"><h2>${t('Calories and protein')}</h2><span class="sub">${t('Bars: calories · dashes: plan · dark mark: protein · last {0} days', n)}</span>
-  <svg class="chart" viewBox="0 0 ${W} ${H}" width="100%" height="${H}" role="img" aria-label="Calories and protein by day">${g}</svg>
+  return `<section class="card span2"><h2>${t('Calories and protein')}</h2><span class="sub">${t('Bars: calories · dashes: plan · dark mark: protein · last {0} days', Math.max(14, n))}</span>
+  ${days.some(d => d.k > 0) ? `<svg class="chart" viewBox="0 0 ${W} ${H}" width="100%" height="${H}" role="img" aria-label="Calories and protein by day">${g}</svg>` : ''}
   <div class="leg"><span><i style="background:var(--good)"></i>${t('On plan')}</span><span><i style="background:var(--gold)"></i>${t('Off target')}</span><span><i style="background:var(--bad)"></i>${t('Off plan')}</span><span><i style="background:var(--line)"></i>${t('Today')}</span></div>
   ${lg.length ? `<div class="kp"><div><b class="num">${nf(avg(lg.map(d => d.k)))}</b><span>${tk ? t('avg kcal (plan {0})', nf(tk)) : t('avg kcal')}</span></div><div><b class="num">${t('{0} g', Math.round(avg(lg.map(d => d.p))))}</b><span>${tp ? t('avg protein (plan {0} g)', Math.round(tp)) : t('avg protein')}</span></div><div><b class="num">${offN}</b><span>${t('off-plan meals')}</span></div></div>` : `<p class="hint">${t('No food logged yet.')}</p>`}</section>`;
 }
@@ -200,12 +200,14 @@ const cellOf = (d, k, goal) => {
 };
 function heatCard(s, days) {
   const goal = s.sleepGoal || 7.5, rows = [['Meals', 'm'], ['Water', 'w'], ['Training', 't'], ['Supps', 's'], [t('Sleep {0} h', goal), 'z']];
-  let h = `<span></span>` + days.map((d, i) => `<button class="dh${d.now ? ' on' : ''}" data-i="${i}" aria-label="${fmt(d.d, { weekday: 'long', day: 'numeric', month: 'long' })}">${wd(d.d).slice(0, AR() ? 3 : 1)}<em class="num">${pd(d.d).getDate()}</em></button>`).join('');
-  rows.forEach(([lab, k]) => { h += `<span class="lab">${k === 'z' ? lab : t(lab)}</span>` + days.map((d, i) => `<button class="c c-${cellOf(d, k, goal)}${d.now ? ' today' : ''}" data-i="${i}" tabindex="-1" aria-hidden="true"></button>`).join(''); });
+  const pad = Math.max(0, 14 - days.length), pre = Array.from({ length: pad }, (_, j) => addD(days[0].d, j - pad));
+  const padH = pre.map(d => `<span class="dh pad">${wd(d).slice(0, AR() ? 3 : 1)}<em class="num">${pd(d).getDate()}</em></span>`).join(''), padC = '<span class="c pad"></span>'.repeat(pad);
+  let h = `<span></span>` + padH + days.map((d, i) => `<button class="dh${d.now ? ' on' : ''}" data-i="${i}" aria-label="${fmt(d.d, { weekday: 'long', day: 'numeric', month: 'long' })}">${wd(d.d).slice(0, AR() ? 3 : 1)}<em class="num">${pd(d.d).getDate()}</em></button>`).join('');
+  rows.forEach(([lab, k]) => { h += `<span class="lab">${k === 'z' ? lab : t(lab)}</span>` + padC + days.map((d, i) => `<button class="c c-${cellOf(d, k, goal)}${d.now ? ' today' : ''}" data-i="${i}" tabindex="-1" aria-hidden="true"></button>`).join(''); });
   const ln = days.slice().reverse().find(d => d.note);
-  return `<section class="card span3"><h2>${t('{0}-day overview', days.length)}</h2><span class="sub">${t('Each square is one day. Tap a day for details.')}</span>
-  <div class="heat" id="heat" style="grid-template-columns:minmax(56px,auto) repeat(${days.length},minmax(0,1fr))">${h}</div>
-  <div class="leg"><span><i style="background:var(--good)"></i>${t('Done')}</span><span><i style="background:var(--bad)"></i>${t('Missed')}</span><span><i style="background:var(--gold)"></i>${t('Partly')}</span><span><i style="background:var(--s2)"></i>${t('Rest / not logged')}</span></div>
+  return `<section class="card span3"><h2>${t('{0}-day overview', 14)}</h2><span class="sub">${t('Each square is one day. Tap a day for details.')}</span>
+  <div class="heat" id="heat" style="grid-template-columns:minmax(56px,auto) repeat(14,minmax(0,1fr))">${h}</div>
+  <div class="leg"><span><i style="background:var(--good)"></i>${t('Done')}</span><span><i style="background:var(--bad)"></i>${t('Missed')}</span><span><i style="background:var(--gold)"></i>${t('Partly')}</span><span><i style="background:var(--s2)"></i>${t('Rest / not logged')}</span>${pad ? `<span><i class="padk"></i>${t('Before the start')}</span>` : ''}</div>
   <div class="det" id="det"></div>${ln ? `<div class="note" id="lnote"><b>${t('Latest note')} · ${wd(ln.d)} ${fmt(ln.d)}</b><span class="keep">${esc(ln.note)}</span></div>` : ''}</section>`;
 }
 function dayDetail(d) {

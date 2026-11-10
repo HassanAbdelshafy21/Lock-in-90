@@ -51,6 +51,7 @@ button{font:inherit;color:inherit;cursor:pointer}
 .c-g{background:var(--good)!important}.c-b{background:var(--bad)!important}.c-y{background:var(--gold)!important}
 .heat .lab{color:var(--ink2);font-size:11.5px;white-space:nowrap;padding-inline-end:4px}
 .heat .dh{border:0;background:none;padding:2px 0;text-align:center;color:var(--mut);font-size:10px;line-height:1.15;display:grid;border-radius:6px;min-width:0}.heat .dh em{font-style:normal;font-size:10.5px;color:var(--ink2)}.heat .dh.on em{color:var(--ink);font-weight:700}
+.heat .c.pad{background:transparent;border:1.5px dashed var(--line)}.heat .dh.pad{opacity:.45}.leg i.padk{border:1.5px dashed var(--mut);background:transparent}
 .heat .today{outline:2px solid var(--gold);outline-offset:1px}
 .heat .sel:not(.dh){box-shadow:0 0 0 2px var(--s),0 0 0 4px var(--ink)}.heat .dh.sel{background:var(--s2)}.heat .dh.sel em{color:var(--ink);font-weight:700}
 .det{margin-top:12px;border-top:1px solid var(--line);padding-top:12px}
@@ -69,7 +70,7 @@ button{font:inherit;color:inherit;cursor:pointer}
 :root[dir="rtl"] .num{unicode-bidi:isolate}
 :root[dir="rtl"] .ring b .num{direction:ltr}
 button:focus-visible{outline:2px solid var(--water);outline-offset:2px}
-@media (min-width:900px){.grid{grid-template-columns:1.1fr 1fr 1fr;margin:-48px auto 0;max-width:1080px;padding:0 24px}.span2{grid-column:span 2}.span3{grid-column:1/-1}.hdr{padding:22px 0 70px}.hdr .in{padding:0 24px}.score{align-content:center}.heat .c{aspect-ratio:auto;height:26px}}
+@media (min-width:900px){.grid{grid-template-columns:1.1fr 1fr 1fr;margin:-48px auto 0;max-width:1080px;padding:0 24px}.span2{grid-column:span 2}.span3{grid-column:1/-1}.hdr{padding:22px 0 70px}.hdr .in{padding:0 24px}.score{align-content:center}.heat .c{aspect-ratio:auto;height:26px}.heat{max-width:900px}}
 @media (max-width:380px){.score{grid-template-columns:1fr;justify-items:center}.score>div:last-child{width:100%}}
 </style>
 </head>
