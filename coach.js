@@ -32,6 +32,7 @@ function chart(pts, goal) {
 }
 
 function render(s) {
+  s.weights = (s.weights || []).map(x => Array.isArray(x) ? x : [x.d, x.w]);
   document.documentElement.lang = LANG === 'ar' ? 'ar' : 'en'; document.documentElement.dir = LANG === 'ar' ? 'rtl' : 'ltr';
   const days = s.days || [], last7 = days.slice(-7), closed7 = last7.filter((d, i) => i < last7.length - 1 || d.ok);
   const logged = last7.filter(d => d.k > 0), wts = (s.weights || []);

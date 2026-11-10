@@ -4,7 +4,7 @@ import { initializeFirestore, getFirestore, persistentLocalCache, persistentMult
 import * as C from './core.js';
 import { trText, addFoodNames } from './i18n.js';
 import * as TR from './train.js';
-const APP_VERSION = '23 · attempt count fix';
+const APP_VERSION = '24 · coach link fix';
 import { EX, POSE, figSVG, YT, LINES, FOODS, COACH_MEALS, DEFAULT_SUPPS, COACH_ENC, SLOTS, CARDIO_MODES } from './data.js';
 addFoodNames(FOODS);
 
@@ -25,7 +25,7 @@ const REMINDERS = [['morning', '9:00 · Plan for the day'], ['water', 'Every 2 h
 const FBV = '10.14.1', fbApp = initializeApp(FIREBASE);
 const auth = getAuth(fbApp);
 let db;
-try { db = initializeFirestore(fbApp, { localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }) }); }
+try { db = initializeFirestore(fbApp, { ignoreUndefinedProperties: true, localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }) }); }
 catch (e) { db = getFirestore(fbApp); }
 
 /* ---------- state ---------- */
@@ -187,7 +187,6 @@ function draw() {
   if (!S.settings) { $('top').innerHTML = topIdle(); $('top').parentElement.hidden = false; m.innerHTML = welcomeHTML(); return; }
   if (S.quickWater && S.got.days) { S.quickWater = false; const dd = dayDoc(today()); dd.water = (dd.water || 0) + 250; saveDay(today()); S.view = 'today'; history.replaceState(null, '', '#today'); toast(`+250 ml · ${L(C.waterTotal(dd))} L today`); }
   privacyMigrate();
-  C.TT.gym.sub = isOwner() ? 'Your PPLUL day. Tick it after you log it in Lyfta.' : 'Tick it once your gym workout is done.';
   if (S.quickSport && S.got.days) { S.quickSport = false; S.view = 'today'; history.replaceState(null, '', '#today'); setTimeout(openSport, 50); }
   const R = C.computeRun(S.settings, S.days, now());
   $('top').innerHTML = ''; $('top').parentElement.hidden = true;
@@ -640,7 +639,7 @@ function coachData(R) {
   Object.values(S.checkins).forEach(c => c.weight && pts.push([c.date, c.weight])); Object.keys(S.days).forEach(k => S.days[k].weight && pts.push([k, S.days[k].weight]));
   pts.sort((a, b) => a[0] < b[0] ? -1 : 1);
   const cks = Object.values(S.checkins).sort((a, b) => a.date < b.date ? -1 : 1).slice(-6).map(c => ({ date: c.date, waist: c.waist || null, chest: c.chest || null, arm: c.arm || null, hips: c.hips || null, neck: c.neck || null, weight: c.weight || null }));
-  return { name: boardName(), lang: LANG(), day: Math.min(R.dayNum, 90), streak: R.done, best: R.best, attempt: R.attemptNo, startDate: st.startDate, startWeight: st.startWeight || null, goalWeight: st.goalWeight || null, height: st.height || null, days, weights: pts.slice(-90), checkins: cks };
+  return { name: boardName(), lang: LANG(), day: Math.min(R.dayNum, 90), streak: R.done, best: R.best, attempt: R.attemptNo, startDate: st.startDate, startWeight: st.startWeight || null, goalWeight: st.goalWeight || null, height: st.height || null, days, weights: pts.slice(-90).map(([d, w]) => ({ d, w })), checkins: cks };
 }
 function coachPublish(R) {
   const c = S.settings && S.settings.coach;
@@ -648,7 +647,7 @@ function coachPublish(R) {
   const data = coachData(R), key = JSON.stringify(data);
   if (key === S.coachLast) return;
   S.coachLast = key; clearTimeout(coachT);
-  coachT = setTimeout(() => setDoc(doc(db, `shares/${c.token}`), { ...data, owner: uid(), updated: Date.now() }).catch(e => { S.coachLast = null; if (e && e.code === 'permission-denied') toast('The coach link needs the updated Firestore rules (see the README).'); }), 2500);
+  coachT = setTimeout(() => setDoc(doc(db, `shares/${c.token}`), { ...data, owner: uid(), updated: Date.now() }).then(() => { S.coachOk = Date.now(); }).catch(e => { S.coachLast = null; console.warn('coach link', e); if (e && e.code !== 'permission-denied') toast('Couldn’t update the coach link. It retries automatically.'); if (e && e.code === 'permission-denied') toast('The coach link needs the updated Firestore rules (see the README).'); }), 2500);
 }
 const coachURL = () => `${location.origin}${location.pathname.replace(/index\.html$/, '')}coach.html?t=${S.settings.coach.token}`;
 function coachSetupHTML(st) {
