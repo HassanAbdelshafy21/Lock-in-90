@@ -4,7 +4,7 @@ import { initializeFirestore, getFirestore, persistentLocalCache, persistentMult
 import * as C from './core.js';
 import { trText, addFoodNames } from './i18n.js';
 import * as TR from './train.js';
-const APP_VERSION = '22 · reset attempt count';
+const APP_VERSION = '23 · attempt count fix';
 import { EX, POSE, figSVG, YT, LINES, FOODS, COACH_MEALS, DEFAULT_SUPPS, COACH_ENC, SLOTS, CARDIO_MODES } from './data.js';
 addFoodNames(FOODS);
 
@@ -439,7 +439,7 @@ async function startOverAct(act, v) {
   if (o.wo) { Object.keys(S.acts || {}).forEach(k => { deleteDoc(doc(db, up('activities/' + k))).catch(() => { }); delete S.acts[k]; }); }
   if (o.body) { Object.keys(S.checkins || {}).forEach(k => { writes.push(['checkins/' + k, { deleted: true }]); delete S.checkins[k]; }); Object.keys(S.photos || {}).forEach(k => { writes.push(['photos/' + k, { deleted: true }]); delete S.photos[k]; }); }
   if (o.plans) { st.meals = BLANK_MEALS(); st.planLog = { ...(st.planLog || {}), [t]: BLANK_MEALS() }; st.supps = []; st.train = null; st.ifthen = []; st.focus = {}; st.planNoted = false; }
-  st.attemptBase = o.attempts ? 0 : (st.attemptBase || 0) + R.attemptNo; st.startDate = t; delete st.attemptStart;
+  st.attemptBase = o.attempts ? 0 : R.attemptNo; st.startDate = t; delete st.attemptStart;
   if (o.days || o.wo) { st.cheered = {}; }
   const newAttempt = o.attempts ? 1 : R.attemptNo + 1;
   if (o.tell && st.group) st.resetNote = { date: t, attempt: newAttempt }; else delete st.resetNote;
