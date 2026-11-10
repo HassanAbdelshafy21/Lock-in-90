@@ -4,7 +4,7 @@ import { initializeFirestore, getFirestore, persistentLocalCache, persistentMult
 import * as C from './core.js';
 import { trText, addFoodNames } from './i18n.js';
 import * as TR from './train.js';
-const APP_VERSION = '21 · restore your meal plan';
+const APP_VERSION = '22 · reset attempt count';
 import { EX, POSE, figSVG, YT, LINES, FOODS, COACH_MEALS, DEFAULT_SUPPS, COACH_ENC, SLOTS, CARDIO_MODES } from './data.js';
 addFoodNames(FOODS);
 
@@ -399,7 +399,7 @@ async function shareMonthImage(mk) {
 }
 
 /* ---------- start over (choose what to clear) ---------- */
-function openStartOver() { S.so = { preset: 'attempt', days: false, wo: false, body: false, plans: false, tell: !!S.settings.group, typed: '' }; drawStartOver(); }
+function openStartOver() { S.so = { preset: 'attempt', days: false, wo: false, body: false, plans: false, attempts: false, tell: !!S.settings.group, typed: '' }; drawStartOver(); }
 function soCounts() {
   const t = today(); let days = 0, wos = 0;
   Object.entries(S.days).forEach(([k, d]) => { if (k > t) return; if ((d.meals && Object.keys(d.meals).length) || d.water || (d.extras || []).length) days++; if (d.wo) wos++; });
@@ -412,15 +412,16 @@ function drawStartOver() {
   $('sheet').innerHTML = `<div class="sheet" role="dialog" aria-modal="true" aria-label="Start over"><div class="grab" aria-hidden="true"></div><div class="spread"><h2>Start over</h2><button class="x" data-act="closesheet" aria-label="Close">×</button></div><p class="hint">Pick what to clear. You’re on attempt ${R.attemptNo}, day ${Math.min(R.dayNum, 90)}.</p>
   <div class="pre"><button data-act="so-pre" data-v="attempt" aria-pressed="${o.preset === 'attempt'}"><b>New attempt</b><small>Day 1 again, keep all history</small></button><button data-act="so-pre" data-v="clean" aria-pressed="${o.preset === 'clean'}"><b>Clean slate</b><small>Clear everything except your group</small></button></div>
   <div class="ck lockd"><i>✓</i><span><b>Restart the 90 days</b><small>Day 1 starts today. Always included.</small></span></div>
+  ${ck('attempts', 'Reset the attempt count', 'Back to attempt 1, as if you never started (good after testing)')}
   ${ck('days', 'Logged days', 'Meals, water, supplements, notes, sleep')}${ck('wo', 'Workouts', 'Sets, records, cardio and sports')}${ck('body', 'Body', 'Weight, measurements, check-ins and progress photos')}${ck('plans', 'My plans', 'Meal plan, supplements, training plan, if-then plans')}
   ${S.settings.group ? ck('tell', 'Tell my group', `Friends see “${esc(boardName())} started over” and get a notification`) : ''}
   <div class="keep"><b>Always kept:</b> your account, ${S.settings.group ? `group ${esc(S.settings.group)} and friends, ` : ''}notifications, language and coach link.</div>
   ${del ? `<p class="hint danger-t"><b>This deletes ${[o.days && `${n.days} logged days`, o.wo && `${n.wos} workouts`, o.body && `${n.photos} photos and ${n.checkins} check-ins`, o.plans && 'your plans'].filter(Boolean).join(', ')} for good.</b> <button class="link" data-act="export">Download a backup first</button></p><input class="in" id="so-type" placeholder="Type DELETE to confirm" autocomplete="off" autocapitalize="characters" value="${esc(o.typed)}">` : ''}
-  <button class="btn ${del ? 'danger' : 'primary'} block" data-act="so-go" ${del && o.typed.trim().toUpperCase() !== 'DELETE' ? 'disabled' : ''} id="so-go">${del ? 'Delete and start over' : `Start attempt ${R.attemptNo + 1}`}</button></div>`;
+  <button class="btn ${del ? 'danger' : 'primary'} block" data-act="so-go" ${del && o.typed.trim().toUpperCase() !== 'DELETE' ? 'disabled' : ''} id="so-go">${del ? 'Delete and start over' : `Start attempt ${o.attempts ? 1 : R.attemptNo + 1}`}</button></div>`;
 }
 async function startOverAct(act, v) {
   const o = S.so; if (!o) return;
-  if (act === 'so-pre') { Object.assign(o, v === 'clean' ? { preset: 'clean', days: true, wo: true, body: true, plans: true } : { preset: 'attempt', days: false, wo: false, body: false, plans: false }); o.typed = ''; return drawStartOver(); }
+  if (act === 'so-pre') { Object.assign(o, v === 'clean' ? { preset: 'clean', days: true, wo: true, body: true, plans: true, attempts: true } : { preset: 'attempt', days: false, wo: false, body: false, plans: false, attempts: false }); o.typed = ''; return drawStartOver(); }
   if (act === 'so-tog') { o[v] = !o[v]; o.preset = o.days && o.wo && o.body && o.plans ? 'clean' : !o.days && !o.wo && !o.body && !o.plans ? 'attempt' : 'custom'; return drawStartOver(); }
   if (act !== 'so-go') return;
   const del = o.days || o.wo || o.body || o.plans; if (del && o.typed.trim().toUpperCase() !== 'DELETE') return;
@@ -438,12 +439,14 @@ async function startOverAct(act, v) {
   if (o.wo) { Object.keys(S.acts || {}).forEach(k => { deleteDoc(doc(db, up('activities/' + k))).catch(() => { }); delete S.acts[k]; }); }
   if (o.body) { Object.keys(S.checkins || {}).forEach(k => { writes.push(['checkins/' + k, { deleted: true }]); delete S.checkins[k]; }); Object.keys(S.photos || {}).forEach(k => { writes.push(['photos/' + k, { deleted: true }]); delete S.photos[k]; }); }
   if (o.plans) { st.meals = BLANK_MEALS(); st.planLog = { ...(st.planLog || {}), [t]: BLANK_MEALS() }; st.supps = []; st.train = null; st.ifthen = []; st.focus = {}; st.planNoted = false; }
-  st.attemptBase = (st.attemptBase || 0) + R.attemptNo; st.startDate = t; delete st.attemptStart;
-  if (o.tell && st.group) st.resetNote = { date: t, attempt: R.attemptNo + 1 }; else delete st.resetNote;
+  st.attemptBase = o.attempts ? 0 : (st.attemptBase || 0) + R.attemptNo; st.startDate = t; delete st.attemptStart;
+  if (o.days || o.wo) { st.cheered = {}; }
+  const newAttempt = o.attempts ? 1 : R.attemptNo + 1;
+  if (o.tell && st.group) st.resetNote = { date: t, attempt: newAttempt }; else delete st.resetNote;
   for (let i = 0; i < writes.length; i += 400) { const bt = writeBatch(db); writes.slice(i, i + 400).forEach(([p, v]) => bt.set(doc(db, up(p)), stamp(p, clone(v)))); try { await bt.commit(); } catch (e) { toast('Part of the reset didn’t save. Try again online.'); } }
   saveSettings();
-  if (o.tell && st.group) { Object.keys(S.board || {}).filter(id => id !== uid()).forEach(id => setDoc(doc(db, `groups/${st.group}/members/${id}/cheers/${uid()}_${t}_reset`), { from: uid(), name: boardName(), kind: 'reset', date: t, at: Date.now(), pushed: false, attempt: R.attemptNo + 1 }).catch(() => { })); S.boardLast = null; }
-  S.so = null; closeSheet(); toast(`Attempt ${R.attemptNo + 1}. Day 1 is today.`); go('today');
+  if (o.tell && st.group) { Object.keys(S.board || {}).filter(id => id !== uid()).forEach(id => setDoc(doc(db, `groups/${st.group}/members/${id}/cheers/${uid()}_${t}_reset`), { from: uid(), name: boardName(), kind: 'reset', date: t, at: Date.now(), pushed: false, attempt: newAttempt }).catch(() => { })); S.boardLast = null; }
+  S.so = null; S.meSec = null; closeSheet(); toast(`Attempt ${newAttempt}. Day 1 is today.`); go('today');
 }
 
 /* ---------- if-then plans (implementation intentions) + reflection after a miss ---------- */
