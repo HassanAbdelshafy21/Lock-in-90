@@ -4,7 +4,7 @@ import { initializeFirestore, getFirestore, persistentLocalCache, persistentMult
 import * as C from './core.js';
 import { trText, addFoodNames } from './i18n.js';
 import * as TR from './train.js';
-const APP_VERSION = '25.1 · coach grid fix';
+const APP_VERSION = '25.2 · no yesterday after a reset';
 import { EX, POSE, figSVG, YT, LINES, FOODS, COACH_MEALS, DEFAULT_SUPPS, COACH_ENC, SLOTS, CARDIO_MODES } from './data.js';
 addFoodNames(FOODS);
 
@@ -55,7 +55,8 @@ function applyLang() {
   if (ar) trNode(document.body);
 }
 new MutationObserver(ms => { if (LANG() !== 'ar') return; ms.forEach(m => m.addedNodes.forEach(trNode)); }).observe(document.body, { childList: true, subtree: true });
-const editDate = () => { const g = now().hour < 3 ? C.addDays(today(), -1) : null; return S.editDate && S.editDate === g ? g : today(); };
+const graceDay = () => { const st = S.settings, y = C.addDays(today(), -1); if (now().hour >= 3 || !st || !st.startDate) return null; const a = st.attemptStart && st.attemptStart > st.startDate ? st.attemptStart : st.startDate; return y >= a ? y : null; };
+const editDate = () => { const g = graceDay(); return S.editDate && S.editDate === g ? g : today(); };
 const uid = () => S.user && S.user.uid;
 const up = p => `users/${uid()}/${p}`;
 const kc = v => Math.round(v || 0);
@@ -883,7 +884,7 @@ function upNextHTML(R, d, date, P) {
   return '';
 }
 function todayHTML(R) {
-  const t = today(), n = now(), grace = n.hour < 3 ? C.addDays(t, -1) : null, date = editDate();
+  const t = today(), n = now(), grace = graceDay(), date = editDate();
   const st = S.settings, d = S.days[date] || {}, ev = C.evalDay(st, d, date), P = ev.P;
   const line = LINES[((R.dayNum - 1) % LINES.length + LINES.length) % LINES.length];
   const mealsBad = P.off.length || P.offExtra.length;

@@ -176,8 +176,9 @@ export const sportModMin = s => (s.min || 0) * (sportById(s.sport).met[s.lvl ?? 
 export function computeRun(settings, days, now) {
   if (!settings || !settings.startDate) return null;
   const today = now.date;
-  const grace = now.hour < 3 ? addDays(today, -1) : null;
   let attemptStart = settings.attemptStart && settings.attemptStart > settings.startDate ? settings.attemptStart : settings.startDate;
+  // the 3 am grace window only applies to a day inside the challenge (not the day before a start or reset)
+  const grace = now.hour < 3 && addDays(today, -1) >= attemptStart ? addDays(today, -1) : null;
   const attempts = [];
   let lastFail = null;
   for (let d = attemptStart; d < today; d = addDays(d, 1)) {
