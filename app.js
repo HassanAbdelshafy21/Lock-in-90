@@ -4,7 +4,7 @@ import { initializeFirestore, getFirestore, persistentLocalCache, persistentMult
 import * as C from './core.js';
 import { trText, addFoodNames } from './i18n.js';
 import * as TR from './train.js';
-const APP_VERSION = '29.1 · Day and week settings';
+const APP_VERSION = '30 · add a whole meal';
 import { EX, POSE, figSVG, YT, LINES, FOODS, COACH_MEALS, DEFAULT_SUPPS, COACH_ENC, SLOTS, CARDIO_MODES } from './data.js';
 import { BRANDS, BRAND_BY_CODE } from './brands.js';
 addFoodNames(FOODS); addFoodNames(BRANDS);
@@ -988,7 +988,7 @@ function macrosHTML(tot, target) {
 }
 const dropTag = it => C.isDrink(it) ? ' <span class="state s-water">counts as water</span>' : '';
 function itemsEditor(items, scope) {
-  return `<div class="items">${items.length ? items.map((it, i) => { const m = C.itemMacros(it); return `<div class="itm"><div class="nm">${esc(it.name)}${dropTag(it)}${comboPartsHTML(it)}<small>${it.su ? esc(amountTxt(it)) + ' · ' : ''}${kc(m.k)} kcal · ${C.round(m.p, 1)} g protein</small></div><label class="g"><input type="number" inputmode="decimal" min="0" step="any" value="${C.round(it.g, 1)}" data-grams="${scope}:${i}" aria-label="${esc(it.name)} ${C.isDrink(it) ? 'millilitres' : 'grams'}">${C.isDrink(it) ? 'ml' : 'g'}</label><button class="x" data-act="rmitem" data-v="${scope}:${i}" aria-label="Remove ${esc(it.name)}">×</button></div>`; }).join('') : '<p class="hint">No foods yet.</p>'}
+  return `<div class="items">${items.length ? items.map((it, i) => { const m = C.itemMacros(it); return `<div class="itm"><div class="nm">${it.meal ? '🍔 ' : ''}${esc(it.name)}${it.cheat ? ' <span class="state s-cheat">🍕 cheat meal</span>' : ''}${dropTag(it)}${comboPartsHTML(it)}${it.meal ? `<button class="link" data-act="mbedit" data-v="${scope}|${i}">Edit meal</button>` : ''}<small>${it.su ? esc(amountTxt(it)) + ' · ' : ''}${kc(m.k)} kcal · ${C.round(m.p, 1)} g protein</small></div>${it.meal ? '<span class="g"></span>' : `<label class="g"><input type="number" inputmode="decimal" min="0" step="any" value="${C.round(it.g, 1)}" data-grams="${scope}:${i}" aria-label="${esc(it.name)} ${C.isDrink(it) ? 'millilitres' : 'grams'}">${C.isDrink(it) ? 'ml' : 'g'}</label>`}<button class="x" data-act="rmitem" data-v="${scope}:${i}" aria-label="Remove ${esc(it.name)}">×</button></div>`; }).join('') : '<p class="hint">No foods yet.</p>'}
   <div class="row"><button class="btn small" data-act="addfood" data-v="${scope}">+ Add food</button>${/^(plan|meal):/.test(scope) ? `<button class="btn small" data-act="mealfat" data-v="${scope}">${mealFatItem(items) ? '🧈 Change cooking fat' : '🧈 + Cooking fat'}</button>` : ''}</div></div>`;
 }
 function mealsHTML(date, d, P) {
@@ -1024,7 +1024,7 @@ function mealsHTML(date, d, P) {
   });
   h += `</div>`;
   const ex = d.extras || [];
-  h += `<div class="sgrp"><span class="sub">Extras outside your meals</span>${ex.length ? `<div class="items">${ex.map((it, i) => { const mm = C.itemMacros(it); return `<div class="itm"><div class="nm">${esc(it.name)} ${it.off ? '<span class="state s-bad">off-plan</span>' : ''}${dropTag(it)}${comboPartsHTML(it)}<small>${it.su ? esc(amountTxt(it)) + ' · ' : ''}${kc(mm.k)} kcal · ${C.round(mm.p, 1)} g protein</small></div><label class="g"><input type="number" inputmode="decimal" min="0" step="any" value="${C.round(it.g, 1)}" data-grams="extra:${i}" aria-label="${esc(it.name)} ${C.isDrink(it) ? 'millilitres' : 'grams'}">${C.isDrink(it) ? 'ml' : 'g'}</label><button class="x" data-act="rmitem" data-v="extra:${i}" aria-label="Remove">×</button></div>`; }).join('')}</div>` : ''}
+  h += `<div class="sgrp"><span class="sub">Extras outside your meals</span>${ex.length ? `<div class="items">${ex.map((it, i) => { const mm = C.itemMacros(it); return `<div class="itm"><div class="nm">${it.meal ? '🍔 ' : ''}${esc(it.name)} ${it.cheat ? '<span class="state s-cheat">🍕 cheat meal</span>' : it.off ? '<span class="state s-bad">off-plan</span>' : ''}${dropTag(it)}${comboPartsHTML(it)}${it.meal ? `<button class="link" data-act="mbedit" data-v="extra|${i}">Edit meal</button>` : ''}<small>${it.su ? esc(amountTxt(it)) + ' · ' : ''}${kc(mm.k)} kcal · ${C.round(mm.p, 1)} g protein</small></div>${it.meal ? '<span class="g"></span>' : `<label class="g"><input type="number" inputmode="decimal" min="0" step="any" value="${C.round(it.g, 1)}" data-grams="extra:${i}" aria-label="${esc(it.name)} ${C.isDrink(it) ? 'millilitres' : 'grams'}">${C.isDrink(it) ? 'ml' : 'g'}</label>`}<button class="x" data-act="rmitem" data-v="extra:${i}" aria-label="Remove">×</button></div>`; }).join('')}</div>` : ''}
   <div class="row"><button class="btn small" data-act="addfood" data-v="extra">+ Log an extra (drink, snack, cheat)</button><button class="btn small" data-act="crave">🌊 Craving? Wait 10 minutes</button></div></div></section>`;
   return h;
 }
@@ -1480,9 +1480,9 @@ function openSheet(scope) {
   $('sheet').innerHTML = `<div class="sheet" role="dialog" aria-modal="true" aria-label="Add food"><div class="spread"><h2>Add food</h2><button class="x" data-act="closesheet" aria-label="Close">×</button></div>
   <input class="in" id="fs-q" placeholder="Search foods or brands (English or عربي)" autocomplete="off">
   <div class="fchips" id="fs-chips" role="group" aria-label="Show"></div>
-  <div class="row"><button class="btn small" data-act="scan">Scan barcode</button><button class="btn small" data-act="custom">From a label</button><button class="btn small" data-act="recipe">New recipe</button></div>
+  <div class="row"><button class="btn small mbb" data-act="mealbuild">🍔 Add a meal</button><button class="btn small" data-act="scan">Scan barcode</button><button class="btn small" data-act="custom">From a label</button><button class="btn small" data-act="recipe">New recipe</button></div>
   <div id="fs-body"></div></div>`;
-  $('fs-q').addEventListener('input', () => { if (SH && SH.recipe) SH.recipeAdd = true; SH.usda = []; SH.offr = []; SH.offMsg = ''; sheetSearch(); });
+  $('fs-q').addEventListener('input', () => { if (SH && SH.recipe) SH.recipeAdd = true; if (SH && SH.mb) SH.mbAdd = true; SH.usda = []; SH.offr = []; SH.offMsg = ''; sheetSearch(); });
   sheetSearch();
   setTimeout(() => $('fs-q') && $('fs-q').focus(), 50);
 }
@@ -1642,13 +1642,14 @@ function resRow(f, i, src) {
 function sheetSearch() {
   if (!SH) return;
   if (SH.recipe && !SH.recipeAdd && !SH.picked) return drawRecipe();
+  if (SH.mb && !SH.mbAdd && !SH.picked) return drawMealBuild();
   const q = ($('fs-q') || {}).value || '';
   SH.results = libMatches(q, SH.filt);
   if (SH.picked) return drawPicked();
   const ch = $('fs-chips'); if (ch) ch.innerHTML = FILTS.filter(([k]) => k !== 'friends' || friendFoods().length || SH.filt === 'friends').map(([k, l]) => `<button data-act="ffilt" data-v="${k}" aria-pressed="${SH.filt === k}">${l}</button>`).join('');
   const lib = SH.results.map((f, i) => (f.sec && (i === 0 || SH.results[i - 1].sec !== f.sec) ? `<span class="sub">${f.sec}</span>` : '') + resRow(f, i, 'lib')).join('');
   const online = q.trim() ? `<div class="online"><button class="btn small" data-act="offsearch">🛒 Search Egyptian products online</button><button class="btn small" data-act="usda">Search USDA</button></div>${SH.offMsg ? `<p class="hint">${esc(SH.offMsg)}</p>` : ''}` : `<p class="hint">Type a food or a brand (Balance, Juhayna, Rich Bake…). Products sold in Egypt can also be searched online.</p>`;
-  $('fs-body').innerHTML = (!q.trim() && !SH.recipe && SH.scope !== 'focus' ? usualsHTML() : '') + (SH.recipe ? `<div class="rc-banner"><span>Pick an ingredient for <b>${esc(SH.recipe.name || 'your recipe')}</b></span><button class="link" data-act="rcback">Back to recipe</button></div>` : '')
+  $('fs-body').innerHTML = (!q.trim() && !SH.recipe && !SH.mb && SH.scope !== 'focus' ? usualsHTML() : '') + (SH.mb ? `<div class="rc-banner"><span>Pick a food for <b>${esc(SH.mb.name || 'your meal')}</b></span><button class="link" data-act="mbback">Back to the meal</button></div>` : '') + (SH.recipe ? `<div class="rc-banner"><span>Pick an ingredient for <b>${esc(SH.recipe.name || 'your recipe')}</b></span><button class="link" data-act="rcback">Back to recipe</button></div>` : '')
     + `<div class="results">${lib || (q.trim() ? '<p class="hint">Nothing in the app’s foods. Try searching online below, scan the barcode, or add it from the label.</p>' : '')}
     ${SH.offr.length ? '<span class="sub">Sold in Egypt · Open Food Facts</span>' + SH.offr.map((f, i) => resRow(f, i, 'off')).join('') : ''}
     ${SH.usda.length ? '<span class="sub">USDA results</span>' + SH.usda.map((f, i) => resRow(f, i, 'usda')).join('') : ''}</div>${online}`;
@@ -1693,7 +1694,7 @@ function drawPicked() {
   ${srcTxt ? `<p class="hint src">${esc(srcTxt)}</p>` : ''}
   <label class="chk"><input type="checkbox" id="fs-drink" ${SH.drink ? 'checked' : ''}> It’s a drink: count it toward my water</label>
   ${SH.scope === 'extra' ? `<div class="seg wide" role="group" aria-label="Plan status"><button class="clean" data-act="extraoff" data-v="0" aria-pressed="${!SH.off}">Allowed by plan</button><button class="off" data-act="extraoff" data-v="1" aria-pressed="${SH.off}">Off-plan</button></div>` : ''}
-  <div class="row"><button class="btn primary grow" data-act="addpicked">${SH.recipe && SH.recipeAdd ? 'Add to recipe' : 'Add'}</button><button class="btn ghost" data-act="unpick">Back</button>${f.src === 'usda' || f.src === 'off' || f.src === 'friend' ? '<button class="btn small" data-act="savefood">Save to my foods</button>' : ''}${mineF && inGroup ? `<button class="btn small" data-act="sharefood">${mineF.shared ? 'Shared with group ✓' : 'Share with my group'}</button>` : ''}</div></div>`;
+  <div class="row"><button class="btn primary grow" data-act="addpicked">${SH.recipe && SH.recipeAdd ? 'Add to recipe' : SH.mb && SH.mbAdd ? 'Add to meal' : 'Add'}</button><button class="btn ghost" data-act="unpick">Back</button>${f.src === 'usda' || f.src === 'off' || f.src === 'friend' ? '<button class="btn small" data-act="savefood">Save to my foods</button>' : ''}${mineF && inGroup ? `<button class="btn small" data-act="sharefood">${mineF.shared ? 'Shared with group ✓' : 'Share with my group'}</button>` : ''}</div></div>`;
   const gi = $('fs-g'); if (gi) gi.addEventListener('input', e => { SH.g = parseFloat(e.target.value) || 0; $('fs-nums').innerHTML = pickedNums(); });
 }
 function saveFood(f) {
@@ -1868,6 +1869,30 @@ async function startScan() {
 }
 function stopCam() { if (SH && SH.stream) { SH.stream.getTracks().forEach(t => t.stop()); SH.stream = null; } }
 /* recipe builder: ingredients (cooked or raw, as you weigh them) + the finished dish weight -> one food per 100 g */
+/* a whole meal (burger + fries + drink) logged as one item, as an extra or instead of a planned meal */
+function mbItem(mb) {
+  const items = mb.items, g = items.reduce((a, x) => a + (x.g || 0), 0) || 1, per = {};
+  ['k', 'p', 'c', 'f'].forEach(k => per[k] = C.round(items.reduce((a, x) => a + (x.per[k] || 0) * x.g / 100, 0) / g * 100, 3));
+  const ml = items.reduce((a, x) => a + (C.isDrink(x) ? (x.ml ?? x.g ?? 0) : x.meal ? (x.ml || 0) : 0), 0);
+  return { name: (mb.name || 'Meal').trim().slice(0, 40), g: C.round(g, 1), per, parts: clone(items), meal: true, ...(ml ? { ml: Math.round(ml) } : {}) };
+}
+function mbRead() { const mb = SH.mb; if (!mb) return mb; const n = $('mb-n'); if (n) mb.name = n.value; const sv = $('mb-save'); if (sv) mb.save = sv.checked; document.querySelectorAll('[data-mbg]').forEach(e => { const it = mb.items[+e.dataset.mbg], g = parseFloat(e.value); if (it && g > 0 && g !== it.g) { if (it.parts) scaleCombo(it, g); it.g = g; delete it.su; delete it.sq; } }); return mb; }
+function drawMealBuild() {
+  const mb = SH.mb, st = S.settings, date = editDate(), d = S.days[date] || {}, plan = C.plannedMeals(st, d, date), it = mb.items.length ? mbItem(mb) : null, tot = it ? C.itemMacros(it) : null, na = it ? microOf(it, 'na') : null;
+  const cheatOn = !!(st.cheat && st.cheat.on), cu = cheatOn ? C.cheatsUsed(st, S.days, date, date) : null, todayUsed = C.pillars(st, d, date).cheats - (mb.edit && mb.wasCheat ? 1 : 0), left = cu ? Math.max(0, cu.max - cu.used - todayUsed) : 0;
+  if (mb.counts === 'cheat' && !left) mb.counts = 'ok';
+  $('fs-body').innerHTML = `<div class="picked mbuild"><b>${mb.edit ? 'Edit meal' : 'Add a meal'}</b>
+  <input class="in" id="mb-n" maxlength="40" placeholder="e.g. Burger meal" value="${esc(mb.name)}" aria-label="Meal name">
+  <div class="items">${mb.items.map((x, i) => `<div class="itm"><div class="nm">${esc(x.name.split(' + ')[0])}${comboPartsHTML(x)}<small>${esc(amountTxt(x))} · ${kc(C.itemMacros(x).k)} kcal</small></div><label class="g"><input type="number" inputmode="decimal" min="0" step="any" value="${C.round(x.g, 1)}" data-mbg="${i}" aria-label="Amount of ${esc(x.name)}"><span>${C.isDrink(x) ? 'ml' : 'g'}</span></label><button class="x" data-act="mbrm" data-v="${i}" aria-label="Remove ${esc(x.name)}">×</button></div>`).join('') || '<p class="hint">Add each food you ate, with its serving.</p>'}</div>
+  <button class="btn small" data-act="mbadd">+ Add a food to this meal</button>
+  ${tot ? `<div class="mbtot"><b class="num">${kc(tot.k)} kcal</b><div class="mac4 num"><div><b>${C.round(tot.p, 1)} g</b><span>protein</span></div><div><b>${C.round(tot.c, 1)} g</b><span>carbs</span></div><div><b>${C.round(tot.f, 1)} g</b><span>fat</span></div><div><b>${na ? nfm(na.v * it.g / 100) + ' mg' : '—'}</b><span>sodium</span></div></div></div>` : ''}
+  ${mb.edit ? '' : `<label class="setup-r"><span>Where</span><select class="in" id="mb-where"><option value="extra" ${mb.where === 'extra' ? 'selected' : ''}>Extra meal</option>${plan.map(m => `<option value="${esc(m.id)}" ${mb.where === m.id ? 'selected' : ''}>Instead of ${esc(m.name)}${m.time ? ' · ' + esc(m.time) : ''}</option>`).join('')}</select></label>`}
+  ${!mb.edit || mb.where === 'extra' ? `<span class="sub">Counts as</span><div class="seg wide" role="group" aria-label="Counts as"><button class="clean" data-act="mbcount" data-v="ok" aria-pressed="${mb.counts === 'ok'}">Allowed by plan</button><button class="off" data-act="mbcount" data-v="off" aria-pressed="${mb.counts === 'off'}">Off-plan</button>${cheatOn ? `<button class="cheat" data-act="mbcount" data-v="cheat" aria-pressed="${mb.counts === 'cheat'}" ${left || mb.counts === 'cheat' ? '' : 'disabled'}>🍕 Free cheat meal</button>` : ''}</div>
+  ${cheatOn ? `<p class="hint">${left ? (left === 1 ? '1 free cheat meal left this week.' : `${left} free cheat meals left this week.`) + ' The day still counts.' : 'No free cheat meal left this week.'}</p>` : ''}
+  ${mb.counts === 'off' ? '<p class="hint">Off-plan means today won’t count.</p>' : ''}` : ''}
+  ${mb.edit ? '' : `<label class="chk"><input type="checkbox" id="mb-save" ${mb.save ? 'checked' : ''}> Save to my usuals</label>`}
+  <div class="row"><button class="btn primary grow" data-act="mbsave" ${mb.items.length ? '' : 'disabled'}>${mb.edit ? 'Save changes' : `Add ${esc((mb.name || 'meal').trim().toLowerCase() || 'meal')}`}</button><button class="btn ghost" data-act="mbcancel">Cancel</button></div></div>`;
+}
 function drawRecipe() {
   const r = SH.recipe, sumG = r.items.reduce((s, it) => s + (it.g || 0), 0), tot = C.sumItems(r.items), W = r.total || sumG;
   const per = W ? { k: tot.k / W * 100, p: tot.p / W * 100 } : { k: 0, p: 0 };
@@ -2115,6 +2140,24 @@ document.addEventListener('click', async ev => {
   if (act === 'scan') return startScan();
   if (act === 'codego') { const c = ($('fs-code').value || '').trim(); if (c) lookupBarcode(c); return; }
   if (act === 'custom') { SH.cf = null; SH.picked = null; return customForm(v || null); }
+  if (act === 'mealbuild') { SH.mb = { name: '', items: [], where: SH.scope === 'extra' || !/^meal:/.test(SH.scope) ? 'extra' : SH.scope.slice(5), counts: 'ok', save: false }; SH.mbAdd = false; SH.picked = null; $('fs-q').value = ''; return drawMealBuild(); }
+  if (act === 'mbadd') { mbRead(); SH.mbAdd = true; SH.picked = null; $('fs-q').value = ''; sheetSearch(); $('fs-q').focus(); return; }
+  if (act === 'mbback') { SH.mbAdd = false; SH.picked = null; $('fs-q').value = ''; return drawMealBuild(); }
+  if (act === 'mbrm') { mbRead(); SH.mb.items.splice(+v, 1); return drawMealBuild(); }
+  if (act === 'mbwhere') { mbRead(); SH.mb.where = v; return drawMealBuild(); }
+  if (act === 'mbcount') { mbRead(); SH.mb.counts = v; return drawMealBuild(); }
+  if (act === 'mbcancel') { if (SH.mb && SH.mb.edit) return closeSheet(); SH.mb = null; SH.mbAdd = false; $('fs-q').value = ''; return sheetSearch(); }
+  if (act === 'mbsave') {
+    const mb = mbRead(); if (!mb.items.length) return;
+    if (!(mb.name || '').trim()) mb.name = mb.items.map(x => x.name.split(',')[0].split(' + ')[0]).slice(0, 2).join(' + ');
+    const item = mbItem(mb), D = editDate(), dd = S.days[D] = S.days[D] || { date: D };
+    if (mb.counts === 'cheat') item.cheat = true;
+    if (mb.edit) { const list = itemList(mb.edit.scope); if (list && list[mb.edit.i]) { const old = list[mb.edit.i]; list[mb.edit.i] = { ...item, ...(old.off ? { off: true } : {}), ...(old.cheat ? { cheat: true } : {}), ...(mb.edit.scope === 'extra' ? { off: mb.counts === 'off', cheat: mb.counts === 'cheat' } : {}) }; saveScope(mb.edit.scope); } closeSheet(); toast('Meal updated.'); return draw(); }
+    if (mb.save) { S.settings.usuals = [{ id: 'u' + Date.now().toString(36), name: item.name, item: clone(item), off: mb.counts === 'off' }, ...(S.settings.usuals || []).filter(x => x.name !== item.name)].slice(0, 8); delete S.settings.usuals[0].item.cheat; saveSettings(); }
+    if (mb.where === 'extra') { addItemTo('extra', { ...item, off: mb.counts === 'off' }); }
+    else { dd.meals = dd.meals || {}; const cur = dd.meals[mb.where] || {}; dd.meals[mb.where] = { status: mb.counts === 'cheat' ? 'cheat' : mb.counts === 'off' ? 'off' : 'swap', items: [item], note: cur.note || '' }; delete item.cheat; if (dd.skip) delete dd.skip[mb.where]; saveDay(D); }
+    closeSheet(); toast(mb.counts === 'cheat' ? 'Added as your free cheat meal. The day still counts.' : `Added ${item.name}.`); return draw();
+  }
   if (act === 'recipe') { SH.recipe = { name: '', items: [], total: null, serv: null }; SH.recipeAdd = false; SH.picked = null; $('fs-q').value = ''; return drawRecipe(); }
   if (act === 'rcadd') { SH.recipeAdd = true; SH.picked = null; $('fs-q').value = ''; sheetSearch(); $('fs-q').focus(); return; }
   if (act === 'rcback') { SH.recipeAdd = false; SH.picked = null; $('fs-q').value = ''; return drawRecipe(); }
@@ -2143,6 +2186,10 @@ document.addEventListener('click', async ev => {
   }
   if (act === 'extraoff') { SH.off = v === '1'; return drawPicked(); }
   if (act === 'savefood') { const { sec, fav, recent, lastG, lastSu, lastSq, by, ...b } = SH.picked; const f = { ...b, units: unitsOf(b), drink: !!SH.drink, id: 'c' + Date.now().toString(36), src: 'custom', from: b.src }; delete f.shared; saveFood(f); SH.picked = { ...f }; toast('Saved to your foods.'); return drawPicked(); }
+  if (act === 'addpicked' && SH.mb && SH.mbAdd) {
+    const item = pickedItem(); if (!(item.g > 0)) return toast('Enter an amount first.');
+    SH.mb.items.push(item); SH.picked = null; SH.mbAdd = false; $('fs-q').value = ''; return drawMealBuild();
+  }
   if (act === 'addpicked' && SH.recipe && SH.recipeAdd) {
     const f = SH.picked; SH.recipe.items.push({ fid: f.id, name: f.name, g: C.round(SH.g, 1), per: { ...f.per }, ...(f.like ? { like: f.like } : {}) });
     SH.picked = null; SH.recipeAdd = false; $('fs-q').value = ''; return drawRecipe();
@@ -2221,6 +2268,7 @@ document.addEventListener('click', async ev => {
     case 'unskip': delete d().skip[v]; saveDay(D); break;
     case 'addfood': return openSheet(v);
     case 'mealfat': return openFatSheet(v);
+    case 'mbedit': { const [sc, ix] = v.split('|'), list = itemList(sc), it = list && list[+ix]; if (!it) return; openSheet(sc); SH.mb = { name: it.name, items: clone(it.parts || []), where: 'extra', counts: it.cheat ? 'cheat' : it.off ? 'off' : 'ok', edit: { scope: sc, i: +ix }, wasCheat: !!it.cheat }; if (sc !== 'extra') SH.mb.where = 'meal'; return drawMealBuild(); }
     case 'rmitem': { const i = v.lastIndexOf(':'), scope = v.slice(0, i); itemList(scope).splice(+v.slice(i + 1), 1); saveScope(scope); break; }
     case 'water': { const dd = d(); dd.water = Math.max(0, Math.min(12000, (dd.water || 0) + (+b.dataset.n))); saveDay(D); break; }
     case 'train': { const dd = d(); dd.trainingDone = !dd.trainingDone; dd.trainingSource = dd.trainingDone ? 'manual' : null; saveDay(D); break; }
@@ -2342,6 +2390,8 @@ document.addEventListener('change', ev => {
   if (SH && SH.scope === 'sport' && (t.id === 'sp-min' || t.id === 'sp-hr' || t.id === 'sp-count')) { if (t.id === 'sp-min') SH.min = Math.max(0, Math.min(600, parseInt(t.value, 10) || 0)); else if (t.id === 'sp-hr') SH.hr = parseInt(t.value, 10) || null; else SH.counts = t.checked; return drawSport(); }
   if (t.id === 'ck-photo') { const f = t.files && t.files[0], n = $('ck-photo-name'); if (n) n.textContent = f ? 'Photo ready: ' + f.name.slice(0, 28) : 'Take or choose a photo'; return; }
   if (t.id === 'bud-pct' || t.id === 'bud-floor' || t.id === 'bud-cheat' || t.id === 'bud-trim') { const b = C.budgetOf(S.settings); if (t.id === 'bud-pct') b.maxPct = +t.value; else if (t.id === 'bud-floor') b.floor = +t.value; else if (t.id === 'bud-cheat') b.cheat = t.checked; else b.trim = t.checked; S.settings.budget = b; saveSettings(); return draw(); }
+  if (t.id === 'mb-save' && SH && SH.mb) { SH.mb.save = t.checked; return; }
+  if (t.id === 'mb-where' && SH && SH.mb) { mbRead(); SH.mb.where = t.value; return drawMealBuild(); }
   if (t.id === 'fs-usual' && SH) { SH.saveUsual = t.checked; return drawPicked(); }
   if (t.id === 'fs-usual-n' && SH) { SH.usualName = t.value; return; }
   if (t.id === 'fs-remfat' && SH) { SH.remFat = t.checked; return; }

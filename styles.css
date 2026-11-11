@@ -927,3 +927,7 @@ details.why{margin-top:6px}
 .wbars i.tgt{position:absolute;left:-2px;right:-2px;border-top:2px dashed var(--ink);opacity:.35}
 .wbars span{font-size:10.5px;color:var(--muted);text-align:center;height:14px}
 .note2.info{border-color:var(--water)}
+.mbuild{display:grid;gap:10px}.mbtot{background:var(--primary);color:var(--on-primary);border-radius:16px;padding:11px 12px;display:grid;gap:8px}.mbtot>b{font-size:16px}.mbtot .mac4 div{background:rgba(255,255,255,.1)}.mbtot .mac4 span{color:inherit;opacity:.75}
+.btn.mbb{border-color:var(--primary);color:var(--ink);background:var(--accent-soft)}
+.state.s-cheat{background:var(--warn-soft);color:var(--ink)}
+.nm .link{display:block;font-size:12px;margin:2px 0}

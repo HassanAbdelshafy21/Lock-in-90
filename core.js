@@ -200,8 +200,8 @@ export function drinkMl(day) {
   if (!day) return 0;
   let ml = 0;
   const meals = day.meals || {}, skip = day.skip || {};
-  Object.keys(meals).forEach(id => { const md = meals[id]; if (!md || !md.status || skip[id]) return; (md.items || []).forEach(it => { if (isDrink(it)) ml += it.ml ?? it.g ?? 0; }); });
-  (day.extras || []).forEach(it => { if (isDrink(it)) ml += it.ml ?? it.g ?? 0; });
+  Object.keys(meals).forEach(id => { const md = meals[id]; if (!md || !md.status || skip[id]) return; (md.items || []).forEach(it => { if (isDrink(it)) ml += it.ml ?? it.g ?? 0; else if (it.meal && it.ml) ml += it.ml; }); });
+  (day.extras || []).forEach(it => { if (isDrink(it)) ml += it.ml ?? it.g ?? 0; else if (it.meal && it.ml) ml += it.ml; });
   return Math.round(ml);
 }
 export const waterTotal = day => ((day && day.water) || 0) + drinkMl(day);
@@ -223,8 +223,8 @@ export function pillars(settings, day, date) {
   const tt = trainType(settings, date);
   const req = (settings.supps || []).filter(s => s.req);
   const sDone = req.filter(s => (day.supps || {})[s.id]).length;
-  const offExtra = cheatDay ? [] : (day.extras || []).filter(x => x.off);
-  return { pm, clean, off, offExtra, cheatDay, cheats: cheatDay ? 1 : pm.filter(m => meals[m.id] && meals[m.id].status === 'cheat').length, wDrinks, mealsOk: pm.length > 0 && clean === pm.length && !offExtra.length, goal, w, tt, trained: tt === 'rest' || !!day.trainingDone, req, sDone };
+  const offExtra = cheatDay ? [] : (day.extras || []).filter(x => x.off && !(x.cheat && settings.cheat && settings.cheat.on));
+  return { pm, clean, off, offExtra, cheatDay, cheats: cheatDay ? 1 : pm.filter(m => meals[m.id] && meals[m.id].status === 'cheat').length + (day.extras || []).filter(x => x.cheat).length, wDrinks, mealsOk: pm.length > 0 && clean === pm.length && !offExtra.length, goal, w, tt, trained: tt === 'rest' || !!day.trainingDone, req, sDone };
 }
 /* your own week: starts Saturday, the weekday you started the challenge (default), or a day you pick (0 = Sunday) */
 export function weekStartDay(settings) {
@@ -242,7 +242,7 @@ export function cheatsUsed(settings, days, date, exceptDate) {
   const win = cheatWindow(settings, date); let n = 0; const on = [];
   for (let d = win.from; d <= win.to; d = addDays(d, 1)) {
     const day = days[d]; if (!day) continue;
-    const k = day.cheatDay ? 1 : Object.values(day.meals || {}).filter(m => m && m.status === 'cheat').length;
+    const k = day.cheatDay ? 1 : Object.values(day.meals || {}).filter(m => m && m.status === 'cheat').length + (day.extras || []).filter(x => x && x.cheat).length;
     if (k && d !== exceptDate) { n += k; on.push(d); }
   }
   return { ...win, used: n, on, left: Math.max(0, win.max - n) };
