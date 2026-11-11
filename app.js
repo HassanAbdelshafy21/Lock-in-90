@@ -4,7 +4,7 @@ import { initializeFirestore, getFirestore, persistentLocalCache, persistentMult
 import * as C from './core.js';
 import { trText, addFoodNames } from './i18n.js';
 import * as TR from './train.js';
-const APP_VERSION = '30 · add a whole meal';
+const APP_VERSION = '30.1 · coach page shows today';
 import { EX, POSE, figSVG, YT, LINES, FOODS, COACH_MEALS, DEFAULT_SUPPS, COACH_ENC, SLOTS, CARDIO_MODES } from './data.js';
 import { BRANDS, BRAND_BY_CODE } from './brands.js';
 addFoodNames(FOODS); addFoodNames(BRANDS);
@@ -654,7 +654,7 @@ function coachData(R) {
     const dt = C.addDays(t, -i); if (dt < st.startDate) continue;
     const d = S.days[dt] || {}, ev = C.evalDay(st, d, dt), P = ev.P, tot = C.dayTotals(st, d), tg = C.planTargets(st, d, dt);
     days.push({ d: dt, now: dt === t, ok: ev.complete, k: Math.round(tot.k), p: Math.round(tot.p), tk: Math.round(tg.k), tp: Math.round(tg.p), w: C.round(P.w / 1000, 2), wg: C.round(P.goal / 1000, 2), tr: P.tt === 'rest' ? 'rest' : d.trainingDone ? 'done' : 'no', tt: C.TT[P.tt].label, sup: [P.sDone, P.req.length], wt: d.weight || null, sl: d.sleep || null, sp: (d.sports || []).reduce((s, x) => s + (x.min || 0), 0), off: P.off.length + P.offExtra.length, miss: ev.complete ? [] : ev.missing, ...(st.coach && st.coach.notes && d.note ? { note: d.note } : {}),
-      ms: !P.pm.length ? 'none' : P.off.length || P.offExtra.length ? 'off' : P.cheats && P.mealsOk ? 'cheat' : P.mealsOk ? 'ok' : P.clean ? 'part' : 'none', sw: Object.values(d.meals || {}).filter(m => m && m.status === 'swap').length,
+      ms: !P.pm.length ? 'none' : P.off.length || P.offExtra.length ? 'off' : P.cheats && P.mealsOk ? 'cheat' : P.mealsOk ? 'ok' : P.clean ? 'part' : 'none', sw: Object.values(d.meals || {}).filter(m => m && m.status === 'swap').length, mc: [P.clean.length, P.pm.length],
       ss: !P.req.length ? 'none' : P.sDone >= P.req.length ? 'ok' : P.sDone ? 'part' : 'miss', wo: coachWo(d, dt), cd: (d.stamina || []).reduce((a, x) => a + (x.min || 0), 0), spl: (d.sports || []).map(x => ({ n: (C.SPORTS.find(z => z.id === x.sport) || {}).name || x.name || 'Sport', m: x.min || 0, k: Math.round(x.kcal || 0) })) });
   }
   const pts = []; if (st.startWeight) pts.push([st.startDate, st.startWeight]);

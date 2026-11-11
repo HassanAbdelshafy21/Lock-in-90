@@ -26,7 +26,7 @@ const sgn = v => (v > 0 ? '+' : v < 0 ? '−' : '') + Math.abs(r1(v));
 const ARS = {
   'Coach view': 'عرض الكابتن', 'Day {0} of 90': 'اليوم {0} من 90', 'Updated just now': 'تم التحديث الآن', 'Updated {0} min ago': 'تم التحديث منذ {0} دقيقة', 'Updated {0} h ago': 'تم التحديث منذ {0} ساعة', 'Updated {0} days ago': 'تم التحديث منذ {0} أيام',
   'started {0}': 'البداية {0}', 'Streak': 'السلسلة', 'Best': 'الأفضل', 'Attempt {0}': 'المحاولة {0}', 'Goal {0} kg': 'الهدف {0} كجم', 'Rank': 'الرتبة',
-  'This week': 'هذا الأسبوع', 'days locked in': 'أيام مكتملة', 'Meals': 'الوجبات', 'Water': 'المياه', 'Training': 'التمرين', 'Supps': 'المكملات', 'Sleep': 'النوم',
+  'This week': 'هذا الأسبوع', 'Today so far': 'اليوم حتى الآن', 'To do': 'لم يتم بعد', 'days locked in': 'أيام مكتملة', 'Meals': 'الوجبات', 'Water': 'المياه', 'Training': 'التمرين', 'Supps': 'المكملات', 'Sleep': 'النوم',
   'Needs attention': 'يحتاج انتباه', 'From the last 7 days': 'من آخر 7 أيام', 'All on track': 'كل شيء على المسار', 'Nothing to flag in the last 7 days.': 'لا شيء يستدعي الانتباه في آخر 7 أيام.',
   'Water missed {0} times': 'فاتت المياه {0} مرات', 'Water missed once': 'فاتت المياه مرة', '{0} of {1} L': '{0} من {1} لتر',
   'Protein under target {0} days': 'البروتين أقل من الهدف {0} أيام', 'Protein under target once': 'البروتين أقل من الهدف مرة', 'Avg {0} g vs {1} g plan.': 'المتوسط {0} جم مقابل {1} جم في الخطة.', 'Meals swapped {0} times.': 'تم تبديل وجبات {0} مرات.',
@@ -40,7 +40,7 @@ const ARS = {
   'per week': 'في الأسبوع', 'of body / week': 'من الجسم / أسبوع', 'to goal at this rate': 'للهدف بهذا المعدل', '~{0} wks': '~{0} أسابيع', 'goal {0}': 'الهدف {0}', 'Not enough weigh-ins yet.': 'لا توجد وزنات كافية بعد.',
   'Calories and protein': 'السعرات والبروتين', 'Bars: calories · dashes: plan · dark mark: protein · last {0} days': 'الأعمدة: السعرات · الشرطات: الخطة · العلامة الداكنة: البروتين · آخر {0} يوم',
   'avg kcal (plan {0})': 'متوسط السعرات (الخطة {0})', 'avg kcal': 'متوسط السعرات', 'avg protein (plan {0} g)': 'متوسط البروتين (الخطة {0} جم)', 'avg protein': 'متوسط البروتين', 'off-plan meals': 'وجبات خارج الخطة',
-  'On plan': 'على الخطة', 'Off target': 'بعيد عن الهدف', 'Off plan': 'خارج الخطة', 'Today': 'اليوم', 'No food logged yet.': 'لم يُسجل طعام بعد.',
+  'On plan': 'على الخطة', 'Off target': 'بعيد عن الهدف', 'Off plan': 'خارج الخطة', 'Today': 'اليوم', 'No food logged yet.': 'لم يُسجل طعام بعد.', 'kcal today so far (plan {0})': 'سعرات اليوم حتى الآن (الخطة {0})', 'kcal today so far': 'سعرات اليوم حتى الآن', 'protein so far (plan {0} g)': 'البروتين حتى الآن (الخطة {0} جم)', 'protein so far': 'البروتين حتى الآن',
   'Last 7 days · {0} sessions · {1} cardio min': 'آخر 7 أيام · {0} جلسات · {1} دقيقة كارديو', '{0} min': '{0} دقيقة', '{0} sets': '{0} مجموعة', '{0} t': '{0} طن', '+ {0} min cardio': '+ {0} دقيقة كارديو', '~{0} kcal': '~{0} سعرة',
   'Marked done': 'تم التعليم كمكتمل', 'Not done': 'لم يتم', 'Missed': 'فات', '{0} records': '{0} أرقام', '1 record': 'رقم جديد', 'Cardio': 'كارديو', 'Calisthenics': 'كاليسثينكس', 'Nothing logged in the last 7 days.': 'لا شيء مسجل في آخر 7 أيام.',
   '{0}-day overview': 'نظرة {0} يوم', 'Each square is one day. Tap a day for details.': 'كل مربع يوم. اضغط على يوم للتفاصيل.', 'Done': 'تم', 'Partly': 'جزئيًا', 'Rest / not logged': 'راحة / غير مسجل', 'Before the start': 'قبل البداية', 'Sleep {0} h': 'النوم {0} س',
@@ -88,6 +88,15 @@ function weekCard(s, days) {
   const plan = base.filter(d => d.tr !== 'rest'), trN = plan.filter(d => d.tr === 'done').length;
   const sup = pct(base, { has: d => d.ss !== 'none', ok: d => d.ss === 'ok' });
   const C = 2 * Math.PI * 50, fr = of ? okN / of : 0;
+  if (!closed.length && wk.length) { // first day of the week: show today so far instead of 0%
+    const d = wk[wk.length - 1], mc = d.mc || [0, 0], bar2 = (lab, f, txt, col) => `<div><span>${t(lab)}</span><i><em style="width:${Math.round(Math.min(1, f || 0) * 100)}%;background:${col}"></em></i><span class="num">${txt}</span></div>`;
+    return `<section class="card score"><div class="ring"><svg viewBox="0 0 120 120" width="120" height="120" aria-hidden="true"><circle cx="60" cy="60" r="50" fill="none" stroke="var(--s2)" stroke-width="12"/></svg><b><span class="num">${okN}/1</span><small>${t('days locked in')}</small></b></div>
+    <div><h2>${t('Today so far')}</h2><span class="sub">${t('This week')} · ${wd(sat)} ${fmt(sat)} – ${wd(fri)} ${fmt(fri)}</span><div class="pb">
+    ${bar2('Meals', mc[1] ? mc[0] / mc[1] : 0, mc[1] ? `${mc[0]}/${mc[1]}` : '—', 'var(--good)')}
+    ${bar2('Water', d.wg ? d.w / d.wg : 0, `${d.w}/${d.wg} L`, 'var(--water)')}
+    ${bar2('Training', d.tr === 'done' || d.tr === 'rest' ? 1 : 0, d.tr === 'rest' ? t('Rest day') : d.tr === 'done' ? t('Done') : t('To do'), 'var(--gold)')}
+    ${bar2('Supps', d.sup && d.sup[1] ? d.sup[0] / d.sup[1] : 0, d.sup && d.sup[1] ? `${d.sup[0]}/${d.sup[1]}` : '—', 'var(--supp)')}</div></div></section>`;
+  }
   const bar = (lab, f, txt, col) => `<div><span>${t(lab)}</span><i><em style="width:${Math.round((f ?? 0) * 100)}%;background:${col}"></em></i><span class="num">${txt}</span></div>`;
   return `<section class="card score"><div class="ring"><svg viewBox="0 0 120 120" width="120" height="120" aria-hidden="true"><circle cx="60" cy="60" r="50" fill="none" stroke="var(--s2)" stroke-width="12"/>${fr ? `<circle cx="60" cy="60" r="50" fill="none" stroke="var(--good)" stroke-width="12" stroke-linecap="round" stroke-dasharray="${(C * fr).toFixed(1)} ${C.toFixed(1)}" transform="rotate(-90 60 60)"/>` : ''}</svg><b><span class="num">${okN}/${of}</span><small>${t('days locked in')}</small></b></div>
   <div><h2>${t('This week')}</h2><span class="sub">${wd(sat)} ${fmt(sat)} – ${wd(fri)} ${fmt(fri)}</span><div class="pb">
@@ -166,12 +175,13 @@ function foodCard(days) {
     ${d.p ? `<rect x="${(cx - 6).toFixed(1)}" y="${(yp(d.p) - 2).toFixed(1)}" width="12" height="4" rx="2" fill="var(--ink)"/>` : ''}
     <text x="${cx.toFixed(1)}" y="${H - 8}" text-anchor="middle" font-size="10" fill="${d.now ? 'var(--ink)' : 'var(--mut)'}" font-weight="${d.now ? 700 : 400}">${pd(d.d).getDate()}</text></g>`;
   });
-  const lg = days.filter(d => d.k > 0 && (!d.now || d.ok)), tk = avg(lg.map(d => d.tk).filter(Boolean)), tp = avg(lg.map(d => d.tp).filter(Boolean));
+  // averages use finished days; on a first day (or with nothing else logged) today so far is shown instead
+  const done = days.filter(d => d.k > 0 && (!d.now || d.ok)), td = days.find(d => d.now && d.k > 0), lg = done.length ? done : td ? [td] : [], soFar = !done.length && !!td, tk = avg(lg.map(d => d.tk).filter(Boolean)), tp = avg(lg.map(d => d.tp).filter(Boolean));
   const offN = days.reduce((a, d) => a + (d.off || 0), 0);
   return `<section class="card span2"><h2>${t('Calories and protein')}</h2><span class="sub">${t('Bars: calories · dashes: plan · dark mark: protein · last {0} days', Math.max(14, n))}</span>
   ${days.some(d => d.k > 0) ? `<svg class="chart" viewBox="0 0 ${W} ${H}" width="100%" height="${H}" role="img" aria-label="Calories and protein by day">${g}</svg>` : ''}
   <div class="leg"><span><i style="background:var(--good)"></i>${t('On plan')}</span><span><i style="background:var(--gold)"></i>${t('Off target')}</span><span><i style="background:var(--bad)"></i>${t('Off plan')}</span><span><i style="background:var(--line)"></i>${t('Today')}</span></div>
-  ${lg.length ? `<div class="kp"><div><b class="num">${nf(avg(lg.map(d => d.k)))}</b><span>${tk ? t('avg kcal (plan {0})', nf(tk)) : t('avg kcal')}</span></div><div><b class="num">${t('{0} g', Math.round(avg(lg.map(d => d.p))))}</b><span>${tp ? t('avg protein (plan {0} g)', Math.round(tp)) : t('avg protein')}</span></div><div><b class="num">${offN}</b><span>${t('off-plan meals')}</span></div></div>` : `<p class="hint">${t('No food logged yet.')}</p>`}</section>`;
+  ${lg.length ? `<div class="kp"><div><b class="num">${nf(avg(lg.map(d => d.k)))}</b><span>${soFar ? (tk ? t('kcal today so far (plan {0})', nf(tk)) : t('kcal today so far')) : tk ? t('avg kcal (plan {0})', nf(tk)) : t('avg kcal')}</span></div><div><b class="num">${t('{0} g', Math.round(avg(lg.map(d => d.p))))}</b><span>${soFar ? (tp ? t('protein so far (plan {0} g)', Math.round(tp)) : t('protein so far')) : tp ? t('avg protein (plan {0} g)', Math.round(tp)) : t('avg protein')}</span></div><div><b class="num">${offN}</b><span>${t('off-plan meals')}</span></div></div>` : `<p class="hint">${t('No food logged yet.')}</p>`}</section>`;
 }
 
 function trainCard(days) {
@@ -194,7 +204,7 @@ function trainCard(days) {
 
 const cellOf = (d, k, goal) => {
   const live = d.now && !d.ok;
-  if (k === 'm') return d.ms === 'cheat' ? 'c' : d.ms === 'ok' ? 'g' : d.ms === 'off' ? 'b' : live || d.ms === 'none' ? 'n' : 'y';
+  if (k === 'm') return d.ms === 'cheat' ? 'c' : d.ms === 'ok' ? 'g' : d.ms === 'off' ? 'b' : d.ms === 'part' ? 'y' : 'n';
   if (k === 'w') return d.w >= d.wg ? 'g' : live ? (d.w > 0 ? 'y' : 'n') : d.w >= d.wg * 0.75 ? 'y' : 'b';
   if (k === 't') return d.tr === 'rest' ? 'n' : d.tr === 'done' ? 'g' : live ? 'n' : 'b';
   if (k === 's') return d.ss === 'ok' ? 'g' : d.ss === 'none' ? 'n' : d.ss === 'part' ? 'y' : live ? 'n' : 'b';
