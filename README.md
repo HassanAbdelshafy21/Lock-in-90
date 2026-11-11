@@ -22,6 +22,7 @@ One screen for the day. A navy scoreboard shows four rings around the day number
   - **More nutrients:** sodium (and salt), sugar, saturated fat, fiber, potassium and calcium for each food and for the day, against WHO limits, with the foods that gave you the most sodium.
   - **Add from a label:** per 100 g or per serving, sodium or salt, your own servings, and a check that catches typos. You can photograph the nutrition table and the phone reads the numbers (on the phone itself, English and Arabic). Also barcode scan, USDA search and recipes.
   - **Friends' foods:** share a food you added and everyone in your group can log it.
+- **Your day, your clock:** the new day starts at midnight by default, or at Fajr (worked out daily for 20 Egyptian cities) or a set time, so logging at 1 am still counts for the day you're in.
 - **Habits:** a morning commitment, if-then plans for risky moments, a 3-tap reflection after a missed day, a 10-minute craving tool, a sleep goal with a bedtime reminder, and one weekly focus goal.
 - **Ramadan mode:** a Suhoor / Iftar / after-Taraweeh plan, water paced from iftar to fajr, and an iftar countdown.
 
