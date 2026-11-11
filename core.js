@@ -247,6 +247,40 @@ export function cheatsUsed(settings, days, date, exceptDate) {
   }
   return { ...win, used: n, on, left: Math.max(0, win.max - n) };
 }
+/* weekly calorie budget: going over one day lowers the rest of your week's targets a little.
+   Under-eating is never saved up. One day drops at most maxPct% and never below the floor. Debt ends with the week. */
+export const BUDGET_DEFAULT = { on: false, mode: 'spread', maxPct: 20, floor: 1200, cheat: false, trim: true };
+export const budgetOf = settings => ({ ...BUDGET_DEFAULT, ...((settings && settings.budget) || {}) });
+export function budgetDay(settings, days, date) {
+  const b = budgetOf(settings), ws = myWeekStart(settings, date), we = addDays(ws, 6), start = settings.startDate || ws;
+  let debt = 0; const log = [];
+  for (let d = ws; d <= date; d = addDays(d, 1)) {
+    const day = (days && days[d]) || {}, base = Math.round(planTargets(settings, day, d).k || 0);
+    const left = diffDays(d, we) + 1, room = Math.max(0, Math.min(base * b.maxPct / 100, base - b.floor));
+    const cut = base && d >= start && debt >= 50 ? Math.round(Math.min(room, b.mode === 'asap' ? debt : debt / left)) : 0;
+    const row = { d, base, cut, target: base - cut, debtIn: Math.round(debt) };
+    if (d < date && d >= start && base) {
+      const eaten = Math.round(dayTotals(settings, day).k || 0), logged = Object.values(day.meals || {}).some(m => m && m.status) || (day.extras || []).length;
+      const cheat = !b.cheat && pillars(settings, day, d).cheats > 0;
+      if (logged) { const raw = eaten - base, delta = raw > 0 && raw < 50 ? 0 : raw; /* ignore small logging noise */ row.eaten = eaten; row.over = delta > 0 && !cheat ? delta : 0; debt = Math.max(0, debt + (cheat ? Math.min(0, Math.max(delta, -cut)) : Math.max(delta, -cut))); }
+    }
+    log.push(row);
+  }
+  const today = log[log.length - 1];
+  return { ...today, debt: Math.round(debt), log, from: ws, to: we, budget: log.reduce((a, r) => a + r.base, 0) + Array.from({ length: diffDays(date, we) }, (_, i) => Math.round(planTargets(settings, (days || {})[addDays(date, i + 1)] || {}, addDays(date, i + 1)).k || 0)).reduce((a, v) => a + v, 0), on: b.on };
+}
+// suggest smaller portions for today's planned meals that remove about `cut` kcal from carb and fat foods (never protein foods)
+export function trimPlan(meals, cut) {
+  const out = {}; if (!(cut > 0)) return out;
+  const cand = []; meals.forEach(m => (m.items || []).forEach((it, i) => { const k = (it.per.k || 0) * (it.g || 0) / 100, pk = (it.per.p || 0) * 4 * (it.g || 0) / 100; if (k > 15 && (it.per.k || 0) >= 50 && pk / k < 0.3 && !it.fat) cand.push({ m: m.id, i, it, k }); }));
+  const total = cand.reduce((a, x) => a + x.k, 0); if (!total) return out;
+  cand.forEach(x => {
+    const want = Math.min(x.k * 0.5, cut * x.k / total), step = x.it.g >= 50 ? 5 : 1;
+    let g = Math.round((x.it.g - want / ((x.it.per.k || 1) / 100)) / step) * step; g = Math.max(step, Math.min(x.it.g, g));
+    if (g < x.it.g) (out[x.m] = out[x.m] || []).push({ i: x.i, from: x.it.g, to: g, kcal: Math.round((x.it.g - g) * x.it.per.k / 100), name: x.it.name });
+  });
+  return out;
+}
 export function evalDay(settings, day, date) {
   day = day || {};
   const P = pillars(settings, day, date);

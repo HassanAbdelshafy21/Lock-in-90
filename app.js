@@ -4,7 +4,7 @@ import { initializeFirestore, getFirestore, persistentLocalCache, persistentMult
 import * as C from './core.js';
 import { trText, addFoodNames } from './i18n.js';
 import * as TR from './train.js';
-const APP_VERSION = '28 · coffee add-ins, cooking fat, cheat meal, your own week';
+const APP_VERSION = '29 · weekly calorie budget';
 import { EX, POSE, figSVG, YT, LINES, FOODS, COACH_MEALS, DEFAULT_SUPPS, COACH_ENC, SLOTS, CARDIO_MODES } from './data.js';
 import { BRANDS, BRAND_BY_CODE } from './brands.js';
 addFoodNames(FOODS); addFoodNames(BRANDS);
@@ -240,6 +240,7 @@ function bannersHTML(R) {
   if (ev.complete && m) h += banner('good', `Milestone: Day ${m[0]}`, `${m[1]}. Keep the chain going.`);
   const rcp = [30, 60].find(c => R.dayNum === c + 1 || (R.dayNum === c && ev.complete));
   if (rcp && S.view === 'today') h += `<div class="banner b-good"><strong>Your Day ${rcp} recap is ready</strong><p><button class="link" data-act="tab" data-v="progress">See it in Progress</button></p></div>`;
+  { const b = budgetAt(today()); if (b && b.cut && S.view === 'today') h += `<div class="banner b-info"><strong>Calories today: ${kc(b.target)} instead of ${kc(b.base)}</strong><p>Paying back ${b.debtIn} kcal over plan this week, a little each day. <button class="link" data-act="panel" data-v="meals">See today’s portions</button></p></div>`; }
   if (C.addDays(myWS(today()), 6) === today() && S.view === 'today') h += `<div class="banner b-info"><strong>Weekly review is ready</strong><p><button class="link" data-act="tab" data-v="progress">Open it in Progress</button></p></div>`;
   return h;
 }
@@ -939,7 +940,9 @@ function todayNotesHTML(R) {
   if (R.victory) out.push(['good', '90 days. Done.', `You finished all 90 days on attempt ${R.attemptNo}.`]);
   if (R.critical && !ev.complete) out.push(['bad', 'Never miss twice', 'Yesterday reset you to Day 1. Today is non-negotiable.']);
   if (ev.offPlan) out.push(['bad', 'Today can’t count yet', 'Something off-plan is logged. If it was a mistake, change it back.']);
+  else if (!ev.complete && n.late) { const mm = n.end - (n.hour * 60 + n.minute); out.push(['warn', `Still ${C.DAYNAMES[C.weekday(n.date)]} until ${dayEndTxt(n)} (${Math.floor(mm / 60)} h ${mm % 60} min)`, 'Finish it now and the day locks in. Still missing: ' + ev.missing.join(' · ')]); }
   else if (!ev.complete && hoursLeft(n) <= 3) { const left = hoursLeft(n); out.push(['warn', `${left} hour${left === 1 ? '' : 's'} left to lock in today`, ev.missing.join(' · ')]); }
+  { const b = budgetAt(today()); if (b && b.cut) out.push(['info', `Calories today: ${kc(b.target)} instead of ${kc(b.base)}`, `Paying back ${b.debtIn} kcal over plan this week, a little each day. Meals shows the smaller portions.`]); }
   const m = C.MILES.find(x => x[0] === R.done);
   if (ev.complete && m) out.push(['good', `Milestone: Day ${m[0]}`, `${m[1]}. Keep the chain going.`]);
   const rcp = [30, 60].find(c => R.dayNum === c + 1 || (R.dayNum === c && ev.complete));
@@ -992,7 +995,7 @@ function mealsHTML(date, d, P) {
   const st = S.settings, meals = d.meals || {}, tot = C.dayTotals(st, d), plan = C.mealsOn(st, date);
   const unl = plan.filter(m => (m.items || []).length && !(d.skip || {})[m.id] && !(meals[m.id] && meals[m.id].status)).length;
   let h = `<section class="card" id="sec-meals"><div class="card-h"><h2>Meals</h2>${pill(P.off.length || P.offExtra.length ? 'bad' : P.mealsOk ? 'done' : 'todo', P.off.length || P.offExtra.length ? 'Off-plan' : `${P.clean} / ${P.pm.length} on plan`)}</div>
-  ${macrosHTML(tot, C.planTargets(st, d, date))}${unl ? `<button class="btn good" data-act="allplan">Log ${unl === plan.length ? 'all meals' : unl === 1 ? 'the last planned meal' : 'the other ' + unl} as planned</button>` : ''}<div class="tl">`;
+  ${macrosHTML(tot, dayTarget(date, d))}${trimCardHTML(date)}${unl ? `<button class="btn good" data-act="allplan">Log ${unl === plan.length ? 'all meals' : unl === 1 ? 'the last planned meal' : 'the other ' + unl} as planned</button>` : ''}<div class="tl">`;
   const cs = st.cheat && st.cheat.on ? C.cheatsUsed(st, S.days, date, date) : null;
   const CH = cs ? { ...cs, kind: st.cheat.kind || 'meal', left: Math.max(0, cs.max - cs.used - (P.cheats || 0)), usedTxt: [...cs.on, ...(P.cheats ? [date] : [])].map(x => x === today() ? 'today' : C.DAYNAMES[C.weekday(x)].slice(0, 3) + ' ' + C.parse(x).getDate()).join(', ') } : null;
   if (CH && CH.kind === 'day') h += `<div class="cheatday">${d.cheatDay ? `<button class="btn cheat" data-act="cheatday" aria-pressed="true">🍕 Free cheat day ✓ · tap to undo</button><p class="hint">Every meal and extra today counts as on plan. Going over your calories is fine.</p>` : CH.left ? `<button class="btn cheat" data-act="cheatday">🍕 Use your free cheat day</button>` : `<p class="hint">🍕 Free cheat day used ${esc(CH.usedTxt)}. The next one is free from ${fmt(C.addDays(CH.to, 1))}.</p>`}</div>`;
@@ -1172,7 +1175,7 @@ function weekReview() {
 function progressHTML(R) {
   const st = S.settings, t = today(), rv = weekReview();
   const G = { friends: friendsTabsHTML() };
-  let h = recapHTML(R) + `<section class="card"><div class="card-h"><h2>Last 7 days</h2>${pill(rv.locked === rv.n ? 'done' : 'todo', `${rv.locked} / ${rv.n} locked in`)}</div>
+  let h = recapHTML(R) + weeklyCalHTML() + `<section class="card"><div class="card-h"><h2>Last 7 days</h2>${pill(rv.locked === rv.n ? 'done' : 'todo', `${rv.locked} / ${rv.n} locked in`)}</div>
   <div class="review"><div><b>${rv.worst && rv.worst[1] ? esc(rv.worst[0]) : 'None'}</b><span>${rv.worst && rv.worst[1] ? `Most missed (${rv.worst[1]} day${rv.worst[1] === 1 ? '' : 's'})` : 'Nothing missed'}</span></div>
   <div><b class="num">${rv.prot ? kc(rv.prot) + ' g' : '—'}</b><span>Avg protein${rv.tp ? ` · plan ${kc(rv.tp)} g` : ''}</span></div>
   <div><b class="num">${rv.kcal ? kc(rv.kcal) : '—'}</b><span>Avg calories${rv.tk ? ` · plan ${kc(rv.tk)}` : ''}</span></div>
@@ -1318,6 +1321,41 @@ async function shareWeek() {
 }
 
 /* ---------- SETUP ---------- */
+/* weekly calorie budget */
+const budgetOn = () => !!(S.settings && S.settings.budget && S.settings.budget.on);
+const budgetAt = date => budgetOn() ? C.budgetDay(S.settings, S.days, date) : null;
+function dayTarget(date, d) { const t = C.planTargets(S.settings, d, date), b = budgetAt(date); return b && b.cut ? { ...t, k: b.target, base: t.k, cut: b.cut } : t; }
+// today's planned meals with smaller carb and fat portions (only when the budget is paying back)
+function trimsFor(date) { const b = budgetAt(date); if (!b || !b.cut || !C.budgetOf(S.settings).trim) return {}; const d = S.days[date] || {}; return C.trimPlan(C.plannedMeals(S.settings, d, date), b.cut); }
+function trimmedItems(m, trims) { const tr = trims[m.id]; if (!tr) return clone(m.items); return clone(m.items).map((it, i) => { const x = tr.find(z => z.i === i); return x ? { ...it, g: x.to, trimmed: x.from } : it; }); }
+function trimCardHTML(date) {
+  const b = budgetAt(date); if (!b || !b.cut) return '';
+  const tr = trimsFor(date), meals = C.plannedMeals(S.settings, S.days[date] || {}, date), rows = meals.filter(m => tr[m.id]).map(m => `<div class="trim"><b>${esc(m.name)}${m.time ? ' · ' + esc(m.time) : ''}</b>${tr[m.id].map(x => `<div class="spread"><span>${esc(x.name.split(',')[0])} <span class="num">${C.round(x.from, 1)} g → ${C.round(x.to, 1)} g</span></span><em class="num">−${x.kcal}</em></div>`).join('')}</div>`).join('');
+  return `<div class="trimcard"><div class="spread"><b>Calories today: <span class="num">${kc(b.target)}</span></b><s class="num">${kc(b.base)}</s></div><p class="hint">−${b.cut} kcal, paying back ${b.debtIn} kcal over plan this week (${C.diffDays(date, b.to) + 1} days left).</p>
+  ${C.budgetOf(S.settings).trim ? (rows ? `<span class="sub">Today’s plan, trimmed. Only carbs and fats get smaller; protein stays the same.</span>${rows}` : '') : ''}
+  <label class="chk"><input type="checkbox" id="bud-trim" ${C.budgetOf(S.settings).trim ? 'checked' : ''}> Use the trimmed portions for “As planned”</label></div>`;
+}
+function weeklyCalHTML() {
+  if (!budgetOn()) return '';
+  const t = today(), b = C.budgetDay(S.settings, S.days, t), rows = [];
+  for (let i = 0; i < 7; i++) { const dt = C.addDays(b.from, i), past = dt < t, r = b.log.find(x => x.d === dt), d = S.days[dt] || {}, base = r ? r.base : Math.round(C.planTargets(S.settings, d, dt).k || 0), eaten = dt <= t ? Math.round(C.dayTotals(S.settings, d).k || 0) : null; rows.push({ dt, past, base, target: r ? r.target : base, eaten }); }
+  const mx = Math.max(1, ...rows.map(r => Math.max(r.base, r.eaten || 0))) * 1.08, H = 110, y = v => Math.round(v / mx * H);
+  const eatenSum = rows.reduce((a, r) => a + (r.eaten || 0), 0), over = b.log.reduce((a, r) => a + (r.over || 0), 0);
+  return `<section class="card" id="sec-budget"><div class="card-h"><h2>Weekly calories</h2>${pill(b.debt >= 50 ? 'todo' : 'done', b.debt >= 50 ? `${b.debt} kcal to pay back` : 'On budget')}</div>
+  <span class="sub">${fmt(b.from)} – ${fmt(b.to)} · budget <b class="num">${b.budget.toLocaleString('en-US')}</b> kcal</span>
+  <div class="wbars" style="height:${H + 22}px">${rows.map(r => `<div title="${fmt(r.dt)}: ${r.eaten != null ? kc(r.eaten) + ' / ' : ''}${kc(r.target)} kcal"><i class="tgt" style="bottom:${y(r.target) + 18}px"></i><em class="${r.eaten == null ? 'fut' : r.eaten > r.target + 50 ? 'over' : ''}" style="height:${Math.max(4, y(r.eaten != null ? r.eaten : r.target))}px"></em><span>${esc(C.DAYNAMES[C.weekday(r.dt)].slice(0, 2))}</span></div>`).join('')}</div>
+  <div class="setup-r"><span>Eaten so far</span><b class="num">${eatenSum.toLocaleString('en-US')}</b></div>${over ? `<div class="setup-r"><span>Over plan this week</span><b class="num" style="color:var(--bad)">+${over}</b></div>` : ''}
+  ${b.cut ? `<div class="setup-r"><span>Today’s target</span><b class="num">${kc(b.target)} <small class="sub">(−${b.cut})</small></b></div>` : ''}</section>`;
+}
+function budgetHTML(st) {
+  const b = C.budgetOf(st), base = C.planTargets(st, S.days[today()] || {}, today()).k || 0, room = Math.max(0, Math.min(base * b.maxPct / 100, base - b.floor));
+  return `<div class="cheatset"><div class="spread"><span><b>Weekly calorie budget</b><small class="sub" style="display:block">Pay back days you go over</small></span><button class="switch" role="switch" data-act="budon" aria-checked="${b.on}" aria-label="Weekly calorie budget"><i></i></button></div>
+  ${b.on ? `<div class="seg wide" role="group" aria-label="How to pay back"><button data-act="budmode" data-v="spread" aria-pressed="${b.mode !== 'asap'}">Spread over the week</button><button data-act="budmode" data-v="asap" aria-pressed="${b.mode === 'asap'}">As soon as possible</button></div>
+  <div class="setup-r"><label for="bud-pct">Most off one day</label><select class="in" id="bud-pct">${[10, 15, 20, 25].map(v => `<option value="${v}" ${b.maxPct === v ? 'selected' : ''}>${v}%${base ? ` (${Math.round(base * v / 100)} kcal)` : ''}</option>`).join('')}</select></div>
+  <div class="setup-r"><label for="bud-floor">Never below</label><select class="in" id="bud-floor">${[1200, 1300, 1400, 1500, 1600, 1800].map(v => `<option value="${v}" ${b.floor === v ? 'selected' : ''}>${v.toLocaleString('en-US')} kcal</option>`).join('')}</select></div>
+  ${st.cheat && st.cheat.on ? `<label class="chk"><input type="checkbox" id="bud-cheat" ${b.cheat ? 'checked' : ''}> Count free cheat meals</label>` : ''}
+  <p class="hint">${base && room < 50 ? `Your plan (${kc(base)} kcal) is close to the ${b.floor.toLocaleString('en-US')} floor, so little can come off one day. ` : ''}Eating less than plan isn’t saved up for later, so there’s no reason to skip meals now and binge later. A new week starts fresh.</p>` : ''}</div>`;
+}
 function weekStartHTML(st) {
   const w = st.weekStart || {}, mode = w.mode === 'sat' || w.mode === 'day' ? w.mode : 'start', wd = C.weekStartDay(st), ws = C.myWeekStart(st, today()), sd = C.weekday(st.startDate);
   const DS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'], order = [6, 0, 1, 2, 3, 4, 5];
@@ -1371,7 +1409,7 @@ function setupHTML(R) {
   h += `<section class="card" id="sec-plan"><div class="card-h"><h2>Meal plan</h2>${pill('todo', `${kc(planTot.k)} kcal · ${kc(planTot.p)} g protein`)}</div>
   ${(st.ramadan && st.ramadan.on) || editingRamadan() ? `<div class="seg wide" role="group" aria-label="Which plan"><button data-act="planedit" data-v="normal" aria-pressed="${!editingRamadan()}">Normal days</button><button data-act="planedit" data-v="ramadan" aria-pressed="${editingRamadan()}">Ramadan</button></div>` : ''}<p class="hint">${isOwner() ? 'Your coach’s plan' : 'Your meal plan (from your coach, or your own)'}, in cooked weights. Add the foods and grams for each meal; the totals become your daily calorie and protein targets. When your coach changes it, edit it here: the change applies from today, and earlier days keep the plan they had.</p>${planHistoryHTML(st)}`;
   h += restorePlanCard(st);
-  h += cheatHTML(st);
+  h += cheatHTML(st) + budgetHTML(st);
   PM.forEach((m, i) => {
     const s = C.sumItems(m.items);
     h += `<div class="planmeal"><div class="row"><input class="in grow" id="pm-n-${m.id}" data-mealname="${m.id}" value="${esc(m.name)}" aria-label="Meal name"><input class="in sm" id="pm-t-${m.id}" type="time" data-mealtime="${m.id}" value="${esc(m.time || '')}" aria-label="Time" style="width:110px"></div>
@@ -2129,7 +2167,7 @@ document.addEventListener('click', async ev => {
     case 'meal': {
       const id = b.dataset.id, dd = d(), m = C.mealsOn(S.settings, D).find(x => x.id === id), cur = dd.meals[id] || {};
       if (cur.status === v) { delete dd.meals[id]; S.openMeal = null; }
-      else if (v === 'plan') { dd.meals[id] = { status: 'plan', items: clone(m.items), note: cur.note || '' }; S.openMeal = null; S.expandMeal = null; }
+      else if (v === 'plan') { dd.meals[id] = { status: 'plan', items: trimmedItems(m, trimsFor(D)), note: cur.note || '' }; S.openMeal = null; S.expandMeal = null; }
       else if (v === 'swap') { dd.meals[id] = { status: 'swap', items: cur.items && cur.items.length ? cur.items : clone(m.items), note: cur.note || '' }; S.openMeal = id; }
       else if (v === 'cheat') { const st = S.settings, cu = C.cheatsUsed(st, S.days, D, D), mine = Object.entries(dd.meals).filter(([k, x]) => k !== id && x && x.status === 'cheat').length; if (!(st.cheat && st.cheat.on) || cu.used + mine >= cu.max) { toast('No free cheat meal left this week.'); break; } dd.meals[id] = { status: 'cheat', items: cur.items || [], note: cur.note || '' }; S.openMeal = id; toast('Free cheat meal. The day still counts.'); }
       else { dd.meals[id] = { status: 'off', items: cur.status === 'off' ? cur.items : [], note: cur.note || '' }; S.openMeal = id; }
@@ -2138,7 +2176,7 @@ document.addEventListener('click', async ev => {
     case 'openmeal': S.openMeal = v; break;
     case 'copymeal': return openCopy(v);
     case 'expandmeal': S.expandMeal = S.expandMeal === v ? null : v; break;
-    case 'allplan': { const dd = d(); C.mealsOn(S.settings, D).forEach(m => { if ((m.items || []).length && !dd.skip[m.id] && !(dd.meals[m.id] && dd.meals[m.id].status)) dd.meals[m.id] = { status: 'plan', items: clone(m.items), note: '' }; }); saveDay(D); toast('Meals logged as planned.'); break; }
+    case 'allplan': { const dd = d(), trs = trimsFor(D); C.mealsOn(S.settings, D).forEach(m => { if ((m.items || []).length && !dd.skip[m.id] && !(dd.meals[m.id] && dd.meals[m.id].status)) dd.meals[m.id] = { status: 'plan', items: trimmedItems(m, trs), note: '' }; }); saveDay(D); toast('Meals logged as planned.'); break; }
     case 'share': return shareWeek();
     case 'sharecard': return shareCard();
     case 'sharerecap': {
@@ -2242,6 +2280,8 @@ document.addEventListener('click', async ev => {
     case 'defgym': S.settings.gymTime = v; saveSettings(); break;
     case 'wkmode': S.settings.weekStart = { ...(S.settings.weekStart || {}), mode: v, ...(v === 'day' && !(S.settings.weekStart || {}).d && (S.settings.weekStart || {}).d !== 0 ? { d: C.weekday(S.settings.startDate) } : {}) }; saveSettings(); S.boardLast = null; break;
     case 'wkday': S.settings.weekStart = { mode: 'day', d: +v }; saveSettings(); S.boardLast = null; break;
+    case 'budon': S.settings.budget = { ...C.budgetOf(S.settings), on: !C.budgetOf(S.settings).on }; saveSettings(); break;
+    case 'budmode': S.settings.budget = { ...C.budgetOf(S.settings), mode: v }; saveSettings(); break;
     case 'cheaton': S.settings.cheat = { per: '1w', kind: 'meal', ...(S.settings.cheat || {}), on: !(S.settings.cheat && S.settings.cheat.on) }; saveSettings(); break;
     case 'cheatper': S.settings.cheat = { ...(S.settings.cheat || {}), per: v }; saveSettings(); break;
     case 'cheatkind': S.settings.cheat = { ...(S.settings.cheat || {}), kind: v }; saveSettings(); break;
@@ -2300,6 +2340,7 @@ document.addEventListener('change', ev => {
   if (t.id === 'imp-file' || t.id === 'imp-file2') return importBackup(t.files[0]);
   if (SH && SH.scope === 'sport' && (t.id === 'sp-min' || t.id === 'sp-hr' || t.id === 'sp-count')) { if (t.id === 'sp-min') SH.min = Math.max(0, Math.min(600, parseInt(t.value, 10) || 0)); else if (t.id === 'sp-hr') SH.hr = parseInt(t.value, 10) || null; else SH.counts = t.checked; return drawSport(); }
   if (t.id === 'ck-photo') { const f = t.files && t.files[0], n = $('ck-photo-name'); if (n) n.textContent = f ? 'Photo ready: ' + f.name.slice(0, 28) : 'Take or choose a photo'; return; }
+  if (t.id === 'bud-pct' || t.id === 'bud-floor' || t.id === 'bud-cheat' || t.id === 'bud-trim') { const b = C.budgetOf(S.settings); if (t.id === 'bud-pct') b.maxPct = +t.value; else if (t.id === 'bud-floor') b.floor = +t.value; else if (t.id === 'bud-cheat') b.cheat = t.checked; else b.trim = t.checked; S.settings.budget = b; saveSettings(); return draw(); }
   if (t.id === 'fs-usual' && SH) { SH.saveUsual = t.checked; return drawPicked(); }
   if (t.id === 'fs-usual-n' && SH) { SH.usualName = t.value; return; }
   if (t.id === 'fs-remfat' && SH) { SH.remFat = t.checked; return; }

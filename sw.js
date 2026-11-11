@@ -1,5 +1,5 @@
 // Offline support: app files are served from cache and refreshed in the background.
-const VERSION = 'lockin-v29';
+const VERSION = 'lockin-v30';
 const EXC = 'lockin-ex-1'; // exercise photos and data: kept across app updates
 const FB = '10.14.1';
 const SHELL = ['./', './index.html', './styles.css', './app.js', './core.js', './data.js', './i18n.js', './train.js', './brands.js', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png', './icons/maskable-192.png', './icons/maskable-512.png', './icons/favicon.png', './icons/apple-touch-icon.png', './icons/logo.svg', './fonts/Alexandria.ttf'];
