@@ -43,7 +43,11 @@ const plainObj = v => v && typeof v === 'object' && Object.getPrototypeOf(v) ===
 const fsEnc = v => Array.isArray(v) ? v.map(x => Array.isArray(x) ? { _a: fsEnc(x) } : fsEnc(x)) : plainObj(v) ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, fsEnc(x)])) : v;
 const fsDec = v => Array.isArray(v) ? v.map(fsDec) : plainObj(v) ? (Object.keys(v).length === 1 && Array.isArray(v._a) ? v._a.map(fsDec) : Object.fromEntries(Object.entries(v).map(([k, x]) => [k, fsDec(x)]))) : v;
 const L = ml => String(C.round(ml / 1000, 2));
-const now = () => C.nowIn();
+const now = () => C.nowIn(undefined, S.settings && S.settings.dayStart);
+const dsMode = () => C.dayStartMode(S.settings && S.settings.dayStart);
+const hoursLeft = n => Math.max(0, Math.ceil((n.end - (n.hour * 60 + n.minute)) / 60));
+// label for when the day ends: "Fajr 4:47" or "5:00"
+const dayEndTxt = n => `${dsMode() === 'fajr' ? 'Fajr ' : ''}${C.minTxt(n.end - 1440)}`;
 const today = () => now().date;
 const fmt = s => C.parse(s).toLocaleDateString(LANG() === 'ar' ? 'ar-EG-u-nu-latn' : 'en-GB', { day: 'numeric', month: LANG() === 'ar' ? 'long' : 'short' });
 /* language: Arabic is applied by translating rendered text, so every screen and message is covered without two copies of the UI */
@@ -60,7 +64,7 @@ function applyLang() {
   if (ar) trNode(document.body);
 }
 new MutationObserver(ms => { if (LANG() !== 'ar') return; ms.forEach(m => m.addedNodes.forEach(trNode)); }).observe(document.body, { childList: true, subtree: true });
-const graceDay = () => { const st = S.settings, y = C.addDays(today(), -1); if (now().hour >= 3 || !st || !st.startDate) return null; const a = st.attemptStart && st.attemptStart > st.startDate ? st.attemptStart : st.startDate; return y >= a ? y : null; };
+const graceDay = () => { const st = S.settings, y = C.addDays(today(), -1); if (dsMode() !== 'midnight' || now().hour >= 3 || !st || !st.startDate) return null; const a = st.attemptStart && st.attemptStart > st.startDate ? st.attemptStart : st.startDate; return y >= a ? y : null; };
 const editDate = () => { const g = graceDay(); return S.editDate && S.editDate === g ? g : today(); };
 const uid = () => S.user && S.user.uid;
 const up = p => `users/${uid()}/${p}`;
@@ -212,9 +216,9 @@ function syncChip() {
 }
 const FLAME = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.5c.6 3.2 4.7 5.6 4.7 10.3A4.7 4.7 0 0 1 12 17.5a4.7 4.7 0 0 1-4.7-4.7c0-2 1-3.4 2-4.4.2 1.5.9 2.6 2 3.1-.4-3.4.3-6.4.7-9z"/><path d="M12 21.5c-3.9 0-6.5-2.6-6.5-6.2 0-1 .2-2 .6-2.8" opacity=".55"/></svg>';
 function flameChip(R) {
-  const ev = R.todayEval, h = now().hour;
-  const st = ev.complete ? 'lit' : h >= 21 ? 'risk' : '';
-  const tip = ev.complete ? 'Today is locked in' : h >= 21 ? 'Streak at risk: finish today' : 'Streak';
+  const ev = R.todayEval, risk = hoursLeft(now()) <= 3;
+  const st = ev.complete ? 'lit' : risk ? 'risk' : '';
+  const tip = ev.complete ? 'Today is locked in' : risk ? 'Streak at risk: finish today' : 'Streak';
   return `<span class="chip flame ${st}" title="${tip}" aria-label="${tip}, streak ${R.done}">${FLAME}<b class="num">${R.done}</b></span>`;
 }
 function topHTML(R) {
@@ -230,7 +234,8 @@ function bannersHTML(R) {
   const ev = R.todayEval;
   if (R.critical && !ev.complete) h += banner('bad', 'Never miss twice', 'Yesterday broke the chain and reset you to Day 1. Today is non-negotiable.');
   if (ev.offPlan) h += banner('bad', 'Today can’t count right now', 'Something off-plan is logged. If it was a mistake, change it back.');
-  else if (!ev.complete && n.hour >= 21 && S.view === 'today') { const left = 24 - n.hour; h += banner('warn', `${left} hour${left === 1 ? '' : 's'} left to lock in today`, 'Still missing:', ev.missing); }
+  else if (!ev.complete && n.late && S.view === 'today') { const m = n.end - (n.hour * 60 + n.minute); h += banner('warn', `Still ${C.DAYNAMES[C.weekday(n.date)]} until ${dayEndTxt(n)} (${Math.floor(m / 60)} h ${m % 60} min)`, 'Finish it now and the day locks in. Still missing:', ev.missing); }
+  else if (!ev.complete && hoursLeft(n) <= 3 && S.view === 'today') { const left = hoursLeft(n); h += banner('warn', `${left} hour${left === 1 ? '' : 's'} left to lock in today`, 'Still missing:', ev.missing); }
   const m = C.MILES.find(x => x[0] === R.done);
   if (ev.complete && m) h += banner('good', `Milestone: Day ${m[0]}`, `${m[1]}. Keep the chain going.`);
   const rcp = [30, 60].find(c => R.dayNum === c + 1 || (R.dayNum === c && ev.complete));
@@ -475,7 +480,7 @@ function ifThenTodayHTML(date) {
 }
 function reflectHTML(R) {
   const n = now(), t = today(), y = C.addDays(t, -1);
-  if (n.hour < 3 || y < S.settings.startDate) return '';
+  if ((dsMode() === 'midnight' && n.hour < 3) || y < S.settings.startDate) return '';
   const yd = S.days[y] || {};
   if (C.evalDay(S.settings, yd, y).complete) return '';
   if (yd.missWhy && yd.missWhy !== 'pending') {
@@ -531,7 +536,7 @@ function drawCrave() {
 }
 function cravingLog(out) {
   const date = editDate(), dd = dayDoc(date), s = SH, n = now();
-  dd.cravings = [...(dd.cravings || []), { what: s.what, lvl: s.lvl, out, min: Math.round((Date.now() - (s.start || Date.now())) / 60000), at: `${C.pad(n.hour)}:${C.pad(n.minute)}` }];
+  dd.cravings = [...(dd.cravings || []), { what: s.what, lvl: s.lvl, out, min: Math.round((Date.now() - (s.start || Date.now())) / 60000), at: `${C.pad(n.clock)}:${C.pad(n.minute)}` }];
   saveDay(date);
 }
 
@@ -685,7 +690,7 @@ function ramadanSetupHTML(st) {
   ${on ? `<button class="btn small" data-act="planedit" data-v="ramadan">Edit the Ramadan meal plan</button>` : ''}</section>`;
 }
 function ramadanHTML(date) {
-  const st = S.settings, t = today(), r = C.ramadanOf(st), n = now(), mins = n.hour * 60 + n.minute;
+  const st = S.settings, t = today(), r = C.ramadanOf(st), n = now(), mins = n.clock * 60 + n.minute;
   const hm = s => { const [a, b] = String(s).split(':').map(Number); return a * 60 + (b || 0); };
   if (C.inRamadan(st, date) && date === t) {
     const day = C.diffDays(r.from, date) + 1, ift = hm(r.iftar), fj = hm(r.fajr);
@@ -910,6 +915,7 @@ function todayHTML(R) {
   const dayNo = Math.min(R.dayNum, 90);
   let h = `<section class="hero${ev.complete ? ' locked' : ''}">
   <div class="hero-top"><span>${esc(C.DAYNAMES[C.weekday(date)])}, ${fmt(date)}</span><span class="hero-chips">${syncDot()}${TR.rankChip()}${flameChip(R)}</span></div>
+  ${n.late && date === t ? `<span class="until">☾ <span class="num">${C.minTxt(n.clock * 60 + n.minute)}</span> · your day runs until ${esc(dayEndTxt(n))}</span>` : ''}
   ${grace ? `<div class="hero-seg" role="group" aria-label="Day being edited"><button data-act="editdate" data-v="${grace}" aria-pressed="${date === grace}">Yesterday</button><button data-act="editdate" data-v="${t}" aria-pressed="${date === t}">Today</button></div>` : ''}
   <div class="hero-row"><div class="rings" role="img" aria-label="Day ${dayNo} of 90, ${pills.filter(p => p.ok).length} of 4 pillars done">${ringsSVG(parts, mealsBad)}<div class="rings-c"><b class="num">${dayNo}</b><span>of 90</span></div></div>
   <div class="pills">${pills.map(p => `<button class="pill2 ${p.k}${p.ok ? ' ok' : ''}${p.bad ? ' bad' : ''}" data-act="panel" data-v="${p.k}"><i aria-hidden="true"></i><span>${esc(p.name)}</span><em class="num">${p.ok ? '✓ ' : ''}${esc(p.val)}</em></button>`).join('')}</div></div>
@@ -931,7 +937,7 @@ function todayNotesHTML(R) {
   if (R.victory) out.push(['good', '90 days. Done.', `You finished all 90 days on attempt ${R.attemptNo}.`]);
   if (R.critical && !ev.complete) out.push(['bad', 'Never miss twice', 'Yesterday reset you to Day 1. Today is non-negotiable.']);
   if (ev.offPlan) out.push(['bad', 'Today can’t count yet', 'Something off-plan is logged. If it was a mistake, change it back.']);
-  else if (!ev.complete && n.hour >= 21) { const left = 24 - n.hour; out.push(['warn', `${left} hour${left === 1 ? '' : 's'} left to lock in today`, ev.missing.join(' · ')]); }
+  else if (!ev.complete && hoursLeft(n) <= 3) { const left = hoursLeft(n); out.push(['warn', `${left} hour${left === 1 ? '' : 's'} left to lock in today`, ev.missing.join(' · ')]); }
   const m = C.MILES.find(x => x[0] === R.done);
   if (ev.complete && m) out.push(['good', `Milestone: Day ${m[0]}`, `${m[1]}. Keep the chain going.`]);
   const rcp = [30, 60].find(c => R.dayNum === c + 1 || (R.dayNum === c && ev.complete));
@@ -946,7 +952,7 @@ function todayListHTML(R, date, d, P, line, shown) {
   if (logged.length) { const k = logged.reduce((s, m) => s + C.sumItems(meals[m.id].items || []).k, 0), off = logged.some(m => meals[m.id].status === 'off'); rows.push(row('panel', 'meals', off ? '!' : '✓', off ? 'bad' : 'ok', logged.length === plan.length ? 'All meals logged' : logged.map(m => m.name).join(', '), off ? 'Includes an off-plan meal' : '', `${kc(k)} kcal`)); }
   open.slice(0, 3).forEach(m => rows.push(row('panel', 'meals', esc(String(m.name).replace(/\D/g, '').slice(0, 2) || '•'), '', m.name, m.time || '', (m.items || []).length ? `${kc(C.sumItems(m.items).k)} kcal` : '')));
   if ((d.extras || []).length) rows.push(row('panel', 'meals', '+', '', `${d.extras.length} extra${d.extras.length === 1 ? '' : 's'}`, d.extras.map(x => x.name.split(',')[0]).join(', '), `${kc(d.extras.reduce((s, x) => s + C.itemMacros(x).k, 0))} kcal`));
-  if (C.inRamadan(st, date) && date === t) { const r = C.ramadanOf(st), [ih, im] = r.iftar.split(':').map(Number), mins = now().hour * 60 + now().minute, left = ih * 60 + im - mins; rows.push(row('ramsetup', '', '☾', 'ram', left > 0 ? `Iftar in ${Math.floor(left / 60)} h ${left % 60} min` : 'Iftar time. Ramadan Kareem', `Ramadan day ${C.diffDays(r.from, date) + 1}`, '')); }
+  if (C.inRamadan(st, date) && date === t) { const r = C.ramadanOf(st), [ih, im] = r.iftar.split(':').map(Number), mins = now().clock * 60 + now().minute, left = ih * 60 + im - mins; rows.push(row('ramsetup', '', '☾', 'ram', left > 0 ? `Iftar in ${Math.floor(left / 60)} h ${left % 60} min` : 'Iftar time. Ramadan Kareem', `Ramadan day ${C.diffDays(r.from, date) + 1}`, '')); }
   dayPlans(date).forEach(p => rows.push(`<div class="lrow static"><span class="lic">⇢</span><span class="lt"><b>If ${esc(p.when)}</b><small>then ${esc(p.then)}</small></span></div>`));
   if (date === t) { const fw = focusWeek(), cur = (st.focus || {})[fw.key], f = cur && FOCUS[cur.id]; if (f) { const nn = Math.min(f.count(fw.ds, fw.from, fw.to), f.target); rows.push(row('focuspick', '', '⚑', nn >= f.target ? 'ok' : 'gold', f.name, 'This week’s focus', `${nn} / ${f.target}`)); } else rows.push(row('focuspick', '', '⚑', 'gold', 'Pick this week’s focus', 'One extra goal, never breaks your streak', '')); }
   const cheers = Object.values(S.cheers || {});
@@ -1306,6 +1312,20 @@ async function shareWeek() {
 }
 
 /* ---------- SETUP ---------- */
+function dayStartHTML(st) {
+  const ds = st.dayStart || {}, mode = C.dayStartMode(ds), t = today(), city = ds.city || 'cairo', fm = C.fajrMin(t, city);
+  const pos = m => (Math.max(0, Math.min(840, m + 360)) / 840 * 100).toFixed(1); // timeline 6 pm .. 8 am
+  const startM = mode === 'midnight' ? 0 : mode === 'fajr' ? fm : C.dayStartMin(ds, t);
+  return `<div class="dstart" id="sec-daystart"><h3 class="grp">Your day starts at</h3>
+  <p class="hint">When the next day begins in the app. Anything you log before then counts for the day you’re still in.</p>
+  <div class="seg wide" role="group" aria-label="Day starts at"><button data-act="daystart" data-v="midnight" aria-pressed="${mode === 'midnight'}">Midnight</button><button data-act="daystart" data-v="fajr" aria-pressed="${mode === 'fajr'}">Fajr</button><button data-act="daystart" data-v="time" aria-pressed="${mode === 'time'}">Set a time</button></div>
+  ${mode === 'fajr' ? `<div class="setup-r"><label for="ds-city">City for Fajr</label><select class="in" id="ds-city">${Object.entries(C.CITIES).map(([k, c]) => `<option value="${k}" ${k === city ? 'selected' : ''}>${c[0]}</option>`).join('')}</select></div>
+  <div class="ds-today"><span class="sub">Today in ${esc(C.CITIES[city][0])}</span><b class="num">Fajr ${C.minTxt(fm)}</b><p class="hint">Changes a minute or two each day with the season (about 4 am in April to 5:20 am in January in Cairo, summer time included). Egyptian General Authority of Survey method.</p></div>` : ''}
+  ${mode === 'time' ? `<div class="setup-r"><label for="ds-time">New day at<small class="sub" style="display:block">Between midnight and 6 am</small></label><input class="in" id="ds-time" type="time" min="00:00" max="06:00" value="${esc(ds.t || '04:00')}" style="width:120px"></div>` : ''}
+  <div class="ds-line" aria-hidden="true"><i style="width:${pos(startM)}%"></i><em style="left:${pos(startM)}%"></em></div>
+  <div class="ds-ticks" aria-hidden="true"><span style="left:0">6 pm</span><span class="c" style="left:42.9%">midnight</span><span class="c" style="left:71.4%">4 am</span><span style="right:0">8 am</span></div>
+  <p class="hint">${mode === 'midnight' ? 'Grey: the day you’re in. Green: the next day. Until 3 am you can still switch to “Yesterday” on Today.' : `Grey: still the day you’re in. Green: the next day starts at ${C.minTxt(startM)}. Reminders and the friends board follow this.`}</p></div>`;
+}
 function setupHTML(R) {
   const st = S.settings, plan = st.plan || C.DEFAULT_PLAN, wg = st.waterGoal || 3500, sta = st.stamina || { on: true, days: [] };
   let h = `<section class="card"><div class="card-h"><h2>Challenge</h2></div>
@@ -1320,7 +1340,7 @@ function setupHTML(R) {
   <div class="setup-r"><label for="s-bed">Bedtime</label><input class="in" id="s-bed" type="time" data-bedtime="1" value="${esc(st.bedtime || '23:30')}" style="width:120px"></div>
   <div class="setup-r"><label for="s-age">Age (optional)</label><input class="in" id="s-age" type="number" inputmode="numeric" min="16" max="90" data-setting="age" placeholder="for heart-rate calories" value="${st.age || ''}"></div>
   <div class="setup-r"><span>Calorie formula</span><div class="seg" role="group" aria-label="Sex for calorie formula"><button data-act="sex" data-v="m" aria-pressed="${st.sex !== 'f'}">Male</button><button data-act="sex" data-v="f" aria-pressed="${st.sex === 'f'}">Female</button></div></div>
-  <div class="setup-r"><span>Usual gym time</span><div class="seg"><button data-act="defgym" data-v="am" aria-pressed="${(st.gymTime || 'am') === 'am'}">Morning</button><button data-act="defgym" data-v="pm" aria-pressed="${st.gymTime === 'pm'}">Night</button></div></div></section>`;
+  <div class="setup-r"><span>Usual gym time</span><div class="seg"><button data-act="defgym" data-v="am" aria-pressed="${(st.gymTime || 'am') === 'am'}">Morning</button><button data-act="defgym" data-v="pm" aria-pressed="${st.gymTime === 'pm'}">Night</button></div></div>${dayStartHTML(st)}</section>`;
   // meal plan
   const PM = planMeals(), planTot = C.sumItems(PM.flatMap(m => m.items || []));
   h += `<section class="card" id="sec-plan"><div class="card-h"><h2>Meal plan</h2>${pill('todo', `${kc(planTot.k)} kcal · ${kc(planTot.p)} g protein`)}</div>
@@ -1880,7 +1900,7 @@ document.addEventListener('click', async ev => {
     if (act === 'spsave') {
       const date = editDate(), dd = dayDoc(date), kg = curWeight(date) || 80, s = SH;
       if (!(s.min > 0)) return toast('Enter how many minutes you played.');
-      const rec = { sport: s.sp, min: s.min, lvl: s.lvl, ...(s.hr ? { hr: s.hr } : {}), kcal: Math.round(C.sportKcal({ sport: s.sp, min: s.min, lvl: s.lvl, hr: s.hr }, kg, prof())), counts: !!(s.counts && s.canCount), at: `${C.pad(now().hour)}:${C.pad(now().minute)}` };
+      const rec = { sport: s.sp, min: s.min, lvl: s.lvl, ...(s.hr ? { hr: s.hr } : {}), kcal: Math.round(C.sportKcal({ sport: s.sp, min: s.min, lvl: s.lvl, hr: s.hr }, kg, prof())), counts: !!(s.counts && s.canCount), at: `${C.pad(now().clock)}:${C.pad(now().minute)}` };
       dd.sports = [...(dd.sports || []), rec];
       if (rec.counts) { dd.trainingDone = true; dd.trainingSource = 'sport'; }
       S.settings.lastSport = s.sp; saveSettings(); saveDay(date); closeSheet(); buzz([20, 40, 60]);
@@ -2002,7 +2022,7 @@ document.addEventListener('click', async ev => {
       return;
     }
     case 'celeclose': $('cele').hidden = true; $('cele').innerHTML = ''; return;
-    case 'commit': { const dd = d(), n = now(); dd.commit = `${C.pad(n.hour)}:${C.pad(n.minute)}`; saveDay(D); buzz([20, 40, 60]); toast(`Committed to Day ${Math.min(C.computeRun(S.settings, S.days, now()).dayNum, 90)}. Go get it.`); break; }
+    case 'commit': { const dd = d(), n = now(); dd.commit = `${C.pad(n.clock)}:${C.pad(n.minute)}`; saveDay(D); buzz([20, 40, 60]); toast(`Committed to Day ${Math.min(C.computeRun(S.settings, S.days, now()).dayNum, 90)}. Go get it.`); break; }
     case 'haptics': S.settings.haptics = v === '1'; saveSettings(); if (v === '1') buzz(30); break;
     case 'grpnew': {
       if (!navigator.onLine) return toast('Creating a group needs internet.');
@@ -2092,6 +2112,7 @@ document.addEventListener('click', async ev => {
       toast('Check-in deleted.'); break;
     }
     case 'defgym': S.settings.gymTime = v; saveSettings(); break;
+    case 'daystart': { const ds = { ...(S.settings.dayStart || {}), mode: v }; if (v === 'fajr' && !ds.city) ds.city = 'cairo'; if (v === 'time' && !ds.t) ds.t = '04:00'; S.settings.dayStart = ds; saveSettings(); S.boardLast = null; toast(v === 'midnight' ? 'Your day starts at midnight.' : v === 'fajr' ? `Your day now runs until Fajr (${C.minTxt(C.fajrMin(C.addDays(today(), 1), ds.city))} tomorrow).` : `Your day now starts at ${ds.t}.`); break; }
     case 'mealup': case 'mealdown': { const ms = planMeals(), i = ms.findIndex(x => x.id === v), j = act === 'mealup' ? i - 1 : i + 1; if (j >= 0 && j < ms.length) { [ms[i], ms[j]] = [ms[j], ms[i]]; savePlan(); } break; }
     case 'mealdel': if (S.confirm === 'meal:' + v) { setPlanMeals(planMeals().filter(x => x.id !== v)); S.confirm = null; savePlan(); } else { S.confirm = 'meal:' + v; b.textContent = 'Tap again to delete'; return; } break;
     case 'mealadd': { const ms = planMeals(); ms.push({ id: 'm' + Date.now().toString(36), name: `Meal ${ms.length + 1}`, time: '', items: [] }); savePlan(); break; }
@@ -2159,6 +2180,7 @@ document.addEventListener('change', ev => {
   }
   if (t.dataset.plan !== undefined) { S.settings.plan = { ...(S.settings.plan || C.DEFAULT_PLAN), [t.dataset.plan]: t.value }; saveSettings(); return; }
   if (t.dataset.setting) { const v = parseFloat(t.value); S.settings[t.dataset.setting] = isNaN(v) ? null : v; saveSettings(); if (t.dataset.setting === 'waterGoal') { t.blur(); draw(); } return; }
+  if (t.id === 'ds-city' || t.id === 'ds-time') { const ds = { ...(S.settings.dayStart || {}) }; if (t.id === 'ds-city') ds.city = t.value; else if (/^\d\d:\d\d$/.test(t.value)) ds.t = t.value > '06:00' ? '06:00' : t.value; S.settings.dayStart = ds; saveSettings(); return draw(); }
   if (t.id === 'fb-name') { S.settings.boardName = t.value.trim().slice(0, 24) || null; saveSettings(); S.boardLast = null; return draw(); }
   if (t.dataset.topic) { S.settings.ntfyTopic = t.value.trim().replace(/[^A-Za-z0-9_-]/g, '').slice(0, 64); saveSettings(); return; }
   if (t.dataset.target) { const v = parseFloat(t.value); S.settings.targets = { ...(S.settings.targets || {}), [t.dataset.target]: isNaN(v) ? null : v }; saveSettings(); return; }

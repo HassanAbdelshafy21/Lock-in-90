@@ -886,3 +886,12 @@ label.tst b{font-size:14.5px;display:block}label.tst small{font-size:12px;color:
 details.why{margin-top:6px}
 .ntitle{margin:18px 0 4px;font-size:16px;font-weight:700;padding-top:14px;border-top:1px solid var(--line)}
 .card:not(.panelsheet .card)>.ntitle{border:0;padding:0;margin-top:0}
+/* day start */
+.hero .until{display:inline-flex;gap:6px;align-items:center;background:rgba(255,255,255,.1);border-radius:99px;padding:5px 11px;font-size:12px;margin-top:8px}
+.ds-today{margin:10px 0 4px}.ds-today b{display:block;font-size:26px;font-weight:800;margin:2px 0}
+.ds-line{position:relative;height:14px;border-radius:8px;background:var(--good);overflow:hidden;margin-top:10px}
+.ds-line i{position:absolute;inset-block:0;inset-inline-start:0;background:var(--surface-2)}
+.ds-line em{position:absolute;top:0;bottom:0;width:2px;background:var(--ink)}
+.ds-ticks{position:relative;height:16px;font-size:10.5px;color:var(--muted);margin-top:3px}.ds-ticks span{position:absolute;top:0;white-space:nowrap}.ds-ticks .c{transform:translateX(-50%)}
+.ds-line,.ds-ticks{direction:ltr}
+.dstart{margin-top:16px;padding-top:12px;border-top:1px solid var(--line)}

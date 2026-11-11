@@ -91,7 +91,9 @@ const LIST = [
   { id: 'final', key: 'final', t: at(23, 0) }
 ];
 async function reminders(uid, settings) {
-  const n = C.nowIn(TZ), nowMin = n.hour * 60 + n.minute, date = n.date;
+  const n = C.nowIn(TZ, settings.dayStart), nowMin = n.hour * 60 + n.minute, date = n.date;
+  // with a day that runs to Fajr (or a set time), clock times before the day starts belong to the end of the day: 1:00 -> 25:00
+  const adj = t => (n.starts > 0 && t < n.starts ? t + 1440 : t);
   const rm0 = settings.reminders || {};
   const logRef0 = db.doc(`users/${uid}/meta/notify`);
   const log0 = (await logRef0.get()).data() || {};
@@ -116,7 +118,7 @@ async function reminders(uid, settings) {
     for (const m of C.plannedMeals(settings, day, date)) {
       const [hh, mm] = String(m.time || '').split(':').map(Number);
       if (isNaN(hh)) continue;
-      const due = hh * 60 + (mm || 0) + 45, id = 'meal_' + m.id;
+      const due = adj(hh * 60 + (mm || 0)) + 45, id = 'meal_' + m.id;
       if (sent.includes(id) || nowMin < due || nowMin > due + 150) continue;
       sent.push(id);
       if (!(day.meals && day.meals[m.id] && day.meals[m.id].status)) await ntfy(A(`Log ${m.name}`, `سجّل ${trl(m.name)}`), A(`${m.name} (${m.time}) isn't logged yet. One tap: As planned.`, `${trl(m.name)} (${m.time}) لم تُسجَّل بعد. نقرة واحدة: حسب الخطة.`), { tags: 'fork_and_knife' });
@@ -128,7 +130,8 @@ async function reminders(uid, settings) {
     .concat(rm.bedtime === false ? [] : [{ id: 'bed', key: 'bedtime', t: bedM < 0 ? bedM + 1440 : bedM }]);
   for (const r of list) {
     if (rm[r.key] === false || sent.includes(r.id)) continue;
-    if (nowMin < r.t || nowMin > r.t + 150) continue;
+    const rt = adj(r.t);
+    if (nowMin < rt || nowMin > rt + 150) continue;
     let msg = null;
     if (r.key === 'morning') {
       const tt = C.trainType(settings, date);
@@ -160,7 +163,10 @@ async function reminders(uid, settings) {
       const g = settings.sleepGoal || 7.5, bed = settings.bedtime || '23:30', [bh, bm] = bed.split(':').map(Number), wk = ((bh * 60 + bm + g * 60) % 1440), wake = `${String(Math.floor(wk / 60)).padStart(2, '0')}:${String(Math.round(wk % 60)).padStart(2, '0')}`;
       msg = [A('Wind down', 'وقت الاسترخاء'), A(`Screens off soon. In bed by ${bed} gives you ${g} h of sleep (up at ${wake}). Better sleep means fewer cravings tomorrow.`, `قلّل الشاشات. النوم الساعة ${bed} يعطيك ${g} ساعات نوم (الاستيقاظ ${wake}). نوم أفضل يعني رغبات أقل بكرة.`), { tags: 'zzz' }];
     } else if (r.key === 'final') {
-      if (!ev.complete) msg = [A('1 hour left', 'باقي ساعة'), A(`Missing: ${ev.missing.join(', ')}`, `ناقص: ${ev.missing.map(trl).join('، ')}`), { tags: 'rotating_light', priority: 5 }];
+      const endT = C.minTxt(n.end - 1440), fajr = C.dayStartMode(settings.dayStart) === 'fajr';
+      if (!ev.complete) msg = n.end > 1440
+        ? [A(`Your day runs until ${fajr ? 'Fajr ' : ''}${endT}`, `يومك مستمر حتى ${fajr ? 'الفجر ' : ''}${endT}`), A(`Missing: ${ev.missing.join(', ')}`, `ناقص: ${ev.missing.map(trl).join('، ')}`), { tags: 'rotating_light', priority: 5 }]
+        : [A('1 hour left', 'باقي ساعة'), A(`Missing: ${ev.missing.join(', ')}`, `ناقص: ${ev.missing.map(trl).join('، ')}`), { tags: 'rotating_light', priority: 5 }];
     }
     sent.push(r.id);
     if (msg) await ntfy(msg[0], msg[1], msg[2]);

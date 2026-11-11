@@ -22,10 +22,53 @@ export const addDays = (s, n) => { const d = parse(s); d.setDate(d.getDate() + n
 export const diffDays = (a, b) => Math.round((parse(b) - parse(a)) / 864e5);
 export const weekday = s => parse(s).getDay();
 
-export function nowIn(tz) {
-  if (!tz) { const d = new Date(); return { date: ymd(d), hour: d.getHours(), minute: d.getMinutes() }; }
-  const parts = Object.fromEntries(new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(new Date()).map(p => [p.type, p.value]));
-  return { date: `${parts.year}-${parts.month}-${parts.day}`, hour: +parts.hour, minute: +parts.minute };
+/* ---------- when a new day starts: midnight (default), Fajr for a city, or a set time ---------- */
+export const CITIES = {
+  cairo: ['Cairo', 30.0444, 31.2357], giza: ['Giza', 30.0131, 31.2089], alexandria: ['Alexandria', 31.2001, 29.9187], mansoura: ['Mansoura', 31.0409, 31.3785],
+  tanta: ['Tanta', 30.7865, 31.0004], zagazig: ['Zagazig', 30.5877, 31.502], damietta: ['Damietta', 31.4165, 31.8133], portsaid: ['Port Said', 31.2653, 32.3019],
+  ismailia: ['Ismailia', 30.5965, 32.2715], suez: ['Suez', 29.9668, 32.5498], fayoum: ['Fayoum', 29.3084, 30.8428], benisuef: ['Beni Suef', 29.0661, 31.0994],
+  minya: ['Minya', 28.0871, 30.7618], asyut: ['Asyut', 27.181, 31.1837], sohag: ['Sohag', 26.5591, 31.6957], luxor: ['Luxor', 25.6872, 32.6396],
+  aswan: ['Aswan', 24.0889, 32.8998], hurghada: ['Hurghada', 27.2579, 33.8116], sharm: ['Sharm El Sheikh', 27.9158, 34.33], matrouh: ['Marsa Matrouh', 31.3543, 27.2373],
+};
+// Fajr: the sun 19.5° below the horizon before sunrise (Egyptian General Authority of Survey). Returns hours UTC on that date.
+export function fajrUTC(date, lat, lng, angle = 19.5) {
+  const [y, m, d] = date.split('-').map(Number), rad = Math.PI / 180, D = Date.UTC(y, m - 1, d) / 864e5 + 2440587.5 - 2451545.0;
+  const g = (357.529 + 0.98560028 * D) % 360, q = (280.459 + 0.98564736 * D) % 360;
+  const L = (q + 1.915 * Math.sin(g * rad) + 0.020 * Math.sin(2 * g * rad)) % 360, e = 23.439 - 0.00000036 * D;
+  const RA = Math.atan2(Math.cos(e * rad) * Math.sin(L * rad), Math.cos(L * rad)) / rad / 15, dec = Math.asin(Math.sin(e * rad) * Math.sin(L * rad)) / rad;
+  const eqt = (((q / 15 - ((RA + 24) % 24)) + 12) % 24 + 24) % 24 - 12, noon = 12 - lng / 15 - eqt;
+  const T = Math.acos((-Math.sin(angle * rad) - Math.sin(lat * rad) * Math.sin(dec * rad)) / (Math.cos(lat * rad) * Math.cos(dec * rad))) / rad / 15;
+  return noon - T;
+}
+function clockOf(dt, tz) {
+  if (!tz) return { date: ymd(dt), hour: dt.getHours(), minute: dt.getMinutes() };
+  const parts = Object.fromEntries(new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(dt).map(p => [p.type, p.value]));
+  return { date: `${parts.year}-${parts.month}-${parts.day}`, hour: +parts.hour % 24, minute: +parts.minute };
+}
+// Fajr on a calendar date as minutes after local midnight (the phone's clock, or tz on the server)
+export function fajrMin(date, city, tz) {
+  const c = CITIES[city] || CITIES.cairo, [y, m, d] = date.split('-').map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d) + fajrUTC(date, c[1], c[2]) * 36e5), k = clockOf(dt, tz || 'Africa/Cairo');
+  return k.date === date ? k.hour * 60 + k.minute : 0;
+}
+export const dayStartMode = ds => ds && (ds.mode === 'fajr' || ds.mode === 'time') ? ds.mode : 'midnight';
+// minutes after midnight when the day that starts on `date` begins
+export function dayStartMin(ds, date, tz) {
+  const mode = dayStartMode(ds);
+  if (mode === 'time') return Math.min(360, Math.max(0, hmm(ds.t) ?? 240));
+  if (mode === 'fajr') return fajrMin(date, ds.city, tz);
+  return 0;
+}
+const hmm = s => { const [a, b] = String(s || '').split(':').map(Number); return isNaN(a) ? null : a * 60 + (b || 0); };
+export const minTxt = m => `${Math.floor(m / 60) % 24}:${String(m % 60).padStart(2, '0')}`;
+// the app's "now": before the day starts (e.g. 1 am with Fajr chosen) it's still the previous date, with hour 24+ so
+// "late in the day" logic keeps working. clock = real hour; end = minutes after that date's midnight when the day ends.
+export function nowIn(tz, ds) {
+  const c = clockOf(new Date(), tz), cm = c.hour * 60 + c.minute, mode = dayStartMode(ds);
+  if (mode === 'midnight') return { ...c, clock: c.hour, late: false, starts: 0, end: 1440 };
+  const sm = dayStartMin(ds, c.date, tz);
+  if (cm < sm) { const date = addDays(c.date, -1); return { date, hour: c.hour + 24, minute: c.minute, clock: c.hour, late: true, starts: dayStartMin(ds, date, tz), end: 1440 + sm }; }
+  return { ...c, clock: c.hour, late: false, starts: sm, end: 1440 + dayStartMin(ds, addDays(c.date, 1), tz) };
 }
 
 /* nutrition */
@@ -112,7 +155,9 @@ const hm = s => { const [a, b] = String(s || '').split(':').map(Number); return 
 // share of today's drinking window that has passed, for water pace (normal: 08:00-22:00; Ramadan: midnight-fajr and iftar-midnight)
 export function waterPace(settings, date, mins) {
   if (!inRamadan(settings, date)) return Math.min(1, Math.max(0, (mins - 480) / 840));
-  const r = ramadanOf(settings), fajr = hm(r.fajr) ?? 285, iftar = hm(r.iftar) ?? 1050, total = fajr + (1440 - iftar);
+  const r = ramadanOf(settings), fajr = hm(r.fajr) ?? 285, iftar = hm(r.iftar) ?? 1050;
+  if (dayStartMode(settings.dayStart) !== 'midnight') return Math.min(1, Math.max(0, mins - iftar) / (1440 + fajr - iftar)); // the day runs iftar -> next Fajr
+  const total = fajr + (1440 - iftar);
   return Math.min(1, (Math.min(mins, fajr) + Math.max(0, mins - iftar)) / total);
 }
 /* the meal plan changes over time: settings.planLog keeps a copy per change date, so each day uses the plan that was active then */
@@ -236,7 +281,7 @@ export function computeRun(settings, days, now) {
   const today = now.date;
   let attemptStart = settings.attemptStart && settings.attemptStart > settings.startDate ? settings.attemptStart : settings.startDate;
   // the 3 am grace window only applies to a day inside the challenge (not the day before a start or reset)
-  const grace = now.hour < 3 && addDays(today, -1) >= attemptStart ? addDays(today, -1) : null;
+  const grace = dayStartMode(settings.dayStart) === 'midnight' && now.hour < 3 && addDays(today, -1) >= attemptStart ? addDays(today, -1) : null;
   const attempts = [];
   let lastFail = null;
   for (let d = attemptStart; d < today; d = addDays(d, 1)) {
