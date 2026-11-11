@@ -194,14 +194,14 @@ export function dayTotals(settings, day) {
 }
 
 /* drinks: anything you drink that you log in a meal or as an extra counts toward water (1 g ≈ 1 ml) */
-export const DRINK_IDS = ['coffee', 'coffee_milk', 'tea', 'green_tea', 'cola', 'cola_zero', 'sparkling', 'juice_orange', 'milk_skim', 'milk_full'];
+export const DRINK_IDS = ['coffee', 'coffee_instant', 'coffee_milk', 'tea', 'green_tea', 'cola', 'cola_zero', 'sparkling', 'juice_orange', 'milk_skim', 'milk_full'];
 export const isDrink = it => !!it && (it.drink === true || (it.drink !== false && DRINK_IDS.includes(it.fid)));
 export function drinkMl(day) {
   if (!day) return 0;
   let ml = 0;
   const meals = day.meals || {}, skip = day.skip || {};
-  Object.keys(meals).forEach(id => { const md = meals[id]; if (!md || !md.status || skip[id]) return; (md.items || []).forEach(it => { if (isDrink(it)) ml += it.g || 0; }); });
-  (day.extras || []).forEach(it => { if (isDrink(it)) ml += it.g || 0; });
+  Object.keys(meals).forEach(id => { const md = meals[id]; if (!md || !md.status || skip[id]) return; (md.items || []).forEach(it => { if (isDrink(it)) ml += it.ml ?? it.g ?? 0; }); });
+  (day.extras || []).forEach(it => { if (isDrink(it)) ml += it.ml ?? it.g ?? 0; });
   return Math.round(ml);
 }
 export const waterTotal = day => ((day && day.water) || 0) + drinkMl(day);
@@ -215,15 +215,37 @@ export function pillars(settings, day, date) {
   day = day || {};
   const pm = plannedMeals(settings, day, date);
   const meals = day.meals || {};
-  const isClean = id => meals[id] && (meals[id].status === 'plan' || meals[id].status === 'swap');
-  const off = pm.filter(m => meals[m.id] && meals[m.id].status === 'off');
+  const cheatDay = !!(day.cheatDay && settings.cheat && settings.cheat.on);
+  const isClean = id => cheatDay || (meals[id] && (meals[id].status === 'plan' || meals[id].status === 'swap' || meals[id].status === 'cheat'));
+  const off = cheatDay ? [] : pm.filter(m => meals[m.id] && meals[m.id].status === 'off');
   const clean = pm.filter(m => isClean(m.id)).length;
   const goal = settings.waterGoal || 3500, wDrinks = drinkMl(day), w = (day.water || 0) + wDrinks;
   const tt = trainType(settings, date);
   const req = (settings.supps || []).filter(s => s.req);
   const sDone = req.filter(s => (day.supps || {})[s.id]).length;
-  const offExtra = (day.extras || []).filter(x => x.off);
-  return { pm, clean, off, offExtra, wDrinks, mealsOk: pm.length > 0 && clean === pm.length && !offExtra.length, goal, w, tt, trained: tt === 'rest' || !!day.trainingDone, req, sDone };
+  const offExtra = cheatDay ? [] : (day.extras || []).filter(x => x.off);
+  return { pm, clean, off, offExtra, cheatDay, cheats: cheatDay ? 1 : pm.filter(m => meals[m.id] && meals[m.id].status === 'cheat').length, wDrinks, mealsOk: pm.length > 0 && clean === pm.length && !offExtra.length, goal, w, tt, trained: tt === 'rest' || !!day.trainingDone, req, sDone };
+}
+/* your own week: starts Saturday, the weekday you started the challenge (default), or a day you pick (0 = Sunday) */
+export function weekStartDay(settings) {
+  const w = (settings && settings.weekStart) || {};
+  return w.mode === 'sat' ? 6 : w.mode === 'day' && w.d >= 0 && w.d <= 6 ? +w.d : settings && settings.startDate ? weekday(settings.startDate) : 6;
+}
+export const myWeekStart = (settings, date) => addDays(date, -((weekday(date) - weekStartDay(settings) + 7) % 7));
+/* free cheat meals: how many are allowed in the window around `date`, and the window itself */
+export function cheatWindow(settings, date) {
+  const c = (settings && settings.cheat) || {}, ws = myWeekStart(settings, date);
+  if (c.per === '1of2w') { const w0 = myWeekStart(settings, settings.startDate || date), k = Math.floor(diffDays(w0, ws) / 14); const from = addDays(w0, k * 14); return { from, to: addDays(from, 13), max: 1 }; }
+  return { from: ws, to: addDays(ws, 6), max: c.per === '2w' ? 2 : 1 };
+}
+export function cheatsUsed(settings, days, date, exceptDate) {
+  const win = cheatWindow(settings, date); let n = 0; const on = [];
+  for (let d = win.from; d <= win.to; d = addDays(d, 1)) {
+    const day = days[d]; if (!day) continue;
+    const k = day.cheatDay ? 1 : Object.values(day.meals || {}).filter(m => m && m.status === 'cheat').length;
+    if (k && d !== exceptDate) { n += k; on.push(d); }
+  }
+  return { ...win, used: n, on, left: Math.max(0, win.max - n) };
 }
 export function evalDay(settings, day, date) {
   day = day || {};

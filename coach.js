@@ -44,7 +44,7 @@ const ARS = {
   'Last 7 days · {0} sessions · {1} cardio min': 'آخر 7 أيام · {0} جلسات · {1} دقيقة كارديو', '{0} min': '{0} دقيقة', '{0} sets': '{0} مجموعة', '{0} t': '{0} طن', '+ {0} min cardio': '+ {0} دقيقة كارديو', '~{0} kcal': '~{0} سعرة',
   'Marked done': 'تم التعليم كمكتمل', 'Not done': 'لم يتم', 'Missed': 'فات', '{0} records': '{0} أرقام', '1 record': 'رقم جديد', 'Cardio': 'كارديو', 'Calisthenics': 'كاليسثينكس', 'Nothing logged in the last 7 days.': 'لا شيء مسجل في آخر 7 أيام.',
   '{0}-day overview': 'نظرة {0} يوم', 'Each square is one day. Tap a day for details.': 'كل مربع يوم. اضغط على يوم للتفاصيل.', 'Done': 'تم', 'Partly': 'جزئيًا', 'Rest / not logged': 'راحة / غير مسجل', 'Before the start': 'قبل البداية', 'Sleep {0} h': 'النوم {0} س',
-  'Locked in': 'مكتمل', 'In progress': 'جارٍ', 'Missed: {0}': 'فات: {0}', 'note': 'ملاحظة', 'Latest note': 'آخر ملاحظة',
+  'Locked in': 'مكتمل', 'Free cheat meal': 'وجبة فري (شيت ميل)', '{0} free cheat meals': '{0} وجبات فري', 'Allowed in the plan, so the day counted.': 'مسموح بها في الخطة، فاليوم اتحسب.', 'Cheat meal': 'وجبة فري', 'In progress': 'جارٍ', 'Missed: {0}': 'فات: {0}', 'note': 'ملاحظة', 'Latest note': 'آخر ملاحظة',
   '{0} / {1} kcal': '{0} / {1} سعرة', '{0} kcal': '{0} سعرة', '{0} g protein': '{0} جم بروتين', '{0} / {1} g protein': '{0} / {1} جم بروتين', '{0} / {1} L water': '{0} / {1} لتر مياه', 'Rest day': 'يوم راحة', 'Supps {0}/{1}': 'المكملات {0}/{1}', '{0} h sleep': '{0} ساعة نوم', '{0} kg': '{0} كجم', '{0} g': '{0} جم',
   'Measurements': 'القياسات', '{0} check-ins': '{0} متابعات', '1 check-in': 'متابعة واحدة', 'waist': 'الوسط', 'chest': 'الصدر', 'hips': 'الأرداف', 'arm': 'الذراع', 'neck': 'الرقبة', 'waist ÷ height': 'الوسط ÷ الطول', 'under 0.5 is healthy': 'أقل من 0.5 صحي', '{0} cm': '{0} سم',
   'Read-only view shared from the Lock In 90 app · updates when {0} logs': 'عرض للقراءة فقط من تطبيق Lock In 90 · يتحدث عندما يسجل {0}', 'Dark mode': 'الوضع الداكن', 'Light mode': 'الوضع الفاتح',
@@ -79,11 +79,11 @@ function ago(ms) {
 
 /* ---------- cards ---------- */
 function weekCard(s, days) {
-  const last = days[days.length - 1].d, dow = pd(last).getDay(), sat = addD(last, -((dow + 1) % 7)), fri = addD(sat, 6);
+  const last = days[days.length - 1].d, w0 = s.ws ?? 6, sat = addD(last, -((pd(last).getDay() - w0 + 7) % 7)), fri = addD(sat, 6);
   const wk = days.filter(d => d.d >= sat), closed = wk.filter(d => !d.now || d.ok), base = closed.length ? closed : wk;
   const okN = wk.filter(d => d.ok).length, of = closed.length || wk.length;
   const pct = (a, f) => { const x = a.filter(f.has); return x.length ? x.filter(f.ok).length / x.length : null; };
-  const meals = pct(base, { has: d => d.ms !== 'none', ok: d => d.ms === 'ok' });
+  const meals = pct(base, { has: d => d.ms !== 'none', ok: d => d.ms === 'ok' || d.ms === 'cheat' });
   const waterN = base.filter(d => d.w >= d.wg).length;
   const plan = base.filter(d => d.tr !== 'rest'), trN = plan.filter(d => d.tr === 'done').length;
   const sup = pct(base, { has: d => d.ss !== 'none', ok: d => d.ss === 'ok' });
@@ -99,7 +99,7 @@ function weekCard(s, days) {
 
 function flagsCard(s, days, wts) {
   const last7 = days.slice(-7), c7 = last7.filter(d => !d.now || d.ok), F = [];
-  const flag = (k, title, sub) => F.push(`<div class="flag"><i class="f-${k}" aria-hidden="true">${{ water: '💧', food: '◐', sleep: '☾', supp: '✚', train: '✗', scale: '⚖', ok: '✓' }[k]}</i><span><b>${title}</b><small>${sub}</small></span></div>`);
+  const flag = (k, title, sub) => F.push(`<div class="flag"><i class="f-${k}" aria-hidden="true">${{ water: '💧', food: '◐', sleep: '☾', supp: '✚', train: '✗', scale: '⚖', ok: '✓', cheat: '🍕' }[k]}</i><span><b>${title}</b><small>${sub}</small></span></div>`);
   const wm = c7.filter(d => d.w < d.wg);
   if (wm.length) flag('water', times(wm.length, 'Water missed {0} times', 'Water missed once'), wm.map(d => `${wd(d.d)} ${t('{0} of {1} L', d.w, d.wg)}`).join(', ') + '.');
   const pu = c7.filter(d => d.k > 0 && d.tp > 0 && d.p < d.tp * 0.9);
@@ -112,11 +112,13 @@ function flagsCard(s, days, wts) {
   if (sm.length) flag('supp', times(sm.length, 'Supplements missed on {0} days', 'Supplements missed once'), sm.map(d => `${wd(d.d)} ${d.sup[0]}/${d.sup[1]}`).join(', ') + '.');
   const tm = c7.filter(d => d.tr === 'no');
   if (tm.length) flag('train', times(tm.length, 'Training missed {0} times', 'Training missed once'), tm.map(d => `${wd(d.d)} ${esc(trw(d.tt))}`).join(', ') + '.');
+  const ch = last7.filter(d => d.ms === 'cheat');
+  if (ch.length) flag('cheat', ch.length === 1 ? t('Free cheat meal') : t('{0} free cheat meals', ch.length), ch.map(d => `${wd(d.d)} ${fmt(d.d)}`).join(', ') + '. ' + t('Allowed in the plan, so the day counted.'));
   const lastW = wts.length ? wts[wts.length - 1][0] : null;
   if (days.length >= 7 && (!lastW || lastW < last7[0].d)) flag('scale', t('No weigh-ins this week'), lastW ? t('Last weigh-in: {0}.', fmt(lastW)) : t('None logged yet.'));
   const plan = c7.filter(d => d.tr !== 'rest'), done = plan.filter(d => d.tr === 'done'), prs = last7.reduce((a, d) => a + (d.wo && d.wo.pr || 0), 0);
   if (plan.length && done.length === plan.length) flag('ok', prs > 1 ? t('Training {0} of {1}, {2} new records', done.length, plan.length, prs) : prs === 1 ? t('Training {0} of {1}, 1 new record', done.length, plan.length) : t('Training {0} of {1}', done.length, plan.length), tally(done.map(d => d.wo ? (d.wo.cali ? t('Calisthenics') : d.wo.n) : trw(d.tt))));
-  if (F.length === 0 || (F.length === 1 && F[0].includes('f-ok'))) F.unshift(`<div class="flag"><i class="f-ok" aria-hidden="true">✓</i><span><b>${t('All on track')}</b><small>${t('Nothing to flag in the last 7 days.')}</small></span></div>`);
+  if (F.every(x => x.includes('f-ok') || x.includes('f-cheat'))) F.unshift(`<div class="flag"><i class="f-ok" aria-hidden="true">✓</i><span><b>${t('All on track')}</b><small>${t('Nothing to flag in the last 7 days.')}</small></span></div>`);
   return `<section class="card"><h2>${t('Needs attention')}</h2><span class="sub">${t('From the last 7 days')}</span><div class="flags">${F.join('')}</div></section>`;
 }
 
@@ -192,7 +194,7 @@ function trainCard(days) {
 
 const cellOf = (d, k, goal) => {
   const live = d.now && !d.ok;
-  if (k === 'm') return d.ms === 'ok' ? 'g' : d.ms === 'off' ? 'b' : live || d.ms === 'none' ? 'n' : 'y';
+  if (k === 'm') return d.ms === 'cheat' ? 'c' : d.ms === 'ok' ? 'g' : d.ms === 'off' ? 'b' : live || d.ms === 'none' ? 'n' : 'y';
   if (k === 'w') return d.w >= d.wg ? 'g' : live ? (d.w > 0 ? 'y' : 'n') : d.w >= d.wg * 0.75 ? 'y' : 'b';
   if (k === 't') return d.tr === 'rest' ? 'n' : d.tr === 'done' ? 'g' : live ? 'n' : 'b';
   if (k === 's') return d.ss === 'ok' ? 'g' : d.ss === 'none' ? 'n' : d.ss === 'part' ? 'y' : live ? 'n' : 'b';
@@ -203,15 +205,15 @@ function heatCard(s, days) {
   const pad = Math.max(0, 14 - days.length), pre = Array.from({ length: pad }, (_, j) => addD(days[0].d, j - pad));
   const padH = pre.map(d => `<span class="dh pad">${wd(d).slice(0, AR() ? 3 : 1)}<em class="num">${pd(d).getDate()}</em></span>`).join(''), padC = '<span class="c pad"></span>'.repeat(pad);
   let h = `<span></span>` + padH + days.map((d, i) => `<button class="dh${d.now ? ' on' : ''}" data-i="${i}" aria-label="${fmt(d.d, { weekday: 'long', day: 'numeric', month: 'long' })}">${wd(d.d).slice(0, AR() ? 3 : 1)}<em class="num">${pd(d.d).getDate()}</em></button>`).join('');
-  rows.forEach(([lab, k]) => { h += `<span class="lab">${k === 'z' ? lab : t(lab)}</span>` + padC + days.map((d, i) => `<button class="c c-${cellOf(d, k, goal)}${d.now ? ' today' : ''}" data-i="${i}" tabindex="-1" aria-hidden="true"></button>`).join(''); });
+  rows.forEach(([lab, k]) => { h += `<span class="lab">${k === 'z' ? lab : t(lab)}</span>` + padC + days.map((d, i) => { const c = cellOf(d, k, goal); return `<button class="c c-${c}${d.now ? ' today' : ''}" data-i="${i}" tabindex="-1" aria-hidden="true">${c === 'c' ? 'C' : ''}</button>`; }).join(''); });
   const ln = days.slice().reverse().find(d => d.note);
   return `<section class="card span3"><h2>${t('{0}-day overview', 14)}</h2><span class="sub">${t('Each square is one day. Tap a day for details.')}</span>
   <div class="heat" id="heat" style="grid-template-columns:minmax(56px,auto) repeat(14,minmax(0,1fr))">${h}</div>
-  <div class="leg"><span><i style="background:var(--good)"></i>${t('Done')}</span><span><i style="background:var(--bad)"></i>${t('Missed')}</span><span><i style="background:var(--gold)"></i>${t('Partly')}</span><span><i style="background:var(--s2)"></i>${t('Rest / not logged')}</span>${pad ? `<span><i class="padk"></i>${t('Before the start')}</span>` : ''}</div>
+  <div class="leg"><span><i style="background:var(--good)"></i>${t('Done')}</span><span><i style="background:var(--bad)"></i>${t('Missed')}</span><span><i style="background:var(--gold)"></i>${t('Partly')}</span><span><i style="background:var(--s2)"></i>${t('Rest / not logged')}</span><span><i style="background:var(--gold)"></i>C ${t('Free cheat meal')}</span>${pad ? `<span><i class="padk"></i>${t('Before the start')}</span>` : ''}</div>
   <div class="det" id="det"></div>${ln ? `<div class="note" id="lnote"><b>${t('Latest note')} · ${wd(ln.d)} ${fmt(ln.d)}</b><span class="keep">${esc(ln.note)}</span></div>` : ''}</section>`;
 }
 function dayDetail(d) {
-  const st = d.ok ? `<span class="pill ok">${t('Locked in')}</span>` : d.now ? `<span class="pill">${t('In progress')}</span>` : `<span class="pill no">${d.miss && d.miss.length ? t('Missed: {0}', esc(d.miss.map(trw).join(', '))) : t('Missed')}</span>`;
+  const st = d.ms === 'cheat' && d.ok ? `<span class="pill ok">${t('Locked in')} · 🍕 ${t('Cheat meal')}</span>` : d.ok ? `<span class="pill ok">${t('Locked in')}</span>` : d.now ? `<span class="pill">${t('In progress')}</span>` : `<span class="pill no">${d.miss && d.miss.length ? t('Missed: {0}', esc(d.miss.map(trw).join(', '))) : t('Missed')}</span>`;
   const bits = [
     d.k ? (d.tk ? t('{0} / {1} kcal', nf(d.k), nf(d.tk)) : t('{0} kcal', nf(d.k))) : '',
     d.p ? (d.tp ? t('{0} / {1} g protein', d.p, d.tp) : t('{0} g protein', d.p)) : '',

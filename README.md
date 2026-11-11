@@ -21,7 +21,10 @@ One screen for the day. A navy scoreboard shows four rings around the day number
   - **Servings, not just grams:** pack, slice, cup, bar and so on, with a ½-step amount. The app remembers what you used last time.
   - **More nutrients:** sodium (and salt), sugar, saturated fat, fiber, potassium and calcium for each food and for the day, against WHO limits, with the foods that gave you the most sodium.
   - **Add from a label:** per 100 g or per serving, sodium or salt, your own servings, and a check that catches typos. You can photograph the nutrition table and the phone reads the numbers (on the phone itself, English and Arabic). Also barcode scan, USDA search and recipes.
+  - **Drinks and cooking:** add milk, sugar, honey, creamer or sweetener to a coffee or tea, and the ghee, oil, butter or spray a food or meal was cooked with (with your own teaspoon size). Each is logged as one item, and favourites become one-tap "usuals". Cooking fat adds calories but never makes a meal off-plan.
+  - **Free cheat meal:** if your coach allows it, 1 or 2 a week (or 1 every 2 weeks), as one meal or a whole day. The day still counts, and the coach page marks it.
   - **Friends' foods:** share a food you added and everyone in your group can log it.
+- **Your own week:** weeks start on the weekday you began (or Saturday, or any day you pick) for the weekly review, focus, muscle sets and cheat meal. The friends league stays Saturday to Friday.
 - **Your day, your clock:** the new day starts at midnight by default, or at Fajr (worked out daily for 20 Egyptian cities) or a set time, so logging at 1 am still counts for the day you're in.
 - **Habits:** a morning commitment, if-then plans for risky moments, a 3-tap reflection after a missed day, a 10-minute craving tool, a sleep goal with a bedtime reminder, and one weekly focus goal.
 - **Ramadan mode:** a Suhoor / Iftar / after-Taraweeh plan, water paced from iftar to fajr, and an iftar countdown.

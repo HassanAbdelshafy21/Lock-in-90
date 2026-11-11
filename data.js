@@ -152,6 +152,7 @@ const RAW = [
   ['oil', 'Vegetable oil', 884, 0, 0, 100, [['tsp', 4.5], ['tbsp', 13.5]], 'زيت'],
   ['ghee', 'Ghee', 876, 0, 0, 99.5, [['tsp', 4.5], ['tbsp', 13]], 'سمنة'],
   ['butter', 'Butter', 717, 0.9, 0.1, 81, [['tsp', 5], ['tbsp', 14]], 'زبدة'],
+  ['spray', 'Cooking spray (oil)', 792, 0, 20.7, 78.7, [['1-second spray', 0.75]], 'سبراي زيت للطبخ'],
   ['tahini', 'Tahini', 595, 17, 21, 54, [['tbsp', 15]], 'طحينة'],
   ['peanut_butter', 'Peanut butter', 588, 25, 20, 50, [['tbsp', 16]], 'زبدة فول سوداني'],
   ['almonds', 'Almonds', 579, 21, 22, 50, [['handful', 28]], 'لوز'],
@@ -161,6 +162,10 @@ const RAW = [
   ['mayo', 'Mayonnaise', 680, 1, 0.6, 75, [['tbsp', 14]], 'مايونيز'],
   // drinks and treats
   ['coffee', 'Coffee, black', 2, 0.3, 0, 0, [['cup', 240]], 'قهوة'],
+  ['coffee_instant', 'Instant coffee (Nescafé), made with water', 2, 0.1, 0.3, 0, [['mug', 200], ['cup', 240]], 'نسكافيه قهوة سريعة التحضير'],
+  ['creamer', 'Coffee creamer, powder', 545, 4.8, 55, 35.5, [['tsp', 2], ['sachet', 5]], 'كريمر مبيض قهوة'],
+  ['sweetener', 'Sweetener (tablet or drops)', 0, 0, 0, 0, [['tablet', 0.1]], 'محلي صناعي'],
+  ['cinnamon', 'Cinnamon, ground', 247, 4, 80.6, 1.2, [['tsp', 2.6]], 'قرفة'],
   ['coffee_milk', 'Coffee with milk, no sugar (est.)', 25, 1.4, 2.1, 1.1, [['cup', 240]], 'قهوة باللبن'],
   ['tea', 'Tea, no sugar', 1, 0, 0.3, 0, [['cup', 240]], 'شاي'],
   ['green_tea', 'Green tea, no sugar', 1, 0, 0.2, 0, [['cup', 240]], 'شاي أخضر'],
@@ -195,7 +200,7 @@ const MICRO = {
   strawberry: [1, 4.9, 0, 2, 153, 16], grapes: [2, 15.5, 0.1, 0.9, 191, 10], watermelon: [1, 6.2, 0, 0.4, 112, 7], pomegranate: [3, 13.7, 0.1, 4, 236, 10], kiwi: [3, 9, 0, 3, 312, 34], pear: [1, 9.8, 0, 3.1, 116, 9], dates: [2, 63, 0, 8, 656, 39],
   chia: [16, 0, 3.3, 34.4, 407, 631], cacao: [21, 1.8, 8.1, 37, 1524, 128], olive_oil: [2, 0, 13.8, 0, 1, 1], oil: [0, 0, 12, 0, 0, 0], ghee: [2, 0, 62, 0, 5, 4], butter: [11, 0.1, 51, 0, 24, 24],
   tahini: [115, 0.5, 7.5, 9.3, 414, 426], peanut_butter: [459, 9, 10, 6, 558, 49], almonds: [1, 4.4, 3.8, 12.5, 733, 269], walnuts: [2, 2.6, 6.1, 6.7, 441, 98], honey: [4, 82, 0, 0.2, 52, 6], sugar: [1, 100, 0, 0, 2, 1], mayo: [635, 0.6, 11.7, 0, 20, 8],
-  coffee: [2, 0, 0, 0, 49, 2], coffee_milk: [15, 2, 0.7, 0, 80, 35], tea: [3, 0, 0, 0, 37, 0], green_tea: [1, 0, 0, 0, 8, 0], cola: [4, 10.6, 0, 0, 2, 2], cola_zero: [12, 0, 0, 0, 8, 3], sparkling: [2, 0, 0, 0, 0, 3], juice_orange: [1, 8.4, 0, 0.2, 200, 11],
+  coffee: [2, 0, 0, 0, 49, 2], coffee_instant: [4, 0, 0, 0, 30, 4], creamer: [181, 55, 32.5, 0, 812, 22], sweetener: [0, 0, 0, 0, 0, 0], cinnamon: [10, 2.2, 0.3, 53, 431, 1002], spray: [0, 0, 10, 0, 0, 0], coffee_milk: [15, 2, 0.7, 0, 80, 35], tea: [3, 0, 0, 0, 37, 0], green_tea: [1, 0, 0, 0, 8, 0], cola: [4, 10.6, 0, 0, 2, 2], cola_zero: [12, 0, 0, 0, 8, 3], sparkling: [2, 0, 0, 0, 0, 3], juice_orange: [1, 8.4, 0, 0.2, 200, 11],
   shawarma: [550, 2, 2.5, 1.5, 220, 40], burger: [500, 4, 4.5, 1.3, 220, 70], pizza: [600, 3.6, 4.5, 2.3, 180, 190], hawawshi: [550, 2, 6, 2, 220, 30], feteer: [300, 2, 13, 1.5, 80, 15], chocolate: [79, 52, 18.5, 3.4, 372, 189], basbousa: [150, 35, 6, 1, 80, 30]
 };
 export const MICRO_KEYS = ['na', 'sug', 'sat', 'fib', 'pot', 'ca'];
