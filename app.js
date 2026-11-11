@@ -4,7 +4,7 @@ import { initializeFirestore, getFirestore, persistentLocalCache, persistentMult
 import * as C from './core.js';
 import { trText, addFoodNames } from './i18n.js';
 import * as TR from './train.js';
-const APP_VERSION = '29 · weekly calorie budget';
+const APP_VERSION = '29.1 · Day and week settings';
 import { EX, POSE, figSVG, YT, LINES, FOODS, COACH_MEALS, DEFAULT_SUPPS, COACH_ENC, SLOTS, CARDIO_MODES } from './data.js';
 import { BRANDS, BRAND_BY_CODE } from './brands.js';
 addFoodNames(FOODS); addFoodNames(BRANDS);
@@ -713,7 +713,7 @@ function progressShell(G) {
   return `<div class="seg wide ptabs" role="tablist" aria-label="Progress sections">${PTABS.map(([k, l]) => `<button role="tab" data-act="ptab" data-v="${k}" aria-pressed="${tab === k}">${l}</button>`).join('')}</div>` + (G[tab] || '');
 }
 const ME_GROUPS = [
-  ['Plan', [['Meal plan', '🍽️'], ['Weekly training', '🏋️'], ['Supplements', '💊'], ['Stamina track', '🚴'], ['Ramadan mode', '☾']]],
+  ['Plan', [['Day and week', '📅'], ['Meal plan', '🍽️'], ['Weekly training', '🏋️'], ['Supplements', '💊'], ['Stamina track', '🚴'], ['Ramadan mode', '☾']]],
   ['Habits', [['If-then plans', '⇢'], ['Reminders', '🔔']]],
   ['Sharing', [['Coach link', '🔗'], ['Strava', '↻']]],
   ['App', [['Data', '⚙️'], ['Restart', '↺']]]
@@ -1403,7 +1403,8 @@ function setupHTML(R) {
   <div class="setup-r"><label for="s-bed">Bedtime</label><input class="in" id="s-bed" type="time" data-bedtime="1" value="${esc(st.bedtime || '23:30')}" style="width:120px"></div>
   <div class="setup-r"><label for="s-age">Age (optional)</label><input class="in" id="s-age" type="number" inputmode="numeric" min="16" max="90" data-setting="age" placeholder="for heart-rate calories" value="${st.age || ''}"></div>
   <div class="setup-r"><span>Calorie formula</span><div class="seg" role="group" aria-label="Sex for calorie formula"><button data-act="sex" data-v="m" aria-pressed="${st.sex !== 'f'}">Male</button><button data-act="sex" data-v="f" aria-pressed="${st.sex === 'f'}">Female</button></div></div>
-  <div class="setup-r"><span>Usual gym time</span><div class="seg"><button data-act="defgym" data-v="am" aria-pressed="${(st.gymTime || 'am') === 'am'}">Morning</button><button data-act="defgym" data-v="pm" aria-pressed="${st.gymTime === 'pm'}">Night</button></div></div>${dayStartHTML(st)}${weekStartHTML(st)}</section>`;
+  <div class="setup-r"><span>Usual gym time</span><div class="seg"><button data-act="defgym" data-v="am" aria-pressed="${(st.gymTime || 'am') === 'am'}">Morning</button><button data-act="defgym" data-v="pm" aria-pressed="${st.gymTime === 'pm'}">Night</button></div></div></section>`;
+  h += `<section class="card" id="sec-dayweek"><div class="card-h"><h2>Day and week</h2></div><p class="hint">When your day ends and when your week starts.</p>${dayStartHTML(st)}${weekStartHTML(st)}</section>`;
   // meal plan
   const PM = planMeals(), planTot = C.sumItems(PM.flatMap(m => m.items || []));
   h += `<section class="card" id="sec-plan"><div class="card-h"><h2>Meal plan</h2>${pill('todo', `${kc(planTot.k)} kcal · ${kc(planTot.p)} g protein`)}</div>
