@@ -17,14 +17,15 @@ One screen for the day. A navy scoreboard shows four rings around the day number
 
 - **Every day needs all four:** every planned meal on plan, the water goal, that day's training and the core supplements. Miss one and the counter resets to Day 1. The day after a miss is flagged "Never miss twice."
 - **Food:** your coach's meal plan or your own, one-tap "As planned", and calories and macros from a built-in library (Egyptian staples included, cooked weights). Drinks count toward water.
-  - **Egyptian brands:** popular packaged products (Balance, Juhayna, Domty, Almarai, Lamar, Rich Bake, Abu Auf, Molto and more) checked against their labels, plus McDonald's Egypt from its published tables. Anything else sold in Egypt can be searched on Open Food Facts, and entries whose calories don't add up are left out.
+  - **Egyptian brands:** popular packaged products (Balance, Juhayna, Domty, Almarai, Lamar, Rich Bake, Abu Auf, Molto and more) checked against their labels, plus McDonald's Egypt from its published tables and Dunkin' cappuccino and latte (whole or skim milk, small to large). Anything else sold in Egypt can be searched on Open Food Facts, and entries whose calories don't add up are left out.
   - **Servings, not just grams:** pack, slice, cup, bar and so on, with a ½-step amount. The app remembers what you used last time.
   - **More nutrients:** sodium (and salt), sugar, saturated fat, fiber, potassium and calcium for each food and for the day, against WHO limits, with the foods that gave you the most sodium.
   - **Add from a label:** per 100 g or per serving, sodium or salt, your own servings, and a check that catches typos. You can photograph the nutrition table and the phone reads the numbers (on the phone itself, English and Arabic). Also barcode scan, USDA search and recipes.
-  - **Drinks and cooking:** add milk, sugar, honey, creamer or sweetener to a coffee or tea, and the ghee, oil, butter or spray a food or meal was cooked with (with your own teaspoon size). Each is logged as one item, and favourites become one-tap "usuals". Cooking fat adds calories but never makes a meal off-plan.
+  - **Drinks and cooking:** add milk, sugar, honey, creamer or sweetener to a coffee or tea, and the ghee, oil, butter or spray a food or meal was cooked with (with your own teaspoon size). Each is logged as one item. Cooking fat adds calories but never makes a meal off-plan.
   - **Weekly calorie budget (optional):** go over one day and the rest of your week's targets drop a little to pay it back, spread out or as soon as possible, never more than a set share of a day and never below a floor. Today's planned carb and fat portions shrink to match; protein never does.
-  - **Add a whole meal:** a burger, fries and a drink logged as one entry, as an extra or instead of a planned meal, allowed, off-plan or as your free cheat meal. Save it to your usuals for one tap next time.
-  - **Free cheat meal:** if your coach allows it, 1 or 2 a week (or 1 every 2 weeks), as one meal or a whole day. The day still counts, and the coach page marks it.
+  - **Daily list:** a "Daily" tab in Meals for the things you have most days (your coffee, your tea, a usual meal). One tap adds it, it shows when you had it and how many, and the first three sit as quick buttons on Today.
+  - **Add a whole meal:** a burger, fries and a drink logged as one entry, as an extra or instead of a planned meal, allowed, off-plan or as your free cheat meal. Save it to your Daily list for one tap next time.
+  - **Free cheat meal:** if your coach allows it, 1 or 2 a week (or 1 every 2 weeks), as one meal or a whole day. The day still counts, and the coach page marks it. A cheat meal never resets the challenge: if a recent day broke your streak only because of off-plan food, Today offers to count it as that week's free cheat meal and the streak comes back.
   - **Friends' foods:** share a food you added and everyone in your group can log it.
 - **Your own week:** weeks start on the weekday you began (or Saturday, or any day you pick) for the weekly review, focus, muscle sets and cheat meal. The friends league stays Saturday to Friday.
 - **Your day, your clock:** the new day starts at midnight by default, or at Fajr (worked out daily for 20 Egyptian cities) or a set time, so logging at 1 am still counts for the day you're in.
@@ -105,6 +106,6 @@ _Screenshots use a demo account with made-up data._
 ## Credits
 
 - Exercises and photos: [free-exercise-db](https://github.com/yuhonas/free-exercise-db), public domain (`ex/LICENSE-free-exercise-db.md`).
-- Food data: [Open Food Facts](https://world.openfoodfacts.org) (ODbL), [USDA FoodData Central](https://fdc.nal.usda.gov) (public domain), McDonald's Egypt published nutrition tables. Label reading: [Tesseract.js](https://github.com/naptha/tesseract.js) (Apache 2.0), loaded only when you use it.
+- Food data: [Open Food Facts](https://world.openfoodfacts.org) (ODbL), [USDA FoodData Central](https://fdc.nal.usda.gov) (public domain), McDonald's Egypt published nutrition tables, Dunkin' nutrition guide (calories; the rest worked out from the milk). Label reading: [Tesseract.js](https://github.com/naptha/tesseract.js) (Apache 2.0), loaded only when you use it.
 - Font: [Alexandria](https://fonts.google.com/specimen/Alexandria), SIL Open Font License (`fonts/OFL-Alexandria.txt`).
 - Sports calories: 2024 Adult Compendium of Physical Activities. Body numbers: NICE 2022 waist-to-height bands and the US Navy body-fat formula.

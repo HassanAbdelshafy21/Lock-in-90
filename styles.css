@@ -931,3 +931,14 @@ details.why{margin-top:6px}
 .btn.mbb{border-color:var(--primary);color:var(--ink);background:var(--accent-soft)}
 .state.s-cheat{background:var(--warn-soft);color:var(--ink)}
 .nm .link{display:block;font-size:12px;margin:2px 0}
+/* Daily list */
+.panelsheet .tabsP,.tabsP{display:flex;background:var(--surface-2);border-radius:14px;padding:3px;gap:3px;margin:0 0 12px}
+.tabsP button{flex:1;border:0;background:none;padding:9px 0;border-radius:11px;font:600 13px var(--f-body);color:var(--ink-2);min-height:40px}
+.tabsP button[aria-selected="true"]{background:var(--surface);color:var(--ink);box-shadow:0 1px 3px rgba(20,33,61,.12)}
+.drow{display:grid;grid-template-columns:38px 1fr auto;gap:10px;align-items:center;padding:11px 0;border-bottom:1px solid var(--line)}
+.drow .dic{width:38px;height:38px;border-radius:12px;background:var(--warn-soft);display:grid;place-items:center;font-size:18px}
+.drow b{font-size:14px;display:block}.drow small{font-size:11.5px;color:var(--muted)}
+.btn.dadd{background:var(--primary);color:var(--on-primary);border-color:var(--primary);white-space:nowrap}.btn.dadd.done{background:var(--good-soft);color:var(--good);border-color:transparent}
+.hero .qk{display:flex;gap:8px;overflow-x:auto;margin:8px 0 2px;scrollbar-width:none}.hero .qk::-webkit-scrollbar{display:none}
+.hero .qk button{flex:none;border:0;background:rgba(255,255,255,.1);color:#fff;border-radius:14px;padding:8px 12px;font:600 12.5px var(--f-body);min-height:36px}.hero .qk i{font-style:normal;color:var(--warn)}
+.cheatfix{background:var(--warn-soft);border-radius:14px;padding:11px 12px;display:grid;gap:8px;margin:8px 0}.cheatfix p{margin:0;font-size:13.5px}

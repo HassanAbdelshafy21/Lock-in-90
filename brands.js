@@ -41,6 +41,11 @@ const P = [
   ['rb_oat', 'Rich Bake Oat Toast', 'Rich Bake', 'ريتش بيك توست شوفان', '6223000430194', 260, 12.8, 44.8, 3.6, { sug: 4, sat: 1.2, fib: 2.4 }, [['slice', 25]], 'toast_brown', 0],
   ['rb_bran_tortilla', 'Rich Bake Bran Tortilla', 'Rich Bake', 'ريتش بيك تورتيلا ردة', '6223000432167', 277, 7.8, 58.9, 1.1, { na: 530, sug: 2.2, sat: 0, fib: 4.4 }, [['tortilla', 90]], null, 1],
   ['rb_arabic', 'Rich Bake Arabic Bread', 'Rich Bake', 'ريتش بيك عيش شامي', '6223000434109', 273, 9, 57, 1, null, [], 'baladi', 0],
+  // Dunkin' hot drinks: calories from Dunkin's US nutrition guide (Oct 2026: whole-milk cappuccino 80/120/160 kcal for small/medium/large);
+  // protein, carbs, fat and the rest are worked out from the milk. Small 10 oz, medium 14 oz, large 20 oz.
+  ['dunkin_cap_whole', "Dunkin' Cappuccino, whole milk", "Dunkin'", 'دانكن كابتشينو لبن كامل', null, 28, 1.47, 2.2, 1.51, { na: 20, sug: 2.3, sat: 0.87, fib: 0, pot: 61, ca: 52 }, [['medium', 414], ['small', 296], ['large', 591]], null, 0, 1],
+  ['dunkin_cap_skim', "Dunkin' Cappuccino, skim milk", "Dunkin'", 'دانكن كابتشينو لبن خالي الدسم', null, 16, 1.6, 2.35, 0.05, { na: 20, sug: 2.35, sat: 0.03, fib: 0, pot: 73, ca: 57 }, [['medium', 414], ['small', 296], ['large', 591]], null, 0, 1],
+  ['dunkin_latte_whole', "Dunkin' Latte, whole milk", "Dunkin'", 'دانكن لاتيه لبن كامل', null, 40, 2.1, 3.15, 2.16, { na: 28, sug: 3.3, sat: 1.25, fib: 0, pot: 87, ca: 74 }, [['medium', 414], ['small', 296], ['large', 591]], null, 0, 1],
   // protein, ready to eat
   ['dolphin_tuna', 'Dolphin Tuna', 'Dolphin', 'تونة دولفين', '6224000529048', 170, 26, 0, 7, { sat: 2 }, [['can', 150]], 'tuna_oil', 0],
   ['atyab_hot_fillet', 'Atyab Hot Grilled Chicken Fillet', 'Atyab', 'أطياب فيليه فراخ مشوي حار', '6224007892565', 190, 15, 10, 10, { fib: 2.5 }, [], 'chicken_fried', 0],
@@ -75,7 +80,7 @@ const MC = [
 const r1 = v => Math.round(v * 10) / 10;
 const MICRO_KEYS = ['na', 'sug', 'sat', 'fib', 'pot', 'ca'];
 export const BRANDS = [
-  ...P.map(([id, name, brand, ar, code, k, p, c, f, mi, units, like, chk, drink]) => ({ id, name, brand, ar, code, per: { k, p, c, f, ...(mi || {}) }, units, like: like || null, chk: !!chk, drink: !!drink, src: 'brand', eg: true })),
+  ...P.map(([id, name, brand, ar, code, k, p, c, f, mi, units, like, chk, drink]) => ({ id, name, brand, ar, code, per: { k, p, c, f, ...(mi || {}) }, units, like: like || null, chk: !!chk, drink: !!drink, src: 'brand', eg: true, ...(id.startsWith('dunkin') ? { note: 'Calories from Dunkin’s nutrition guide; the rest worked out from the milk' } : {}) })),
   ...MC.map(([id, name, ar, unit, g, k, p, c, f, na, sug, sat, fib]) => {
     const x = v => v == null ? undefined : r1(v / g * 100);
     const per = { k: x(k), p: x(p), c: x(c), f: x(f), na: x(na), sug: x(sug), sat: x(sat), fib: x(fib) };

@@ -4,7 +4,7 @@ import { initializeFirestore, getFirestore, persistentLocalCache, persistentMult
 import * as C from './core.js';
 import { trText, addFoodNames } from './i18n.js';
 import * as TR from './train.js';
-const APP_VERSION = '30.1 · coach page shows today';
+const APP_VERSION = '31 · Daily list, Dunkin’, cheat meals never reset';
 import { EX, POSE, figSVG, YT, LINES, FOODS, COACH_MEALS, DEFAULT_SUPPS, COACH_ENC, SLOTS, CARDIO_MODES } from './data.js';
 import { BRANDS, BRAND_BY_CODE } from './brands.js';
 addFoodNames(FOODS); addFoodNames(BRANDS);
@@ -479,11 +479,31 @@ function ifThenTodayHTML(date) {
   if (!list.length) return '';
   return `<section class="card ifthen"><span class="sub">Your plan for ${C.DAYNAMES[C.weekday(date)]}</span>${list.map(p => `<p><b>If</b> ${esc(p.when)}, <b>then</b> ${esc(p.then)}.</p>`).join('')}</section>`;
 }
+/* a missed day whose only problem was off-plan food can become the week's free cheat meal (if one is left), so it doesn't reset the challenge */
+function cheatFix(date) {
+  const st = S.settings, day = S.days[date]; if (!day || date >= today() && !day) return null;
+  const c = st.cheat && st.cheat.on ? st.cheat : { on: true, per: '1w', kind: 'meal' }, st2 = { ...st, cheat: { ...c, on: true } };
+  const P = C.pillars(st2, day, date), offs = P.off.length + P.offExtra.length; if (!offs) return null;
+  const nd = clone(day);
+  if (c.kind === 'day') nd.cheatDay = true;
+  else { P.off.forEach(m => { nd.meals[m.id].status = 'cheat'; }); (nd.extras || []).forEach(x => { if (x.off) { x.off = false; x.cheat = true; } }); }
+  const uses = c.kind === 'day' ? 1 : offs, cu = C.cheatsUsed(st2, S.days, date, date);
+  if (cu.used + uses > cu.max) return { blocked: true, uses, max: cu.max, used: cu.used, next: C.addDays(cu.to, 1) };
+  if (!C.evalDay(st2, nd, date).complete) return null;
+  return { nd, uses, turnOn: !(st.cheat && st.cheat.on), kind: c.kind || 'meal' };
+}
+function cheatFixHTML(date) {
+  const f = cheatFix(date); if (!f) return '';
+  if (f.blocked) return `<p class="hint">🍕 This day only missed because of off-plan food, but ${f.uses > 1 ? `it had ${f.uses} off-plan meals and you get ${f.max} free cheat meal${f.max > 1 ? 's' : ''} a week` : 'this week’s free cheat meal is already used'}.</p>`;
+  return `<div class="cheatfix"><p><b>Was it a cheat meal your coach allowed?</b> This day only missed because of off-plan food. Count it as your free cheat ${f.kind === 'day' ? 'day' : 'meal'} and the day counts${f.turnOn ? ' (this turns on 1 free cheat meal a week)' : ''}.</p><button class="btn cheat" data-act="cheatfix" data-v="${date}">🍕 Count it as my free cheat ${f.kind === 'day' ? 'day' : 'meal'}</button></div>`;
+}
 function reflectHTML(R) {
   const n = now(), t = today(), y = C.addDays(t, -1);
   if ((dsMode() === 'midnight' && n.hour < 3) || y < S.settings.startDate) return '';
+  { const lf = (R.attempts || []).slice(-1)[0]; if (lf && lf.fail !== y && lf.fail >= C.addDays(t, -7)) { const cf = cheatFix(lf.fail); if (cf && !cf.blocked) return `<section class="card reflect"><span class="sub">Your streak reset on ${fmt(lf.fail)}</span>${cheatFixHTML(lf.fail)}</section>`; } }
   const yd = S.days[y] || {};
   if (C.evalDay(S.settings, yd, y).complete) return '';
+  { const cf = cheatFix(y); if (cf && !cf.blocked) return `<section class="card reflect"><span class="sub">Yesterday didn’t count</span>${cheatFixHTML(y)}</section>`; }
   if (yd.missWhy && yd.missWhy !== 'pending') {
     const si = WHY_SUGGEST[yd.missWhy];
     if (si == null || yd.missPlanned || (S.settings.ifthen || []).some(p => p.when === IFT_SUGGEST[si][0])) return '';
@@ -740,7 +760,7 @@ function drawDay() {
   const R = C.computeRun(st, S.days, now()), dayNo = C.diffDays(R.attemptStart, date) + 1, t = today();
   const meals = C.mealsOn(st, date).map(m => {
     const md = (d.meals || {})[m.id] || {}, skip = (d.skip || {})[m.id], s = C.sumItems(md.items || []);
-    const lbl = skip ? 'Not part of the plan' : !md.status ? 'Not logged' : md.status === 'plan' ? 'As planned' : md.status === 'swap' ? 'Changed' : 'Off-plan';
+    const lbl = skip ? 'Not part of the plan' : !md.status ? 'Not logged' : md.status === 'plan' ? 'As planned' : md.status === 'swap' ? 'Changed' : md.status === 'cheat' ? '🍕 Cheat meal' : 'Off-plan';
     return `<li><span><b>${esc(m.name)}</b> <span class="mstat ${md.status || ''}">${lbl}</span>${(md.items || []).length && md.status !== 'plan' ? `<small>${esc(md.items.map(x => `${x.name.split(',')[0]} ${C.round(x.g)}${C.isDrink(x) ? ' ml' : ' g'}`).join(', '))}</small>` : ''}</span><span class="num">${md.status ? kc(s.k) + ' kcal' : ''}</span></li>`;
   }).join('');
   const ex = (d.extras || []).map(x => `<li><span>${esc(x.name)}${x.off ? ' <span class="mstat off">off-plan</span>' : ''}</span><span class="num">${C.round(x.g)} ${C.isDrink(x) ? 'ml' : 'g'} · ${kc(C.itemMacros(x).k)} kcal</span></li>`).join('');
@@ -749,7 +769,7 @@ function drawDay() {
   const prev = C.addDays(date, -1), next = C.addDays(date, 1);
   $('sheet').innerHTML = `<div class="sheet" role="dialog" aria-modal="true" aria-label="Day ${fmt(date)}"><div class="spread"><h2>${dayNo >= 1 && dayNo <= 90 ? `Day ${dayNo} · ` : ''}${fmt(date)}</h2><button class="x" data-act="closesheet" aria-label="Close">×</button></div>
   <div class="row dnav"><button class="btn small" data-act="daynav" data-v="${prev}" ${prev < st.startDate ? 'disabled' : ''}>‹ Previous</button><span class="state ${ev.complete ? 's-done' : date === t ? 's-todo' : 's-bad'}">${ev.complete ? 'Locked in' : date === t ? 'In progress' : 'Missed'}</span><button class="btn small" data-act="daynav" data-v="${next}" ${next > t ? 'disabled' : ''}>Next ›</button></div>
-  ${!ev.complete && ev.missing.length ? `<ul class="missing">${ev.missing.map(x => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}
+  ${!ev.complete && ev.missing.length ? `<ul class="missing">${ev.missing.map(x => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}${!ev.complete && date < t ? cheatFixHTML(date) : ''}
   <div class="review"><div><b class="num">${kc(tot.k)}${tgt.k ? `<small> / ${kc(tgt.k)}</small>` : ''}</b><span>Calories</span></div><div><b class="num">${kc(tot.p)} g</b><span>Protein</span></div><div><b class="num">${L(P.w)} L</b><span>Water${P.wDrinks ? ` · ${L(P.wDrinks)} L from drinks` : ''}</span></div><div><b>${P.tt === 'rest' ? 'Rest' : d.trainingDone ? 'Done' : 'Not done'}</b><span>${esc(C.TT[P.tt].label)}</span></div></div>
   <span class="sub">Meals</span><ul class="list">${meals}${ex}</ul>
   ${sp ? `<p class="hint"><b>Sports:</b> ${esc(sp)}</p>` : ''}${cali ? `<p class="hint"><b>Calisthenics:</b> ${esc(cali)}</p>` : ''}
@@ -918,6 +938,7 @@ function todayHTML(R) {
   const dayNo = Math.min(R.dayNum, 90);
   let h = `<section class="hero${ev.complete ? ' locked' : ''}">
   <div class="hero-top"><span>${esc(C.DAYNAMES[C.weekday(date)])}, ${fmt(date)}</span><span class="hero-chips">${syncDot()}${TR.rankChip()}${flameChip(R)}</span></div>
+  ${(st.usuals || []).length && date === t ? `<div class="qk" role="group" aria-label="Daily, one tap">${st.usuals.slice(0, 3).map((u, i) => { const c = dailyCount(date, u).length; return `<button data-act="dailyadd" data-v="${i}">${usualIcon(u)} ${esc(u.name.split(',')[0].replace(/^Dunkin' /, ''))}${c ? ` <i>✓${c > 1 ? '×' + c : ''}</i>` : ' <i>+</i>'}</button>`; }).join('')}</div>` : ''}
   ${n.late && date === t ? `<span class="until">☾ <span class="num">${C.minTxt(n.clock * 60 + n.minute)}</span> · your day runs until ${esc(dayEndTxt(n))}</span>` : ''}
   ${grace ? `<div class="hero-seg" role="group" aria-label="Day being edited"><button data-act="editdate" data-v="${grace}" aria-pressed="${date === grace}">Yesterday</button><button data-act="editdate" data-v="${t}" aria-pressed="${date === t}">Today</button></div>` : ''}
   <div class="hero-row"><div class="rings" role="img" aria-label="Day ${dayNo} of 90, ${pills.filter(p => p.ok).length} of 4 pillars done">${ringsSVG(parts, mealsBad)}<div class="rings-c"><b class="num">${dayNo}</b><span>of 90</span></div></div>
@@ -970,7 +991,7 @@ function todayListHTML(R, date, d, P, line, shown) {
 const PANEL_T = { meals: 'Meals', water: 'Water', train: 'Training', supps: 'Supplements', body: 'Weight, sleep and note' };
 function panelHTML() {
   const date = editDate(), d = S.days[date] || {}, P = C.evalDay(S.settings, d, date).P;
-  const body = S.panel === 'meals' ? mealsHTML(date, d, P) + nutrientsHTML(date, d) : S.panel === 'water' ? waterHTML(P) : S.panel === 'train' ? trainCardHTML(date, d, P) : S.panel === 'supps' ? suppsHTML(date, d, P) : bodyHTML(date, d);
+  const body = S.panel === 'meals' ? `<div class="tabsP" role="tablist"><button role="tab" data-act="mealtab" data-v="plan" aria-selected="${S.mealTab !== 'daily'}">Plan</button><button role="tab" data-act="mealtab" data-v="daily" aria-selected="${S.mealTab === 'daily'}">☕ Daily</button></div>` + (S.mealTab === 'daily' ? dailyHTML(date) : mealsHTML(date, d, P) + nutrientsHTML(date, d)) : S.panel === 'water' ? waterHTML(P) : S.panel === 'train' ? trainCardHTML(date, d, P) : S.panel === 'supps' ? suppsHTML(date, d, P) : bodyHTML(date, d);
   return `<div class="sheet panelsheet" role="dialog" aria-modal="true" aria-label="${esc(PANEL_T[S.panel])}"><div class="grab" aria-hidden="true"></div><div class="spread"><h2>${esc(PANEL_T[S.panel])}</h2><button class="x" data-act="panelclose" aria-label="Close">×</button></div>${body}</div>`;
 }
 function drawPanel() {
@@ -1013,7 +1034,7 @@ function mealsHTML(date, d, P) {
       <div class="spread"><div class="meal-n">${esc(m.name)} <span>${esc(m.time || '')}</span></div>${skip ? `<button class="link" data-act="unskip" data-v="${m.id}">Undo</button>` : `<button class="link" data-act="skip" data-v="${m.id}">Not today</button>`}</div>`;
     if (skip) { h += `<p class="meal-sum">Not part of today’s plan.</p></div></div>`; return; }
     h += `<div class="meal-sum">${md.status ? `Logged <b>${kc(logged.k)} kcal · ${C.round(logged.p, 1)} g protein</b>` : m.items.length ? `Plan: ${esc(m.items.map(x => x.name.split(',')[0]).join(', '))} · <b>${kc(plan.k)} kcal</b>` : 'No plan set for this meal. Log what you ate.'}</div>
-      <div class="seg wide" role="group" aria-label="${esc(m.name)}">${m.items.length ? `<button class="clean" data-act="meal" data-id="${m.id}" data-v="plan" aria-pressed="${md.status === 'plan'}">As planned</button><button class="clean" data-act="meal" data-id="${m.id}" data-v="swap" aria-pressed="${md.status === 'swap'}">Changed</button>` : `<button class="clean" data-act="meal" data-id="${m.id}" data-v="swap" aria-pressed="${md.status === 'swap'}">Log what I ate</button>`}<button class="off" data-act="meal" data-id="${m.id}" data-v="off" aria-pressed="${md.status === 'off'}">Off-plan</button>${CH && CH.kind === 'meal' ? `<button class="cheat" data-act="meal" data-id="${m.id}" data-v="cheat" aria-pressed="${md.status === 'cheat'}" ${!CH.left && md.status !== 'cheat' ? 'disabled' : ''}>${CH.left || md.status === 'cheat' ? '🍕 Cheat (free)' : `🍕 Used ${esc(CH.usedTxt)}`}</button>` : ''}</div>${CH && CH.kind === 'meal' && !CH.left && md.status !== 'cheat' && !md.status ? `<p class="hint">This week’s free cheat meal was ${esc(CH.usedTxt)}. The next one is free from ${fmt(C.addDays(CH.to, 1))}.</p>` : ''}${md.status === 'cheat' ? '<p class="hint">Free cheat meal: counts as on plan. Logging what you ate is optional but keeps your calories honest.</p>' : ''}`;
+      <div class="seg wide" role="group" aria-label="${esc(m.name)}">${m.items.length ? `<button class="clean" data-act="meal" data-id="${m.id}" data-v="plan" aria-pressed="${md.status === 'plan'}">As planned</button><button class="clean" data-act="meal" data-id="${m.id}" data-v="swap" aria-pressed="${md.status === 'swap'}">Changed</button>` : `<button class="clean" data-act="meal" data-id="${m.id}" data-v="swap" aria-pressed="${md.status === 'swap'}">Log what I ate</button>`}<button class="off" data-act="meal" data-id="${m.id}" data-v="off" aria-pressed="${md.status === 'off'}">Off-plan</button>${CH && CH.kind === 'meal' ? `<button class="cheat" data-act="meal" data-id="${m.id}" data-v="cheat" aria-pressed="${md.status === 'cheat'}" ${!CH.left && md.status !== 'cheat' ? 'disabled' : ''}>${CH.left || md.status === 'cheat' ? '🍕 Cheat (free)' : `🍕 Used ${esc(CH.usedTxt)}`}</button>` : ''}</div>${CH && CH.kind === 'meal' && !CH.left && md.status !== 'cheat' && !md.status ? `<p class="hint">This week’s free cheat meal was ${esc(CH.usedTxt)}. The next one is free from ${fmt(C.addDays(CH.to, 1))}.</p>` : ''}${md.status === 'off' && !CH ? '<p class="hint">Was it a cheat meal your coach allowed? <button class="link" data-act="cheaton2">Turn on 1 free cheat meal a week</button> and tap 🍕 so the day still counts.</p>' : ''}${md.status === 'cheat' ? '<p class="hint">Free cheat meal: counts as on plan. Logging what you ate is optional but keeps your calories honest.</p>' : ''}`;
     if (!md.status) h += `<button class="link" data-act="copymeal" data-v="${m.id}">Copy a past meal</button>`;
     if (md.status === 'plan' && S.expandMeal === m.id) { const fi = mealFatItem(md.items); h += `<div class="row"><button class="btn small" data-act="mealfat" data-v="meal:${m.id}">🧈 ${fi ? `Cooked with ${esc(fatAmt(fi.fid, fi.sq || 1))} ${esc((FATS.find(x => x.k === fi.fid) || { label: '' }).label.toLowerCase())} · +${kc(fi.per.k * fi.g / 100)} kcal` : '+ Cooking fat'}</button><button class="link" data-act="expandmeal" data-v="${m.id}">Done</button></div>`; }
     if (md.status === 'swap' || md.status === 'off' || md.status === 'cheat') {
@@ -1655,7 +1676,7 @@ function sheetSearch() {
     ${SH.usda.length ? '<span class="sub">USDA results</span>' + SH.usda.map((f, i) => resRow(f, i, 'usda')).join('') : ''}</div>${online}`;
 }
 function pickFood(f) {
-  SH.picked = f; SH.drink = !!f.drink; SH.warned = false; SH.add = {}; SH.saveUsual = false; SH.tspEdit = false;
+  SH.picked = f; SH.drink = !!f.drink; SH.warned = false; SH.add = {}; SH.saveUsual = !!SH.toDaily; SH.usualName = ''; SH.tspEdit = false;
   const ff = ((S.settings && S.settings.fatFor) || {})[f.id]; SH.fat = ff && canCook(f) ? { ...ff } : null; SH.remFat = !!ff;
   const us = unitsOf(f);
   if (SH.scope === 'extra') SH.off = !(SH.drink && (f.per.k || 0) < 5);
@@ -1678,7 +1699,7 @@ function drawPicked() {
   const f = SH.picked, us = unitsOf(f), unit = SH.drink ? 'ml' : 'g', u = SH.u >= 0 ? us[SH.u] : null;
   if (u) SH.g = C.round(u[1] * (SH.q || 1), 1);
   const ck = C.checkPer(f.per), code = f.code ? ' · ' + f.code : '';
-  const srcTxt = f.src === 'brand' ? (f.rest ? 'From the restaurant’s published nutrition table' : (f.chk ? '✓ From the pack label' : 'From the pack label; values it left out are estimates (~)') + code)
+  const srcTxt = f.note ? f.note : f.src === 'brand' ? (f.rest ? 'From the restaurant’s published nutrition table' : (f.chk ? '✓ From the pack label' : 'From the pack label; values it left out are estimates (~)') + code)
     : f.src === 'off' ? 'Open Food Facts, entered by volunteers: compare with the pack' + code : f.src === 'usda' ? 'USDA FoodData Central' : f.src === 'friend' ? `Shared by · ${f.by}` : f.src === 'custom' ? (f.recipe ? 'Your recipe' : 'Your food') : f.src === 'lib' ? 'Built-in food' : '';
   const inGroup = !!(S.settings && S.settings.group), mineF = S.foods[f.id];
   $('fs-body').innerHTML = `<div class="picked"><div class="spread"><span><b>${esc(f.name)}</b>${f.brand ? `<small class="sub" style="display:block">${esc(f.brand)}</small>` : ''}</span><button class="star" data-act="fav" aria-pressed="${isFav(f)}" aria-label="${isFav(f) ? 'Remove from favourites' : 'Add to favourites'}">${isFav(f) ? '★' : '☆'}</button></div>
@@ -1688,7 +1709,7 @@ function drawPicked() {
   ${canAddIns(f) ? addinsHTML() : ''}${canCook(f) ? fatPickHTML(SH.fat) : ''}
   <div id="fs-nums">${pickedNums()}</div>
   ${(() => { const it = pickedItem(); return it.parts ? `<p class="hint combo-n"><b>${esc(it.name)}</b> · one item in your log${it.ml ? ` · ${it.ml} ml toward water` : ''}</p>` : ''; })()}
-  ${canAddIns(f) || canCook(f) ? `<label class="chk"><input type="checkbox" id="fs-usual" ${SH.saveUsual ? 'checked' : ''}> Save as one of my usuals</label>${SH.saveUsual ? `<input class="in" id="fs-usual-n" maxlength="24" value="${esc(SH.usualName || (canAddIns(f) ? 'My ' + (/tea|شاي/i.test(f.name) ? 'tea' : 'coffee') : f.name.split(',')[0] + (SH.fat && SH.fat.k ? ' in ' + FATS.find(x => x.k === SH.fat.k).label.toLowerCase() : '')))}" aria-label="Name">` : ''}` : ''}
+  ${!SH.recipe && !SH.mb ? `<label class="chk"><input type="checkbox" id="fs-usual" ${SH.saveUsual ? 'checked' : ''}> Add to my Daily list</label>${SH.saveUsual ? `<input class="in" id="fs-usual-n" maxlength="40" value="${esc(SH.usualName || (canAddIns(f) && !f.brand ? 'My ' + (/tea|شاي/i.test(f.name) ? 'tea' : 'coffee') : (f.brand && SH.u >= 0 ? `${f.name.replace(/,.*$/, '')}, ${unitsOf(f)[SH.u][0]}` : f.name.split(',')[0]) + (SH.fat && SH.fat.k ? ' in ' + FATS.find(x => x.k === SH.fat.k).label.toLowerCase() : '')))}" aria-label="Name">` : ''}` : ''}
   ${canCook(f) && SH.fat && SH.fat.k ? `<label class="chk"><input type="checkbox" id="fs-remfat" ${SH.remFat ? 'checked' : ''}> Remember ${esc(FATS.find(x => x.k === SH.fat.k).label.toLowerCase())} for ${esc(f.name.split(',')[0].toLowerCase())}</label>` : ''}
   ${ck.level !== 'ok' ? `<p class="warnbox">⚠ The calories (${kc(f.per.k)} per 100 g) don’t match protein, carbs and fat (about ${ck.calc}). Check the pack before you rely on it.</p>` : ''}
   ${srcTxt ? `<p class="hint src">${esc(srcTxt)}</p>` : ''}
@@ -1714,7 +1735,7 @@ const ADDINS = [
 ];
 const FATS = [{ k: 'ghee', label: 'Ghee' }, { k: 'oil', label: 'Oil' }, { k: 'olive_oil', label: 'Olive oil' }, { k: 'butter', label: 'Butter' }, { k: 'spray', label: 'Spray', u: 's', g: 0.75 }];
 const COOKABLE = new Set(['chicken_breast', 'chicken_thigh', 'beef_lean', 'beef_mince', 'kofta', 'liver', 'salmon', 'tilapia', 'shrimp', 'egg', 'egg_fried', 'egg_white', 'turkey', 'tuna_water', 'areesh', 'rice_white', 'rice_brown', 'pasta', 'oats', 'potato', 'sweet_potato', 'lentils', 'foul', 'chickpeas', 'salad', 'tomato', 'carrot', 'broccoli', 'green_beans', 'zucchini', 'spinach', 'molokhia', 'vegetable_stew']);
-const canAddIns = f => !!f && (['coffee', 'coffee_instant', 'tea', 'green_tea'].includes(f.id) || (!!f.drink && (f.per.k || 0) <= 20 && /coffee|tea|nescaf|espresso|latte|قهوة|شاي|نسكافيه/i.test(f.name + ' ' + (f.ar || ''))));
+const canAddIns = f => !!f && (['coffee', 'coffee_instant', 'tea', 'green_tea'].includes(f.id) || (!!f.drink && (f.per.k || 0) <= 60 && /coffee|tea|nescaf|espresso|latte|cappuccino|americano|قهوة|شاي|نسكافيه|كابتشينو|لاتيه/i.test(f.name + ' ' + (f.ar || ''))));
 const canCook = f => !!f && !f.drink && (COOKABLE.has(f.id) || ((f.src === 'custom' || f.src === 'usda') && !f.recipe));
 const fatTsp = () => +(S.settings && S.settings.fatTsp) || 4.5;
 const fatG = (fk, n) => { const F = FATS.find(x => x.k === fk); return F && F.g ? n * F.g : n * fatTsp(); };
@@ -1760,6 +1781,24 @@ function pickedItem() {
   const f = SH.picked, u = SH.u >= 0 ? unitsOf(f)[SH.u] : null;
   const main = { fid: f.id, name: f.name, g: C.round(SH.g, 1), per: { ...f.per }, drink: !!SH.drink, ...(f.like ? { like: f.like } : {}), ...(u ? { su: u[0], sq: SH.q || 1 } : {}) };
   return makeCombo(main, [...(canAddIns(f) ? addinParts(SH.add || {}) : []), canCook(f) ? fatPart(SH.fat) : null]);
+}
+/* Daily list: your usuals, one tap to add */
+const usualIcon = u => u.item.meal ? '🍔' : /tea|شاي/i.test(u.name + u.item.name) ? '🍵' : C.isDrink(u.item) || /coffee|cappuccino|latte|nescaf|قهوة/i.test(u.name + u.item.name) ? '☕' : '🍽️';
+function dailyCount(date, u) { return ((S.days[date] || {}).extras || []).filter(x => x.du === u.id); }
+function addDaily(i) {
+  const u = (S.settings.usuals || [])[i]; if (!u) return;
+  const item = { ...clone(u.item), du: u.id, at: `${C.pad(now().clock)}:${C.pad(now().minute)}` }; delete item.cheat;
+  item.off = !!u.off && !(C.isDrink(item) && (item.per.k || 0) < 5);
+  addItemTo('extra', item); toast(`Added ${u.name}.`); draw();
+}
+function dailyHTML(date) {
+  const us = S.settings.usuals || [];
+  return `<section class="card" id="sec-daily"><span class="sub">One tap adds it to ${date === today() ? 'today' : 'this day'}</span>
+  ${us.map((u, i) => { const done = dailyCount(date, u), mm = C.itemMacros(u.item), w = C.isDrink(u.item) ? (u.item.ml ?? u.item.g) : u.item.ml;
+    return `<div class="drow"><span class="dic" aria-hidden="true">${usualIcon(u)}</span><span><b>${esc(u.name)}</b><small>${u.item.parts ? esc(u.item.parts.map(x => x.add || x.name.split(',')[0]).join(' + ')) + ' · ' : ''}<span class="num">${kc(mm.k)} kcal</span>${w ? ' · counts toward water' : ''}${u.off ? ' · off-plan' : ''}</small></span>
+    ${S.dailyEdit ? `<button class="x" data-act="usualrm2" data-v="${i}" aria-label="Remove ${esc(u.name)}">×</button>` : `<button class="btn small dadd${done.length ? ' done' : ''}" data-act="dailyadd" data-v="${i}">${done.length ? `✓ ${esc(done[done.length - 1].at || '')}${done.length > 1 ? ' ×' + done.length : ''}` : '+ Add'}</button>`}</div>`; }).join('') || '<p class="hint">Nothing here yet. Add the things you have most days, like your coffee, and they become one tap.</p>'}
+  <div class="row"><button class="btn small" data-act="dailynew">+ Add something to Daily</button>${us.length ? `<button class="link" data-act="dailyedit">${S.dailyEdit ? 'Done' : 'Edit list'}</button>` : ''}</div>
+  ${us.length ? '<p class="hint">Tap “+ Add” again to log a second one (it shows ×2).</p>' : ''}</section>`;
 }
 function usualsHTML() {
   const us = (S.settings.usuals || []); if (!us.length) return '';
@@ -2124,7 +2163,7 @@ document.addEventListener('click', async ev => {
     else if (act === 'tspedit') SH.tspEdit = !SH.tspEdit;
     return SH.fatSheet ? drawFatSheet() : drawPicked();
   }
-  if (act === 'usual') { const u = (S.settings.usuals || [])[+v]; if (!u) return; const item = { ...clone(u.item) }; if (SH.scope === 'extra') item.off = !!u.off; else delete item.off; addItemTo(SH.scope, item); closeSheet(); toast(`Added ${u.name}.`); return draw(); }
+  if (act === 'usual') { const u = (S.settings.usuals || [])[+v]; if (!u) return; const item = { ...clone(u.item), du: u.id, at: `${C.pad(now().clock)}:${C.pad(now().minute)}` }; delete item.cheat; if (SH.scope === 'extra') item.off = !!u.off; else delete item.off; addItemTo(SH.scope, item); closeSheet(); toast(`Added ${u.name}.`); return draw(); }
   if (act === 'fatsave') { const items = itemList(SH.scope); if (!items) return closeSheet(); const i = items.findIndex(x => x.fat && !x.parts), p = fatPart(SH.fat); if (!p) return; const F = FATS.find(x => x.k === SH.fat.k), it = { ...p, name: `${F.label} (cooking)` }; delete it.add; if (i >= 0) items[i] = it; else items.push(it); saveScope(SH.scope); closeSheet(); toast(`${F.label} added: +${kc(p.per.k * p.g / 100)} kcal.`); return draw(); }
   if (act === 'fatrm') { const items = itemList(SH.scope); const i = items ? items.findIndex(x => x.fat && !x.parts) : -1; if (i >= 0) { items.splice(i, 1); saveScope(SH.scope); } closeSheet(); return draw(); }
   if (act === 'usualedit') { SH.usualEdit = !SH.usualEdit; return sheetSearch(); }
@@ -2153,7 +2192,7 @@ document.addEventListener('click', async ev => {
     const item = mbItem(mb), D = editDate(), dd = S.days[D] = S.days[D] || { date: D };
     if (mb.counts === 'cheat') item.cheat = true;
     if (mb.edit) { const list = itemList(mb.edit.scope); if (list && list[mb.edit.i]) { const old = list[mb.edit.i]; list[mb.edit.i] = { ...item, ...(old.off ? { off: true } : {}), ...(old.cheat ? { cheat: true } : {}), ...(mb.edit.scope === 'extra' ? { off: mb.counts === 'off', cheat: mb.counts === 'cheat' } : {}) }; saveScope(mb.edit.scope); } closeSheet(); toast('Meal updated.'); return draw(); }
-    if (mb.save) { S.settings.usuals = [{ id: 'u' + Date.now().toString(36), name: item.name, item: clone(item), off: mb.counts === 'off' }, ...(S.settings.usuals || []).filter(x => x.name !== item.name)].slice(0, 8); delete S.settings.usuals[0].item.cheat; saveSettings(); }
+    if (mb.save) { S.settings.usuals = [...(S.settings.usuals || []).filter(x => x.name !== item.name), { id: 'u' + Date.now().toString(36), name: item.name, item: (() => { const c = clone(item); delete c.cheat; return c; })(), off: mb.counts === 'off' }].slice(-12); saveSettings(); }
     if (mb.where === 'extra') { addItemTo('extra', { ...item, off: mb.counts === 'off' }); }
     else { dd.meals = dd.meals || {}; const cur = dd.meals[mb.where] || {}; dd.meals[mb.where] = { status: mb.counts === 'cheat' ? 'cheat' : mb.counts === 'off' ? 'off' : 'swap', items: [item], note: cur.note || '' }; delete item.cheat; if (dd.skip) delete dd.skip[mb.where]; saveDay(D); }
     closeSheet(); toast(mb.counts === 'cheat' ? 'Added as your free cheat meal. The day still counts.' : `Added ${item.name}.`); return draw();
@@ -2197,7 +2236,7 @@ document.addEventListener('click', async ev => {
   if (act === 'addpicked') {
     const f = SH.picked, item = pickedItem();
     if (!(item.g > 0)) return toast('Enter an amount first.');
-    if (SH.saveUsual) { const nm = (($('fs-usual-n') || {}).value || SH.usualName || f.name).trim().slice(0, 24); S.settings.usuals = [{ id: 'u' + Date.now().toString(36), name: nm, item: clone(item), ...(SH.scope === 'extra' ? { off: !!SH.off } : {}) }, ...(S.settings.usuals || []).filter(x => x.name !== nm)].slice(0, 8); saveSettings(); }
+    if (SH.saveUsual) { const nm = (($('fs-usual-n') || {}).value || SH.usualName || f.name).trim().slice(0, 40), uid2 = 'u' + Date.now().toString(36); S.settings.usuals = [...(S.settings.usuals || []).filter(x => x.name !== nm), { id: uid2, name: nm, item: clone(item), ...(SH.scope === 'extra' ? { off: !!SH.off } : {}) }].slice(-12); saveSettings(); if (SH.scope === 'extra') { item.du = uid2; item.at = `${C.pad(now().clock)}:${C.pad(now().minute)}`; } }
     if (canCook(f)) { const ff = { ...((S.settings.fatFor) || {}) }; if (SH.remFat && SH.fat && SH.fat.k) ff[f.id] = { k: SH.fat.k, n: SH.fat.n }; else if (!SH.remFat) delete ff[f.id]; if (JSON.stringify(ff) !== JSON.stringify(S.settings.fatFor || {})) { S.settings.fatFor = ff; saveSettings(); } }
     if (SH.scope === 'extra') item.off = SH.off;
     addItemTo(SH.scope, item); closeSheet(); toast(`Added ${f.name.split(',')[0]}`); return draw();
@@ -2268,6 +2307,12 @@ document.addEventListener('click', async ev => {
     case 'unskip': delete d().skip[v]; saveDay(D); break;
     case 'addfood': return openSheet(v);
     case 'mealfat': return openFatSheet(v);
+    case 'mealtab': S.mealTab = v; break;
+    case 'dailyadd': return addDaily(+v);
+    case 'cheatfix': { const f = cheatFix(v); if (!f || f.blocked) { toast('This day can’t become a free cheat meal.'); break; } if (f.turnOn) S.settings.cheat = { per: '1w', kind: 'meal', ...(S.settings.cheat || {}), on: true }, saveSettings(); S.days[v] = f.nd; saveDay(v); toast('Counted as your free cheat meal. Your streak is back.'); if (SH && SH.scope === 'day') drawDay(); break; }
+    case 'dailyedit': S.dailyEdit = !S.dailyEdit; break;
+    case 'usualrm2': S.settings.usuals = (S.settings.usuals || []).filter((_, i) => i !== +v); saveSettings(); break;
+    case 'dailynew': openSheet('extra'); SH.toDaily = true; return;
     case 'mbedit': { const [sc, ix] = v.split('|'), list = itemList(sc), it = list && list[+ix]; if (!it) return; openSheet(sc); SH.mb = { name: it.name, items: clone(it.parts || []), where: 'extra', counts: it.cheat ? 'cheat' : it.off ? 'off' : 'ok', edit: { scope: sc, i: +ix }, wasCheat: !!it.cheat }; if (sc !== 'extra') SH.mb.where = 'meal'; return drawMealBuild(); }
     case 'rmitem': { const i = v.lastIndexOf(':'), scope = v.slice(0, i); itemList(scope).splice(+v.slice(i + 1), 1); saveScope(scope); break; }
     case 'water': { const dd = d(); dd.water = Math.max(0, Math.min(12000, (dd.water || 0) + (+b.dataset.n))); saveDay(D); break; }
@@ -2331,6 +2376,7 @@ document.addEventListener('click', async ev => {
     case 'wkday': S.settings.weekStart = { mode: 'day', d: +v }; saveSettings(); S.boardLast = null; break;
     case 'budon': S.settings.budget = { ...C.budgetOf(S.settings), on: !C.budgetOf(S.settings).on }; saveSettings(); break;
     case 'budmode': S.settings.budget = { ...C.budgetOf(S.settings), mode: v }; saveSettings(); break;
+    case 'cheaton2': S.settings.cheat = { per: '1w', kind: 'meal', ...(S.settings.cheat || {}), on: true }; saveSettings(); toast('Free cheat meal is on: 1 a week. Change it in Meal plan.'); break;
     case 'cheaton': S.settings.cheat = { per: '1w', kind: 'meal', ...(S.settings.cheat || {}), on: !(S.settings.cheat && S.settings.cheat.on) }; saveSettings(); break;
     case 'cheatper': S.settings.cheat = { ...(S.settings.cheat || {}), per: v }; saveSettings(); break;
     case 'cheatkind': S.settings.cheat = { ...(S.settings.cheat || {}), kind: v }; saveSettings(); break;
