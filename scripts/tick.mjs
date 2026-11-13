@@ -136,7 +136,7 @@ async function reminders(uid, settings) {
     if (r.key === 'morning') {
       const tt = C.trainType(settings, date);
       const dn = Math.min(R.dayNum, 90), wg = L(settings.waterGoal || 3500);
-      msg = [A(`Day ${dn} of 90${ram ? ' · Ramadan Kareem' : ''}`, `اليوم ${dn} من 90${ram ? ' · رمضان كريم' : ''}`),
+      msg = [R.tracker ? A(`Good morning${ram ? ' · Ramadan Kareem' : ''}`, `صباح الخير${ram ? ' · رمضان كريم' : ''}`) : A(`Day ${dn} of 90${ram ? ' · Ramadan Kareem' : ''}`, `اليوم ${dn} من 90${ram ? ' · رمضان كريم' : ''}`),
         A(`${C.DAYNAMES[C.weekday(date)]}: ${C.TT[tt].label}. Water goal ${wg} L.\n${R.critical ? 'Yesterday broke the chain. Never miss twice.' : `Streak ${R.done}.`}`,
           `${trl(C.DAYNAMES[C.weekday(date)])}: ${trl(C.TT[tt].label)}. هدف المياه ${wg} لتر.\n${R.critical ? 'أمس انكسرت السلسلة. لا تفوّت مرتين.' : `السلسلة ${R.done}.`}`), { tags: 'sunrise' }];
     } else if (r.key === 'water') {
@@ -157,7 +157,7 @@ async function reminders(uid, settings) {
         }
       }
     } else if (r.key === 'evening') {
-      msg = ev.complete ? [A('Locked in', 'مكتمل'), A(`Day ${Math.min(R.dayNum, 90)} is done. Streak ${R.done}.`, `اليوم ${Math.min(R.dayNum, 90)} اكتمل. السلسلة ${R.done}.`), { tags: 'lock' }]
+      msg = ev.complete ? [A('Locked in', 'مكتمل'), (R.tracker ? A(`All your goals are done today. ${R.done} in a row.`, `كل أهدافك اتعملت النهارده. ${R.done} أيام ورا بعض.`) : A(`Day ${Math.min(R.dayNum, 90)} is done. Streak ${R.done}.`, `اليوم ${Math.min(R.dayNum, 90)} اكتمل. السلسلة ${R.done}.`)), { tags: 'lock' }]
         : [A(`${ev.missing.length} thing${ev.missing.length === 1 ? '' : 's'} left today`, `متبقٍ ${ev.missing.length} اليوم`), ev.missing.map(trl).join('\n'), { tags: 'warning', priority: 4 }];
     } else if (r.key === 'bedtime') {
       const g = settings.sleepGoal || 7.5, bed = settings.bedtime || '23:30', [bh, bm] = bed.split(':').map(Number), wk = ((bh * 60 + bm + g * 60) % 1440), wake = `${String(Math.floor(wk / 60)).padStart(2, '0')}:${String(Math.round(wk % 60)).padStart(2, '0')}`;

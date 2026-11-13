@@ -194,7 +194,7 @@ export function dayTotals(settings, day) {
 }
 
 /* drinks: anything you drink that you log in a meal or as an extra counts toward water (1 g ≈ 1 ml) */
-export const DRINK_IDS = ['coffee', 'coffee_instant', 'coffee_milk', 'tea', 'green_tea', 'cola', 'cola_zero', 'sparkling', 'juice_orange', 'milk_skim', 'milk_full'];
+export const DRINK_IDS = ['coffee', 'coffee_instant', 'coffee_milk', 'tea', 'green_tea', 'cola', 'cola_zero', 'sparkling', 'juice_orange', 'milk_skim', 'milk_full', 'sahlab', 'karkade', 'qasab', 'sobia', 'tamr_hindi'];
 export const isDrink = it => !!it && (it.drink === true || (it.drink !== false && DRINK_IDS.includes(it.fid)));
 export function drinkMl(day) {
   if (!day) return 0;
@@ -281,20 +281,30 @@ export function trimPlan(meals, cut) {
   });
   return out;
 }
+/* two ways to use the app: 'challenge' (Lock In 90: every day needs all four, a miss resets to Day 1)
+   and 'tracker' (daily health tracker: you pick the goals, nothing resets).
+   Accounts made before modes existed have no mode and stay in the challenge. */
+export const isTracker = s => !!s && s.mode === 'tracker';
+export const GOALS_DEFAULT = { food: true, water: true, train: true, supps: true };
+export const goalsOf = s => isTracker(s) ? { ...GOALS_DEFAULT, ...((s && s.goals) || {}) } : GOALS_DEFAULT;
 export function evalDay(settings, day, date) {
   day = day || {};
-  const P = pillars(settings, day, date);
+  const P = pillars(settings, day, date), G = goalsOf(settings), tr = isTracker(settings);
   const meals = day.meals || {};
-  const missing = [];
-  if (P.off.length) missing.push(P.off.length === 1 ? `${P.off[0].name} was off-plan` : `${P.off.length} meals were off-plan`);
-  if (P.offExtra.length) missing.push(P.offExtra.length === 1 ? `Off-plan extra: ${P.offExtra[0].name}` : `${P.offExtra.length} off-plan extras`);
+  const miss = { food: [], water: [], train: [], supps: [] };
+  if (P.off.length) miss.food.push(P.off.length === 1 ? `${P.off[0].name} was off-plan` : `${P.off.length} meals were off-plan`);
+  if (P.offExtra.length) miss.food.push(P.offExtra.length === 1 ? `Off-plan extra: ${P.offExtra[0].name}` : `${P.offExtra.length} off-plan extras`);
   const unlogged = P.pm.filter(m => !meals[m.id] || !meals[m.id].status);
-  if (unlogged.length) missing.push(unlogged.length === P.pm.length ? `Log your ${P.pm.length} meals` : `Log ${unlogged.map(m => m.name).join(', ')}`);
-  if (P.w < P.goal) missing.push(`Water at ${round(P.w / 1000, 2)} of ${round(P.goal / 1000, 2)} L`);
-  if (!P.trained) missing.push(TT[P.tt].label);
+  if (unlogged.length) miss.food.push(unlogged.length === P.pm.length ? `Log your ${P.pm.length} meals` : `Log ${unlogged.map(m => m.name).join(', ')}`);
+  // tracker without a meal plan: the food goal is logging what you eat, within your calorie target if you set one (10% leeway)
+  if (tr && !P.pm.length) { const k = dayTotals(settings, day).k, kt = +settings.kcalTarget || 0; if (!k) miss.food.push('Log what you eat'); else if (kt && k > kt * 1.1) miss.food.push(`Calories at ${round(k)} of ${kt}`); }
+  if (P.w < P.goal) miss.water.push(`Water at ${round(P.w / 1000, 2)} of ${round(P.goal / 1000, 2)} L`);
+  if (!P.trained) miss.train.push(TT[P.tt].label);
   const ms = P.req.filter(s => !(day.supps || {})[s.id]);
-  if (ms.length) missing.push(`Supplements: ${ms.map(s => s.name).join(', ')}`);
-  return { complete: missing.length === 0, missing, offPlan: P.off.length > 0 || P.offExtra.length > 0, P };
+  if (ms.length) miss.supps.push(`Supplements: ${ms.map(s => s.name).join(', ')}`);
+  const keys = Object.keys(miss).filter(k => G[k] && (!tr || k !== 'supps' || P.req.length));
+  const missing = keys.flatMap(k => miss[k]);
+  return { complete: missing.length === 0, missing, offPlan: P.off.length > 0 || P.offExtra.length > 0, P, goals: keys, hit: keys.filter(k => !miss[k].length).length, miss };
 }
 
 /* sports: MET values from the 2024 Adult Compendium of Physical Activities (easy / normal / hard).
@@ -334,6 +344,7 @@ export const sportModMin = s => (s.min || 0) * (sportById(s.sport).met[s.lvl ?? 
 /* strict run: any closed day that is incomplete resets the attempt */
 export function computeRun(settings, days, now) {
   if (!settings || !settings.startDate) return null;
+  if (isTracker(settings)) return computeTrack(settings, days, now);
   const today = now.date;
   let attemptStart = settings.attemptStart && settings.attemptStart > settings.startDate ? settings.attemptStart : settings.startDate;
   // the 3 am grace window only applies to a day inside the challenge (not the day before a start or reset)
@@ -353,6 +364,18 @@ export function computeRun(settings, days, now) {
   const todayEval = evalDay(settings, days[today], today);
   const best = Math.max(done, ...attempts.map(a => a.len), 0);
   return { attemptStart, attempts, dayNum: diffDays(attemptStart, today) + 1, done, todayEval, best, grace, critical: lastFail === addDays(today, -1), attemptNo: attempts.length + 1 + (settings.attemptBase || 0), victory: done >= 90 };
+}
+
+/* tracker mode: same shape as computeRun, but nothing resets. done = days in a row on all goals (today counts once it's complete) */
+export function computeTrack(settings, days, now) {
+  const today = now.date, start = settings.startDate;
+  const grace = dayStartMode(settings.dayStart) === 'midnight' && now.hour < 3 && addDays(today, -1) >= start ? addDays(today, -1) : null;
+  let cur = 0, best = 0, total = 0;
+  for (let d = start; d < today; d = addDays(d, 1)) {
+    if (evalDay(settings, days[d], d).complete) { cur++; total++; best = Math.max(best, cur); } else if (d !== grace) cur = 0;
+  }
+  const todayEval = evalDay(settings, days[today], today), done = cur + (todayEval.complete ? 1 : 0);
+  return { tracker: true, attemptStart: start, attempts: [], dayNum: diffDays(start, today) + 1, done, total: total + (todayEval.complete ? 1 : 0), todayEval, best: Math.max(best, done), grace, critical: false, attemptNo: 1, victory: false };
 }
 
 /* stamina program: 12 weeks, 3 sessions a week, low impact */

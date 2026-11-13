@@ -24,7 +24,7 @@ const sgn = v => (v > 0 ? '+' : v < 0 ? '−' : '') + Math.abs(r1(v));
 
 // Coach-page strings. English is the key; {0}, {1}… are filled in order.
 const ARS = {
-  'Coach view': 'عرض الكابتن', 'Day {0} of 90': 'اليوم {0} من 90', 'Updated just now': 'تم التحديث الآن', 'Updated {0} min ago': 'تم التحديث منذ {0} دقيقة', 'Updated {0} h ago': 'تم التحديث منذ {0} ساعة', 'Updated {0} days ago': 'تم التحديث منذ {0} أيام',
+  'Coach view': 'عرض الكابتن', 'Day {0} of 90': 'اليوم {0} من 90', 'Daily tracker': 'متابعة يومية', 'In a row': 'ورا بعض', 'Best run': 'أطول سلسلة', 'Updated just now': 'تم التحديث الآن', 'Updated {0} min ago': 'تم التحديث منذ {0} دقيقة', 'Updated {0} h ago': 'تم التحديث منذ {0} ساعة', 'Updated {0} days ago': 'تم التحديث منذ {0} أيام',
   'started {0}': 'البداية {0}', 'Streak': 'السلسلة', 'Best': 'الأفضل', 'Attempt {0}': 'المحاولة {0}', 'Goal {0} kg': 'الهدف {0} كجم', 'Rank': 'الرتبة',
   'This week': 'هذا الأسبوع', 'Today so far': 'اليوم حتى الآن', 'To do': 'لم يتم بعد', 'days locked in': 'أيام مكتملة', 'Meals': 'الوجبات', 'Water': 'المياه', 'Training': 'التمرين', 'Supps': 'المكملات', 'Sleep': 'النوم',
   'Needs attention': 'يحتاج انتباه', 'From the last 7 days': 'من آخر 7 أيام', 'All on track': 'كل شيء على المسار', 'Nothing to flag in the last 7 days.': 'لا شيء يستدعي الانتباه في آخر 7 أيام.',
@@ -254,8 +254,8 @@ function render(s) {
   const days = s.days || [], wts = s.weights, name = s.name || 'Athlete', upd = s.updated || null, stale = upd && Date.now() - upd > 36 * 36e5;
   document.title = `${name} · Lock In 90`;
   $('hdr').innerHTML = `<div class="brand"><span><img src="icons/logo.svg" alt="">Lock In 90 · ${t('Coach view')}</span><span class="tools"><button class="tbtn" id="theme" aria-label="${isDark() ? t('Light mode') : t('Dark mode')}" title="${isDark() ? t('Light mode') : t('Dark mode')}">${isDark() ? '☀' : '☾'}</button><button class="tbtn" id="lang">${AR() ? 'English' : 'العربية'}</button></span></div>
-  <div class="who"><span class="av" aria-hidden="true">${esc([...name.trim()][0] || '?').toUpperCase()}</span><div><h1><span class="keep">${esc(name)}</span> · ${t('Day {0} of 90', s.day)}</h1><small><i class="live${stale ? ' stale' : ''}"></i>${upd ? ago(upd) + ' · ' : ''}${s.startDate ? t('started {0}', fmt(s.startDate)) : ''}</small></div></div>
-  <div class="chips"><span>🔥 ${t('Streak')} <b class="num">${s.streak ?? 0}</b></span><span>${t('Best')} <b class="num">${s.best ?? 0}</b></span><span>${t('Attempt {0}', s.attempt ?? 1)}</span>${s.goalWeight ? `<span>${t('Goal {0} kg', s.goalWeight)}</span>` : ''}${s.rank ? `<span>${t('Rank')} <b>${esc(trw(s.rank))}</b></span>` : ''}</div>`;
+  <div class="who"><span class="av" aria-hidden="true">${esc([...name.trim()][0] || '?').toUpperCase()}</span><div><h1><span class="keep">${esc(name)}</span> · ${s.mode === 't' ? t('Daily tracker') : t('Day {0} of 90', s.day)}</h1><small><i class="live${stale ? ' stale' : ''}"></i>${upd ? ago(upd) + ' · ' : ''}${s.startDate ? t('started {0}', fmt(s.startDate)) : ''}</small></div></div>
+  <div class="chips">${s.mode === 't' ? `<span>✓ ${t('In a row')} <b class="num">${s.streak ?? 0}</b></span><span>${t('Best run')} <b class="num">${s.best ?? 0}</b></span>` : `<span>🔥 ${t('Streak')} <b class="num">${s.streak ?? 0}</b></span><span>${t('Best')} <b class="num">${s.best ?? 0}</b></span><span>${t('Attempt {0}', s.attempt ?? 1)}</span>`}${s.goalWeight ? `<span>${t('Goal {0} kg', s.goalWeight)}</span>` : ''}${s.rank ? `<span>${t('Rank')} <b>${esc(trw(s.rank))}</b></span>` : ''}</div>`;
   if (!days.length) { $('main').innerHTML = `<section class="card span3"><p class="hint">${t('None logged yet.')}</p></section>`; bind(s, days); return; }
   $('main').innerHTML = weekCard(s, days) + flagsCard(s, days, wts) + weightCard(s, wts) + foodCard(days) + trainCard(days) + heatCard(s, days) + measureCard(s);
   $('foot').textContent = t('Read-only view shared from the Lock In 90 app · updates when {0} logs', name);

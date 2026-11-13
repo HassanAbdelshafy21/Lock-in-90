@@ -4,7 +4,7 @@ import { initializeFirestore, getFirestore, persistentLocalCache, persistentMult
 import * as C from './core.js';
 import { trText, addFoodNames } from './i18n.js';
 import * as TR from './train.js';
-const APP_VERSION = '31 · Daily list, Dunkin’, cheat meals never reset';
+const APP_VERSION = '32 · daily tracker mode, Egyptian home and restaurant food';
 import { EX, POSE, figSVG, YT, LINES, FOODS, COACH_MEALS, DEFAULT_SUPPS, COACH_ENC, SLOTS, CARDIO_MODES } from './data.js';
 import { BRANDS, BRAND_BY_CODE } from './brands.js';
 addFoodNames(FOODS); addFoodNames(BRANDS);
@@ -215,7 +215,9 @@ function syncChip() {
   return `<span class="chip sync">Synced</span>`;
 }
 const FLAME = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.5c.6 3.2 4.7 5.6 4.7 10.3A4.7 4.7 0 0 1 12 17.5a4.7 4.7 0 0 1-4.7-4.7c0-2 1-3.4 2-4.4.2 1.5.9 2.6 2 3.1-.4-3.4.3-6.4.7-9z"/><path d="M12 21.5c-3.9 0-6.5-2.6-6.5-6.2 0-1 .2-2 .6-2.8" opacity=".55"/></svg>';
+const TRK = () => C.isTracker(S.settings);
 function flameChip(R) {
+  if (R.tracker) { const lit = R.todayEval.complete; return `<span class="chip trk${lit ? ' lit' : ''}" title="Days in a row on all your goals" aria-label="${R.done} days in a row on all your goals"><b class="num">✓ ${R.done}</b> in a row</span>`; }
   const ev = R.todayEval, risk = hoursLeft(now()) <= 3;
   const st = ev.complete ? 'lit' : risk ? 'risk' : '';
   const tip = ev.complete ? 'Today is locked in' : risk ? 'Streak at risk: finish today' : 'Streak';
@@ -257,15 +259,17 @@ function signinHTML() {
 }
 function waterSelect(id, attr, val) { return `<select class="in" id="${id}" ${attr}>${WATER_OPTS.map(v => `<option value="${v}" ${v === val ? 'selected' : ''}>${L(v)} L</option>`).join('')}</select>`; }
 function welcomeHTML() {
-  return `<section class="card"><div class="card-h"><h2>Start your 90 days</h2><button class="langbtn" data-act="lang" data-v="${LANG() === 'ar' ? 'en' : 'ar'}">${LANG() === 'ar' ? 'English' : 'العربية'}</button></div>
-  <p class="hint">Every day needs every planned meal on plan, your water goal, that day’s training and your core supplements. Miss any of them and the counter goes back to Day 1. ${isOwner() ? 'Your coach’s meal plan is already loaded; edit it in Me.' : 'You start with Breakfast, Lunch and Dinner. Add your own meal plan and supplements in Me, or just log what you eat and the app counts the calories.'}</p>
+  const md = S.wMode || 'tracker', ch = md === 'challenge';
+  return `<section class="card"><div class="card-h"><h2>${ch ? 'Start your 90 days' : 'How do you want to use it?'}</h2><button class="langbtn" data-act="lang" data-v="${LANG() === 'ar' ? 'en' : 'ar'}">${LANG() === 'ar' ? 'English' : 'العربية'}</button></div>
+  <div class="modepick" role="radiogroup" aria-label="Mode"><button role="radio" data-act="wmode" data-v="tracker" aria-checked="${!ch}"><span class="em">🌿</span><b>Daily health tracker <i class="tg">Default</i></b><small>Log food, water, training and supplements, and see how each day went. A bad day is just a bad day: nothing resets.</small></button><button role="radio" data-act="wmode" data-v="challenge" aria-checked="${ch}"><span class="em">🔥</span><b>Lock In 90 challenge <i class="tg hard">Hard mode</i></b><small>90 days in a row. Every day needs all four. Miss one and you’re back to Day 1.</small></button></div>
+  <p class="hint"><span>You can switch any time in Me → Mode.</span> ${ch ? 'Every day needs every planned meal on plan, your water goal, that day’s training and your core supplements. Miss any of them and the counter goes back to Day 1. ' : ''}${isOwner() ? 'Your coach’s meal plan is already loaded; edit it in Me.' : 'You start with Breakfast, Lunch and Dinner. Add your own meal plan and supplements in Me, or just log what you eat and the app counts the calories.'}</p>
   <div class="form"><label>Start date<input class="in" id="w-start" type="date" value="${today()}" max="${today()}"></label>
   <label>Water goal${waterSelect('w-water', '', 4000)}</label>
   <label>Current weight (kg)<input class="in" id="w-weight" type="number" inputmode="decimal" step="0.1"></label>
   <label>Goal weight (kg)<input class="in" id="w-goal" type="number" inputmode="decimal" step="0.1"></label>
 </div>
   <p class="hint">Your daily calorie and protein targets come from the meal plan automatically.</p>
-  <button class="btn primary block" data-act="start">Start Day 1</button>
+  <button class="btn primary block" data-act="start">${ch ? 'Start Day 1' : 'Start tracking'}</button>
   <p class="hint">Moving from the old app? <label class="link" for="imp-file">Import a backup file</label> instead.</p>
   <input id="imp-file" type="file" accept="application/json,.json" hidden></section>`;
 }
@@ -404,7 +408,7 @@ async function shareMonthImage(mk) {
   let y = 900; g.fillStyle = 'rgba(242,179,61,.16)'; rr(g, 80, y, 920, 190, 26); g.fill(); g.fillStyle = '#F2B33D'; g.font = `800 40px ${F}`; g.fillText(`${m.recs} new record${m.recs === 1 ? '' : 's'}`, 112, y + 62);
   g.fillStyle = '#fff'; g.font = `500 28px ${F}`; (m.best3.length ? m.best3 : ['Keep logging your sets']).forEach((t, i) => { let s = t; while (g.measureText(s).width > 850 && s.length > 4) s = s.slice(0, -2); g.fillText(s, 112, y + 110 + i * 36); });
   y = 1140; g.fillStyle = '#C9D3E8'; g.font = `500 28px ${F}`; if (m.most.length) g.fillText(`Most trained: ${m.most.join(', ').toLowerCase()}`, 80, y); g.fillText(`Least trained: ${m.least.join(', ').toLowerCase()}`, 80, y + 44);
-  g.fillStyle = '#F2B33D'; rr(g, 80, 1240, 250, 64, 32); g.fill(); g.fillStyle = '#14213D'; g.font = `800 30px ${F}`; g.fillText(`Day ${Math.min(C.computeRun(S.settings, S.days, now()).dayNum, 90)}`, 112, 1283);
+  g.fillStyle = '#F2B33D'; rr(g, 80, 1240, 250, 64, 32); g.fill(); g.fillStyle = '#14213D'; g.font = `800 30px ${F}`; g.fillText((() => { const R0 = C.computeRun(S.settings, S.days, now()); return R0.tracker ? `${R0.done} in a row` : `Day ${Math.min(R0.dayNum, 90)}`; })(), 112, 1283);
   const blob = await new Promise(r => cv.toBlob(r, 'image/png')), file = new File([blob], `lock-in-${mk}.png`, { type: 'image/png' });
   try { if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], text: `${monthName(mk)} on Lock In 90` }); return; } } catch (e) { if (e && e.name === 'AbortError') return; }
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = file.name; document.body.appendChild(a); a.click(); a.remove(); toast('Image saved. Send it from your gallery.');
@@ -681,7 +685,7 @@ function coachData(R) {
   Object.values(S.checkins).forEach(c => c.weight && pts.push([c.date, c.weight])); Object.keys(S.days).forEach(k => S.days[k].weight && pts.push([k, S.days[k].weight]));
   pts.sort((a, b) => a[0] < b[0] ? -1 : 1);
   const cks = Object.values(S.checkins).sort((a, b) => a.date < b.date ? -1 : 1).slice(-6).map(c => ({ date: c.date, waist: c.waist || null, chest: c.chest || null, arm: c.arm || null, hips: c.hips || null, neck: c.neck || null, weight: c.weight || null }));
-  return { name: boardName(), lang: LANG(), day: Math.min(R.dayNum, 90), streak: R.done, best: R.best, attempt: R.attemptNo, startDate: st.startDate, startWeight: st.startWeight || null, goalWeight: st.goalWeight || null, height: st.height || null, sleepGoal: st.sleepGoal || 7.5, ws: C.weekStartDay(st), rank: (() => { const r = TR.rankOf(); return r ? r.name : null; })(), days, weights: pts.slice(-90).map(([d, w]) => ({ d, w })), checkins: cks };
+  return { name: boardName(), lang: LANG(), mode: R.tracker ? 't' : 'c', day: Math.min(R.dayNum, 90), streak: R.done, best: R.best, attempt: R.attemptNo, startDate: st.startDate, startWeight: st.startWeight || null, goalWeight: st.goalWeight || null, height: st.height || null, sleepGoal: st.sleepGoal || 7.5, ws: C.weekStartDay(st), rank: (() => { const r = TR.rankOf(); return r ? r.name : null; })(), days, weights: pts.slice(-90).map(([d, w]) => ({ d, w })), checkins: cks };
 }
 function coachPublish(R) {
   const c = S.settings && S.settings.coach;
@@ -730,10 +734,10 @@ const pageHead = (title, R) => `<header class="ph"><h1>${esc(title)}</h1><span c
 const PTABS = [['week', 'Week'], ['muscles', 'Muscles'], ['body', 'Body'], ['chain', 'Chain'], ['friends', 'Friends']];
 function progressShell(G) {
   const tab = PTABS.some(p => p[0] === S.ptab) ? S.ptab : 'week';
-  return `<div class="seg wide ptabs" role="tablist" aria-label="Progress sections">${PTABS.map(([k, l]) => `<button role="tab" data-act="ptab" data-v="${k}" aria-pressed="${tab === k}">${l}</button>`).join('')}</div>` + (G[tab] || '');
+  return `<div class="seg wide ptabs" role="tablist" aria-label="Progress sections">${PTABS.map(([k, l]) => `<button role="tab" data-act="ptab" data-v="${k}" aria-pressed="${tab === k}">${k === 'chain' && TRK() ? 'Calendar' : l}</button>`).join('')}</div>` + (G[tab] || '');
 }
 const ME_GROUPS = [
-  ['Plan', [['Day and week', '📅'], ['Meal plan', '🍽️'], ['Weekly training', '🏋️'], ['Supplements', '💊'], ['Stamina track', '🚴'], ['Ramadan mode', '☾']]],
+  ['Plan', [['Mode', '🎯'], ['Day and week', '📅'], ['Meal plan', '🍽️'], ['Weekly training', '🏋️'], ['Supplements', '💊'], ['Stamina track', '🚴'], ['Ramadan mode', '☾']]],
   ['Habits', [['If-then plans', '⇢'], ['Reminders', '🔔']]],
   ['Sharing', [['Coach link', '🔗'], ['Strava', '↻']]],
   ['App', [['Data', '⚙️'], ['Restart', '↺']]]
@@ -746,7 +750,7 @@ function meHTML(R) {
   const st = S.settings, w = curWeight();
   const sum = { 'Meal plan': `${kc(C.sumItems((st.meals || []).flatMap(m => m.items || [])).k)} kcal · ${(st.meals || []).length} meals`, 'Supplements': `${(st.supps || []).filter(s => s.req).length} core`, 'Ramadan mode': st.ramadan && st.ramadan.on ? 'On' : 'Off', 'If-then plans': `${(st.ifthen || []).length} saved`, 'Coach link': st.coach ? 'Sharing' : 'Off', 'Reminders': pushState() === 'on' ? 'App notifications on' : st.ntfyTopic ? 'ntfy' : 'Not set up', 'Stamina track': (st.stamina || {}).on === false ? 'Off' : 'On', 'Weekly training': '' };
   let h = `<header class="ph"><h1>Me</h1><span class="hero-chips">${syncDot()}${TR.rankChip()}${flameChip(R)}</span></header>
-  <section class="card me-card"><div class="me-top"><span class="avatar">${esc((boardName() || '?').slice(0, 1).toUpperCase())}</span><span><b>${esc(boardName())}</b><small>Day ${Math.min(R.dayNum, 90)} of 90 · attempt ${R.attemptNo}</small></span></div>
+  <section class="card me-card"><div class="me-top"><span class="avatar">${esc((boardName() || '?').slice(0, 1).toUpperCase())}</span><span><b>${esc(boardName())}</b><small>${R.tracker ? `Daily tracker · ${R.done} day${R.done === 1 ? '' : 's'} in a row` : `Day ${Math.min(R.dayNum, 90)} of 90 · attempt ${R.attemptNo}`}</small></span></div>
   <div class="me-stats"><span><b class="num">${w ? C.round(w, 1) : '—'}</b><small>kg now</small></span><span><b class="num">${st.goalWeight || '—'}</b><small>kg goal</small></span><span><b class="num">${L(st.waterGoal || 3500)}</b><small>L water</small></span></div>
   <button class="btn block" data-act="mesec" data-v="Challenge">Edit goals and body</button><div class="card list2 flat">${TR.rankRow()}</div></section>`;
   ME_GROUPS.forEach(([g, items]) => { const its = items.filter(([k]) => byTitle[k]); if (!its.length) return; h += `<h3 class="grp">${g}</h3><section class="card list2">${its.map(([k, ic]) => `<button class="lrow" data-act="mesec" data-v="${esc(k)}"><span class="lic">${ic}</span><span class="lt"><b>${esc(k)}</b>${sum[k] ? `<small>${esc(sum[k])}</small>` : ''}</span><span class="le">›</span></button>`).join('')}</section>`; });
@@ -757,7 +761,7 @@ function meHTML(R) {
 function openDay(date) { SH = { scope: 'day', date }; $('sheet').hidden = false; drawDay(); }
 function drawDay() {
   const date = SH.date, st = S.settings, d = S.days[date] || {}, ev = C.evalDay(st, d, date), P = ev.P, tot = C.dayTotals(st, d), tgt = C.planTargets(st, d, date);
-  const R = C.computeRun(st, S.days, now()), dayNo = C.diffDays(R.attemptStart, date) + 1, t = today();
+  const R = C.computeRun(st, S.days, now()), dayNo = R.tracker ? 0 : C.diffDays(R.attemptStart, date) + 1, t = today();
   const meals = C.mealsOn(st, date).map(m => {
     const md = (d.meals || {})[m.id] || {}, skip = (d.skip || {})[m.id], s = C.sumItems(md.items || []);
     const lbl = skip ? 'Not part of the plan' : !md.status ? 'Not logged' : md.status === 'plan' ? 'As planned' : md.status === 'swap' ? 'Changed' : md.status === 'cheat' ? '🍕 Cheat meal' : 'Off-plan';
@@ -846,12 +850,12 @@ function celebData(R) {
 function showCelebration(R) {
   const c = celebData(R);
   buzz(c.mile ? [40, 60, 40, 60, 140] : [30, 50, 90]);
-  const big = c.victory ? '90 days. Done.' : c.mile ? c.mile[1] : 'Locked in';
-  const sub = c.mile ? `Milestone: Day ${c.mile[0]}` : 'Every box checked. This day counts.';
+  const big = R.tracker ? 'All goals done' : c.victory ? '90 days. Done.' : c.mile ? c.mile[1] : 'Locked in';
+  const sub = R.tracker ? (c.streak > 1 ? `${c.streak} days in a row on all your goals.` : 'Every goal checked today.') : c.mile ? `Milestone: Day ${c.mile[0]}` : 'Every box checked. This day counts.';
   $('cele').hidden = false;
   $('cele').innerHTML = `<div class="cele-in${c.mile ? ' mile' : ''}" role="dialog" aria-modal="true" aria-label="Day ${c.day} locked in">
    <div class="burst" aria-hidden="true">${Array.from({ length: 20 }, (_, i) => `<i style="--a:${i * 18}deg;--d:${(i % 4) * 70}ms;--c:${['var(--spark)', 'var(--good)', 'var(--water)', '#fff'][i % 4]}"></i>`).join('')}</div>
-   <span class="cele-k">Day</span><div class="cele-n num">${c.day}</div><div class="cele-t">${esc(big)}</div>
+   <span class="cele-k">${R.tracker ? 'In a row' : 'Day'}</span><div class="cele-n num">${R.tracker ? c.streak : c.day}</div><div class="cele-t">${esc(big)}</div>
    <p class="cele-s">${esc(sub)}</p><p class="cele-s num">Streak ${c.streak} · ${L(c.water)} L water · ${kc(c.prot)} g protein</p>
    <div class="row"><button class="btn primary" data-act="sharecard">Share image</button><button class="btn ghost" data-act="celeclose">Close</button></div></div>`;
 }
@@ -872,13 +876,13 @@ async function shareCard() {
   [[String(c.streak), 'STREAK'], [L(c.water) + ' L', 'WATER'], [kc(c.prot) + ' g', 'PROTEIN']].forEach(([v, k], i) => { const x = 90 + i * 320; g.fillStyle = CREAM; g.font = `700 78px ${DISP}`; g.fillText(v, x, 1262); g.fillStyle = MUTE; g.font = `500 26px ${MONO}`; g.fillText(k, x, 1300); });
   const blob = await new Promise(r => cv.toBlob(r, 'image/png'));
   const file = new File([blob], `lock-in-day-${c.day}.png`, { type: 'image/png' });
-  try { if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], text: `Day ${c.day} of 90 locked in.` }); return; } } catch (e) { if (e && e.name === 'AbortError') return; }
+  try { if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], text: R.tracker ? `All my goals done today. ${c.streak} in a row.` : `Day ${c.day} of 90 locked in.` }); return; } } catch (e) { if (e && e.name === 'AbortError') return; }
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = file.name; document.body.appendChild(a); a.click(); a.remove(); toast('Image saved. Post it from your gallery.');
 }
 function commitHTML(R, d, date) {
   const n = now();
   if (date !== today() || d.commit || R.todayEval.complete || n.hour < 4 || n.hour >= 14) return '';
-  return `<button class="commitbar" data-act="commit"><span>Commit to Day ${Math.min(R.dayNum, 90)}</span><small>A promise that all four get done today</small></button>`;
+  return `<button class="commitbar" data-act="commit"><span>${R.tracker ? 'Commit to today' : `Commit to Day ${Math.min(R.dayNum, 90)}`}</span><small>${R.tracker ? 'A promise that today’s goals get done' : 'A promise that all four get done today'}</small></button>`;
 }
 
 /* ---------- TODAY ---------- */
@@ -917,6 +921,11 @@ function upNextHTML(R, d, date, P) {
   if (open.length) return mealCard(open[0]);
   return '';
 }
+/* tracker mode: this week, one square per day with how many goals it hit */
+function weekStripHTML(date) {
+  const t = today(), ws = myWS(t), st = S.settings;
+  return `<div class="wkstrip" role="img" aria-label="This week">${Array.from({ length: 7 }, (_, i) => { const dt = C.addDays(ws, i), e = dt <= t && dt >= st.startDate ? C.evalDay(st, S.days[dt], dt) : null; const full = e && e.complete, cls = full ? 'f' : e && e.hit ? 'h' : e && dt < t ? 'm' : ''; return `<button data-act="dayview" data-v="${dt}" ${dt > t || dt < st.startDate ? 'disabled' : ''} class="${cls}${dt === date ? ' t' : ''}"><u>${full ? '✓' : e ? e.hit : ''}</u><span>${esc(C.DAYNAMES[C.weekday(dt)].slice(0, 2))}</span></button>`; }).join('')}</div>`;
+}
 function todayHTML(R) {
   const t = today(), n = now(), grace = graceDay(), date = editDate();
   const st = S.settings, d = S.days[date] || {}, ev = C.evalDay(st, d, date), P = ev.P;
@@ -935,15 +944,22 @@ function todayHTML(R) {
     { k: 'train', name: P.tt === 'gym' ? 'Gym' : P.tt === 'cali' ? 'Home workout' : P.tt === 'cardio' ? 'Cardio' : P.tt === 'recovery' ? 'Mobility' : 'Rest', ok: P.trained, val: P.tt === 'rest' ? 'Rest day' : P.trained ? 'Done' : 'To do' },
     { k: 'supps', name: 'Supps', ok: P.sDone === P.req.length, val: !P.req.length ? 'None' : `${P.sDone} / ${P.req.length}` }
   ];
-  const dayNo = Math.min(R.dayNum, 90);
+  const dayNo = Math.min(R.dayNum, 90), trk = !!R.tracker;
+  if (trk) {
+    const gl = ev.goals, key = { meals: 'food', water: 'water', train: 'train', supps: 'supps' };
+    pills.forEach(p => { if (!gl.includes(key[p.k])) p.nogoal = true; });
+    if (!P.pm.length) { const k = C.dayTotals(st, d).k, kt = +st.kcalTarget || 0; pills[0] = { ...pills[0], name: 'Food', ok: !(ev.miss.food || []).length, val: `${kc(k)}${kt ? ' / ' + kc(kt) : ''} kcal` }; parts[0] = { v: kt ? Math.min(1, k / kt) : k ? 1 : 0 }; }
+  }
+  const center = trk ? `<b class="num">${ev.hit}/${ev.goals.length}</b><span>goals today</span>` : `<b class="num">${dayNo}</b><span>of 90</span>`;
+  const ringLbl = trk ? `${ev.hit} of ${ev.goals.length} goals done today` : `Day ${dayNo} of 90, ${pills.filter(p => p.ok).length} of 4 pillars done`;
   let h = `<section class="hero${ev.complete ? ' locked' : ''}">
   <div class="hero-top"><span>${esc(C.DAYNAMES[C.weekday(date)])}, ${fmt(date)}</span><span class="hero-chips">${syncDot()}${TR.rankChip()}${flameChip(R)}</span></div>
   ${(st.usuals || []).length && date === t ? `<div class="qk" role="group" aria-label="Daily, one tap">${st.usuals.slice(0, 3).map((u, i) => { const c = dailyCount(date, u).length; return `<button data-act="dailyadd" data-v="${i}">${usualIcon(u)} ${esc(u.name.split(',')[0].replace(/^Dunkin' /, ''))}${c ? ` <i>✓${c > 1 ? '×' + c : ''}</i>` : ' <i>+</i>'}</button>`; }).join('')}</div>` : ''}
   ${n.late && date === t ? `<span class="until">☾ <span class="num">${C.minTxt(n.clock * 60 + n.minute)}</span> · your day runs until ${esc(dayEndTxt(n))}</span>` : ''}
   ${grace ? `<div class="hero-seg" role="group" aria-label="Day being edited"><button data-act="editdate" data-v="${grace}" aria-pressed="${date === grace}">Yesterday</button><button data-act="editdate" data-v="${t}" aria-pressed="${date === t}">Today</button></div>` : ''}
-  <div class="hero-row"><div class="rings" role="img" aria-label="Day ${dayNo} of 90, ${pills.filter(p => p.ok).length} of 4 pillars done">${ringsSVG(parts, mealsBad)}<div class="rings-c"><b class="num">${dayNo}</b><span>of 90</span></div></div>
-  <div class="pills">${pills.map(p => `<button class="pill2 ${p.k}${p.ok ? ' ok' : ''}${p.bad ? ' bad' : ''}" data-act="panel" data-v="${p.k}"><i aria-hidden="true"></i><span>${esc(p.name)}</span><em class="num">${p.ok ? '✓ ' : ''}${esc(p.val)}</em></button>`).join('')}</div></div>
-  ${commitHTML(R, d, date)}</section>`;
+  <div class="hero-row"><div class="rings" role="img" aria-label="${ringLbl}">${ringsSVG(parts, mealsBad)}<div class="rings-c">${center}</div></div>
+  <div class="pills">${pills.map(p => `<button class="pill2 ${p.k}${p.ok ? ' ok' : ''}${p.bad ? ' bad' : ''}${p.nogoal ? ' nogoal' : ''}" data-act="panel" data-v="${p.k}"><i aria-hidden="true"></i><span>${esc(p.name)}</span><em class="num">${p.ok ? '✓ ' : ''}${esc(p.val)}</em></button>`).join('')}</div></div>
+  ${trk ? weekStripHTML(date) : ''}${commitHTML(R, d, date)}</section>`;
   // one lifted card: the most useful thing to do right now
   let lift = date === t ? reflectHTML(R) : '';
   if (!lift && !st.planNoted && P.pm.length && P.pm.every(m => !(m.items || []).length)) lift = !C.inRamadan(st, date) && !lastFullPlan(st) && isOwner() ? `<section class="card setupnudge"><h3>Your meal plan is empty</h3><p class="hint">Bring back your coach’s plan (5 meals and your supplements) in one tap.</p><div class="row"><button class="btn primary" data-act="coachrestore">Restore my coach’s plan</button><button class="btn ghost" data-act="planset">Set up a new one</button></div></section>` : !C.inRamadan(st, date) && lastFullPlan(st) ? `<section class="card setupnudge"><h3>Your meal plan is empty</h3><p class="hint">Bring back the plan you saved on ${fmt(lastFullPlan(st).k)} (${lastFullPlan(st).meals.length} meals), or set up a new one.</p><div class="row"><button class="btn primary" data-act="planrestore" data-v="${lastFullPlan(st).k}">Restore my plan</button><button class="btn ghost" data-act="planset">Set up a new one</button></div></section>` : `<section class="card setupnudge"><h3>Add your ${C.inRamadan(st, date) ? 'Ramadan ' : ''}meal plan</h3><p class="hint">Add your coach’s plan or your own in Me → Meal plan. Then one tap logs a meal and your calorie targets appear. No plan? Log what you eat in each meal.</p><div class="row"><button class="btn primary" data-act="planset">Set up my plan</button><button class="btn ghost" data-act="plannoted">I’ll log as I go</button></div></section>`;
@@ -960,13 +976,13 @@ function todayNotesHTML(R) {
   const n = now(), ev = R.todayEval, out = [];
   if (R.victory) out.push(['good', '90 days. Done.', `You finished all 90 days on attempt ${R.attemptNo}.`]);
   if (R.critical && !ev.complete) out.push(['bad', 'Never miss twice', 'Yesterday reset you to Day 1. Today is non-negotiable.']);
-  if (ev.offPlan) out.push(['bad', 'Today can’t count yet', 'Something off-plan is logged. If it was a mistake, change it back.']);
+  if (ev.offPlan) out.push(R.tracker ? ['bad', 'Off-plan food today', 'The food goal won’t count today. If it was a mistake, change it back.'] : ['bad', 'Today can’t count yet', 'Something off-plan is logged. If it was a mistake, change it back.']);
   else if (!ev.complete && n.late) { const mm = n.end - (n.hour * 60 + n.minute); out.push(['warn', `Still ${C.DAYNAMES[C.weekday(n.date)]} until ${dayEndTxt(n)} (${Math.floor(mm / 60)} h ${mm % 60} min)`, 'Finish it now and the day locks in. Still missing: ' + ev.missing.join(' · ')]); }
   else if (!ev.complete && hoursLeft(n) <= 3) { const left = hoursLeft(n); out.push(['warn', `${left} hour${left === 1 ? '' : 's'} left to lock in today`, ev.missing.join(' · ')]); }
   { const b = budgetAt(today()); if (b && b.cut) out.push(['info', `Calories today: ${kc(b.target)} instead of ${kc(b.base)}`, `Paying back ${b.debtIn} kcal over plan this week, a little each day. Meals shows the smaller portions.`]); }
   const m = C.MILES.find(x => x[0] === R.done);
-  if (ev.complete && m) out.push(['good', `Milestone: Day ${m[0]}`, `${m[1]}. Keep the chain going.`]);
-  const rcp = [30, 60].find(c => R.dayNum === c + 1 || (R.dayNum === c && ev.complete));
+  if (ev.complete && m) out.push(R.tracker ? ['good', `${m[0]} days in a row`, 'All your goals, every day. Keep going.'] : ['good', `Milestone: Day ${m[0]}`, `${m[1]}. Keep the chain going.`]);
+  const rcp = !R.tracker && [30, 60].find(c => R.dayNum === c + 1 || (R.dayNum === c && ev.complete));
   if (rcp) out.push(['good', `Your Day ${rcp} recap is ready`, 'See it in Progress.']);
   if (+today().slice(8) <= 3 && prevMonth() + '-31' >= S.settings.startDate) out.push(['good', `Your ${monthName(prevMonth())} report is ready`, 'Progress → Week → Share image.']);
   return out.map(([k, t, b]) => `<div class="note2 ${k}"><b>${esc(t)}</b><span>${esc(b)}</span></div>`).join('');
@@ -1193,6 +1209,24 @@ function weekReview() {
   const cheats = valid.map(x => [x, C.pillars(st, S.days[x] || {}, x).cheats]).filter(x => x[1] && st.cheat && st.cheat.on);
   return { cheats, locked, miss, past: valid.filter(x => x < t).length, wNow, n: valid.length, worst, kcal: nN ? kS / nN : null, prot: nN ? pS / nN : null, tk: nN ? tkS / nN : null, tp: nN ? tpS / nN : null, sleep: slN ? sl / slN : null, slG, slN, cardio, wDelta: wNow && wPrev ? wNow - wPrev : null };
 }
+/* tracker mode: a month calendar shaded by goals hit, instead of the 90-day chain */
+function calendarHTML(R) {
+  const st = S.settings, t = today(), mk = S.calMonth || t.slice(0, 7), first = mk + '-01', dim = new Date(+mk.slice(0, 4), +mk.slice(5, 7), 0).getDate();
+  const ws = C.weekStartDay(st), lead = (C.weekday(first) - ws + 7) % 7, heads = Array.from({ length: 7 }, (_, i) => C.DAYNAMES[(ws + i) % 7].slice(0, 2));
+  let full = 0, logged = 0, waterOk = 0; const cells = [];
+  for (let i = 1; i <= dim; i++) {
+    const dt = `${mk}-${C.pad(i)}`, live = dt <= t && dt >= st.startDate, e = live ? C.evalDay(st, S.days[dt], dt) : null;
+    if (e) { logged++; if (e.complete) full++; if (e.P.w >= e.P.goal) waterOk++; }
+    const lv = !e ? '' : e.complete ? 'l4' : e.goals.length && e.hit / e.goals.length >= 0.7 ? 'l3' : e.hit >= 2 ? 'l2' : e.hit ? 'l1' : '';
+    cells.push(live ? `<button class="${lv}${dt === t ? ' t' : ''}" data-act="dayview" data-v="${dt}" aria-label="${fmt(dt)}: ${e.hit} of ${e.goals.length} goals">${i}</button>` : `<i class="${dt === t ? 't' : ''}">${i}</i>`);
+  }
+  const prev = C.addDays(first, -1).slice(0, 7), next = C.addDays(first, 32).slice(0, 7);
+  return `<section class="card cal"><div class="card-h"><button class="btn small" data-act="calm" data-v="${prev}" ${prev < st.startDate.slice(0, 7) ? 'disabled' : ''} aria-label="Previous month">‹</button><h2>${esc(monthName(mk))}</h2><button class="btn small" data-act="calm" data-v="${next}" ${next > t.slice(0, 7) ? 'disabled' : ''} aria-label="Next month">›</button></div>
+  <div class="calg">${heads.map(x => `<span>${x}</span>`).join('')}${'<i></i>'.repeat(lead)}${cells.join('')}</div>
+  <div class="calkey"><span>Goals hit:</span><u class="l1"></u>1 <u class="l2"></u>2 <u class="l3"></u>most <u class="l4"></u>all</div>
+  <div class="stats"><div class="stat feature"><div class="big num">${full}</div><span>Days on all goals</span></div><div class="stat"><div class="big num">${R.done}</div><span>In a row now</span></div><div class="stat"><div class="big num">${R.best}</div><span>Best run</span></div><div class="stat"><div class="big num">${logged ? Math.round(waterOk / logged * 100) : 0}%</div><span>Water goal hit</span></div></div>
+  <p class="hint">Tap a day to see what you ate and did.</p></section>`;
+}
 function progressHTML(R) {
   const st = S.settings, t = today(), rv = weekReview();
   const G = { friends: friendsTabsHTML() };
@@ -1207,11 +1241,13 @@ function progressHTML(R) {
   <div class="row"><button class="btn primary" data-act="shareweekimg">Send coach report (image)</button><button class="btn" data-act="share">As text</button></div></section>` + insightsHTML();
   G.week = monthCardHTML() + h; h = '';
   { const ws = myWS(today()); TR.setMuscleWeek(ws, C.addDays(ws, 6)); G.muscles = TR.musclesHTML(ws, C.addDays(ws, 6)); }
+  if (R.tracker) h += calendarHTML(R); else {
   h += `<div class="stats"><div class="stat feature"><div class="big num">${R.done}</div><span>Days locked in</span></div><div class="stat"><div class="big num">${Math.min(R.dayNum, 90)}</div><span>Day now</span></div><div class="stat"><div class="big num">${R.best}</div><span>Best streak</span></div><div class="stat"><div class="big num">${Math.floor(R.done / 7)}</div><span>Perfect weeks</span></div></div>`;
   const ms = C.MILES.map(m => m[0]);
   h += `<section class="card"><div class="card-h"><h2>The chain</h2><span class="hint">Tap a day to see it</span></div><div class="grid90">${Array.from({ length: 90 }, (_, i) => { const dt = C.addDays(R.attemptStart, i); let c = ''; if (dt <= t && C.evalDay(st, S.days[dt], dt).complete) c = 'done'; else if (dt === t) c = 'today'; else if (dt === R.grace) c = 'open'; if (ms.includes(i + 1)) c += ' m'; return dt <= t ? `<button class="${c}" data-act="dayview" data-v="${dt}" aria-label="Day ${i + 1}, ${fmt(dt)}">${i + 1}</button>` : `<i class="${c}" title="Day ${i + 1} · ${fmt(dt)}">${i + 1}</i>`; }).join('')}</div></section>`;
   h += `<section class="card"><div class="card-h"><h2>Milestones</h2>${pill('todo', `${C.MILES.filter(m => R.done >= m[0]).length} / ${C.MILES.length}`)}</div><div class="miles">${C.MILES.map(m => `<div class="mile ${R.done >= m[0] ? 'got' : ''}"><b class="num">${m[0]}</b><span>${m[1]}</span></div>`).join('')}</div></section>`;
   if (R.attempts.length) h += `<section class="card"><div class="card-h"><h2>Attempts</h2></div><ul class="list">${R.attempts.map((a, i) => `<li><span>Attempt ${i + 1}</span><span class="num">${a.len} day${a.len === 1 ? '' : 's'} · broke ${fmt(a.fail)}</span></li>`).join('')}<li><span>Attempt ${R.attemptNo}</span><span class="num">${R.done} days and counting</span></li></ul></section>`;
+  }
   G.chain = h; h = '';
   // weight
   const pts = {};
@@ -1280,6 +1316,7 @@ function recapData(R, cp) {
   return { cp, locked, kcal: nN ? kS / nN : null, prot: nN ? pS / nN : null, water, trained, cardio, wChange: first && last ? last - first : null, end };
 }
 function recapHTML(R) {
+  if (R.tracker) return '';
   const dn = R.dayNum, cp = [90, 60, 30].find(c => dn > c || (dn === c && R.todayEval.complete));
   if (!cp) return '';
   const r = recapData(R, cp), sg = v => (v > 0 ? '+' : v < 0 ? '−' : '') + C.round(Math.abs(v), 1);
@@ -1410,10 +1447,24 @@ function dayStartHTML(st) {
   <div class="ds-ticks" aria-hidden="true"><span style="left:0">6 pm</span><span class="c" style="left:42.9%">midnight</span><span class="c" style="left:71.4%">4 am</span><span style="right:0">8 am</span></div>
   <p class="hint">${mode === 'midnight' ? 'Grey: the day you’re in. Green: the next day. Until 3 am you can still switch to “Yesterday” on Today.' : `Grey: still the day you’re in. Green: the next day starts at ${C.minTxt(startM)}. Reminders and the friends board follow this.`}</p></div>`;
 }
+/* Me → Mode: daily tracker or the Lock In 90 challenge */
+const GOAL_ROWS = [['food', 'Food', 'Meals on plan, or calories within your target'], ['water', 'Water goal', ''], ['train', 'Training', 'On your training days'], ['supps', 'Supplements', 'Your core ones']];
+function modeHTML(st, R) {
+  const trk = C.isTracker(st), G = C.goalsOf(st), ask = S.modeAsk, noPlan = !C.mealsOn(st, today()).some(m => (m.items || []).length);
+  let h = `<section class="card" id="sec-mode"><div class="card-h"><h2>Mode</h2></div>
+  <div class="seg wide" role="group" aria-label="Mode"><button data-act="modeask" data-v="tracker" aria-pressed="${trk}">🌿 Daily tracker</button><button data-act="modeask" data-v="challenge" aria-pressed="${!trk}">🔥 Lock In 90</button></div>`;
+  if (trk) h += `<span class="sub">A full day means</span>${GOAL_ROWS.map(([k, l, d]) => `<div class="spread goalrow"><span><b>${l}</b>${d ? `<small class="sub" style="display:block">${d}</small>` : ''}</span><button class="switch" role="switch" data-act="goaltog" data-v="${k}" aria-checked="${!!G[k]}" aria-label="${l}"><i></i></button></div>`).join('')}
+  <div class="setup-r"><label for="s-kt">Daily calorie target<small class="sub" style="display:block">${noPlan ? 'For the food goal, since you have no meal plan' : 'Only used if your meal plan is empty'}</small></label><input class="in" id="s-kt" type="number" inputmode="numeric" min="800" max="6000" step="50" data-setting="kcalTarget" value="${st.kcalTarget || ''}" placeholder="optional" style="width:110px"></div>`;
+  else h += `<p class="hint">You’re in the Lock In 90 challenge: Day ${Math.min(R.dayNum, 90)}, attempt ${R.attemptNo}. Every day needs all four, and a miss sends you back to Day 1.</p>`;
+  if (ask === 'challenge' && trk) h += `<div class="modeask"><b>Start the 90-day challenge</b><p class="hint">Today becomes Day 1. Every day needs all four, and a miss sends you back to Day 1. Your history stays.</p><div class="row"><button class="btn primary" data-act="modego" data-v="challenge">🔥 Start Lock In 90 today</button><button class="btn ghost" data-act="modeask" data-v="">Not now</button></div></div>`;
+  else if (ask === 'tracker' && !trk) h += `<div class="modeask warn"><b>Leave the challenge?</b><p class="hint">The day counter stops at Day ${Math.min(R.dayNum, 90)}. Your days, records and friends stay as they are. If you come back later, you start again at Day 1.</p><div class="row"><button class="btn danger" data-act="modego" data-v="tracker">Switch to the daily tracker</button><button class="btn ghost" data-act="modeask" data-v="">Stay in the challenge</button></div></div>`;
+  else if (trk) h += `<div class="modeask"><b>Want a challenge?</b><p class="hint">Lock In 90: 90 days in a row, all four every day. Miss one and you’re back to Day 1.</p><button class="btn block" data-act="modeask" data-v="challenge">🔥 Start the 90-day challenge</button></div>`;
+  return h + '</section>';
+}
 function setupHTML(R) {
   const st = S.settings, plan = st.plan || C.DEFAULT_PLAN, wg = st.waterGoal || 3500, sta = st.stamina || { on: true, days: [] };
   let h = `<section class="card"><div class="card-h"><h2>Challenge</h2></div>
-  <div class="setup-r"><span>Started</span><span class="num">${fmt(st.startDate)} · attempt ${R.attemptNo}</span></div>
+  <div class="setup-r"><span>Started</span><span class="num">${fmt(st.startDate)}${R.tracker ? '' : ` · attempt ${R.attemptNo}`}</span></div>
   <div class="setup-r"><label for="fb-name">Your name<small class="sub" style="display:block">Shown to friends and your coach</small></label><input class="in" id="fb-name" maxlength="24" value="${esc(st.boardName || '')}" placeholder="${esc(boardName())}" style="max-width:160px"></div>
   <div class="setup-r"><label for="s-water">Water goal</label>${waterSelect('s-water', 'data-setting="waterGoal"', wg)}</div>
   ${wg > 5000 ? '<p class="safety">Above 5 L, spread it out: no more than about 1 L per hour, and add salt or electrolytes on heavy-sweat days.</p>' : ''}
@@ -1425,6 +1476,7 @@ function setupHTML(R) {
   <div class="setup-r"><label for="s-age">Age (optional)</label><input class="in" id="s-age" type="number" inputmode="numeric" min="16" max="90" data-setting="age" placeholder="for heart-rate calories" value="${st.age || ''}"></div>
   <div class="setup-r"><span>Calorie formula</span><div class="seg" role="group" aria-label="Sex for calorie formula"><button data-act="sex" data-v="m" aria-pressed="${st.sex !== 'f'}">Male</button><button data-act="sex" data-v="f" aria-pressed="${st.sex === 'f'}">Female</button></div></div>
   <div class="setup-r"><span>Usual gym time</span><div class="seg"><button data-act="defgym" data-v="am" aria-pressed="${(st.gymTime || 'am') === 'am'}">Morning</button><button data-act="defgym" data-v="pm" aria-pressed="${st.gymTime === 'pm'}">Night</button></div></div></section>`;
+  h += modeHTML(st, R);
   h += `<section class="card" id="sec-dayweek"><div class="card-h"><h2>Day and week</h2></div><p class="hint">When your day ends and when your week starts.</p>${dayStartHTML(st)}${weekStartHTML(st)}</section>`;
   // meal plan
   const PM = planMeals(), planTot = C.sumItems(PM.flatMap(m => m.items || []));
@@ -1620,7 +1672,7 @@ function nutrientsHTML(date, d) {
 }
 
 /* search: favourites, recent, my foods, Egyptian brands, basics, friends' foods; plus online (Open Food Facts Egypt, USDA) */
-const FILTS = [['all', 'All'], ['eg', 'Egyptian brands'], ['basic', 'Basics'], ['mine', 'My foods'], ['friends', 'Friends’ foods']];
+const FILTS = [['all', 'All'], ['egh', '🏠 Egyptian home food'], ['egr', '🥙 Egyptian restaurants'], ['eg', 'Egyptian brands'], ['basic', 'Basics'], ['mine', 'My foods'], ['friends', 'Friends’ foods']];
 function recentFoods() {
   const map = {};
   Object.values(S.days).forEach(d => {
@@ -1638,11 +1690,15 @@ function recentFoods() {
     return { ...base, drink: C.isDrink(it), lastG: it.g, lastSu: it.su, lastSq: it.sq, recent: true };
   });
 }
+/* search text: lower case, Arabic letter variants folded (ى/ي, ة/ه, أ/إ/آ/ا), marks and ’ dropped */
+const normQ = t => (t || '').toLowerCase().replace(/[\u064B-\u0652\u0640]/g, '').replace(/[أإآ]/g, 'ا').replace(/ى/g, 'ي').replace(/ة/g, 'ه').replace(/[’'`]/g, '').replace(/é/g, 'e').trim();
 function libMatches(q, filt = 'all') {
-  const ql = (q || '').toLowerCase().trim(), words = ql.split(/\s+/).filter(Boolean);
-  const hit = f => !ql || words.every(w => f.name.toLowerCase().includes(w) || (f.brand && f.brand.toLowerCase().includes(w))) || (f.ar && f.ar.includes(q.trim()));
+  const ql = normQ(q), words = ql.split(/\s+/).filter(Boolean);
+  const hit = f => !ql || words.every(w => normQ(`${f.name} ${f.brand || ''} ${f.kw || ''} ${f.ar || ''}`).includes(w));
   const tag = (arr, sec) => arr.map(f => ({ ...f, sec }));
   const mine = Object.values(S.foods).map(f => ({ ...f, src: 'custom' }));
+  if (filt === 'egh') { const L = FOODS.filter(f => f.cat && f.cat !== 'rest' && hit(f)).sort((a, b) => a.egOld - b.egOld); return [...tag(L.filter(f => f.cat === 'home'), 'Home cooking'), ...tag(L.filter(f => f.cat === 'sweet'), 'Sweets'), ...tag(L.filter(f => f.cat === 'drink'), 'Drinks')]; }
+  if (filt === 'egr') { const L = FOODS.filter(f => f.cat === 'rest' && hit(f)); return ['Koshary shop', 'Foul and taameya', 'Sandwich shops', 'Fiteer', 'Grills'].flatMap(g => tag(L.filter(f => f.grp === g), g)); }
   if (filt === 'eg') return tag(BRANDS.filter(hit), 'Egyptian brands');
   if (filt === 'basic') return tag(FOODS.filter(hit), 'Basics');
   if (filt === 'mine') return tag(mine.filter(hit), 'My foods');
@@ -2085,7 +2141,8 @@ document.addEventListener('click', async ev => {
       const num = id => parseFloat($(id).value) || null;
       const sd = $('w-start').value || today();
       S.settings = newSettings({ startDate: sd > today() ? today() : sd, waterGoal: +$('w-water').value, startWeight: num('w-weight'), goalWeight: num('w-goal') });
-      saveSettings(); toast('Day 1 starts now.'); return draw();
+      S.settings.mode = S.wMode === 'challenge' ? 'challenge' : 'tracker';
+      saveSettings(); toast(S.settings.mode === 'challenge' ? 'Day 1 starts now.' : 'You’re set. Log your first meal.'); return draw();
     }
   }
   if (act === 'lang') { const was = LANG(); try { localStorage.setItem('lk-lang', v); } catch (e) { } if (S.settings) { S.settings.lang = v; saveSettings(); } if (was === 'ar' && v !== 'ar') { setTimeout(() => location.reload(), 500); return; } applyLang(); return draw(); }
@@ -2274,7 +2331,7 @@ document.addEventListener('click', async ev => {
       return;
     }
     case 'celeclose': $('cele').hidden = true; $('cele').innerHTML = ''; return;
-    case 'commit': { const dd = d(), n = now(); dd.commit = `${C.pad(n.clock)}:${C.pad(n.minute)}`; saveDay(D); buzz([20, 40, 60]); toast(`Committed to Day ${Math.min(C.computeRun(S.settings, S.days, now()).dayNum, 90)}. Go get it.`); break; }
+    case 'commit': { const dd = d(), n = now(); dd.commit = `${C.pad(n.clock)}:${C.pad(n.minute)}`; saveDay(D); buzz([20, 40, 60]); toast(`${TRK() ? 'Committed to today' : `Committed to Day ${Math.min(C.computeRun(S.settings, S.days, now()).dayNum, 90)}`}. Go get it.`); break; }
     case 'haptics': S.settings.haptics = v === '1'; saveSettings(); if (v === '1') buzz(30); break;
     case 'grpnew': {
       if (!navigator.onLine) return toast('Creating a group needs internet.');
@@ -2309,6 +2366,16 @@ document.addEventListener('click', async ev => {
     case 'mealfat': return openFatSheet(v);
     case 'mealtab': S.mealTab = v; break;
     case 'dailyadd': return addDaily(+v);
+    case 'modeask': S.modeAsk = v || null; return draw();
+    case 'modego': {
+      const st = S.settings; S.modeAsk = null;
+      if (v === 'challenge') { st.mode = 'challenge'; st.attemptStart = today() > st.startDate ? today() : st.startDate; saveSettings(); toast('Lock In 90 starts today. Day 1.'); }
+      else { st.mode = 'tracker'; saveSettings(); toast('You’re on the daily tracker. Nothing resets.'); }
+      return draw();
+    }
+    case 'goaltog': { const G = C.goalsOf(S.settings), on = Object.keys(G).filter(k => G[k]); if (G[v] && on.length === 1) { toast('Keep at least one goal.'); break; } S.settings.goals = { ...G, [v]: !G[v] }; saveSettings(); return draw(); }
+    case 'calm': S.calMonth = v; return draw();
+    case 'wmode': S.wMode = v; return draw();
     case 'cheatfix': { const f = cheatFix(v); if (!f || f.blocked) { toast('This day can’t become a free cheat meal.'); break; } if (f.turnOn) S.settings.cheat = { per: '1w', kind: 'meal', ...(S.settings.cheat || {}), on: true }, saveSettings(); S.days[v] = f.nd; saveDay(v); toast('Counted as your free cheat meal. Your streak is back.'); if (SH && SH.scope === 'day') drawDay(); break; }
     case 'dailyedit': S.dailyEdit = !S.dailyEdit; break;
     case 'usualrm2': S.settings.usuals = (S.settings.usuals || []).filter((_, i) => i !== +v); saveSettings(); break;
@@ -2594,7 +2661,7 @@ function boardPublish(R) {
   if (!code || !S.got.days || !R) return;
   const ev = R.todayEval, P = ev.P;
   const doneDates = []; for (let i = 0; i < 30; i++) { const dt = C.addDays(today(), -i); if (C.evalDay(S.settings, S.days[dt], dt).complete) doneDates.push(dt); }
-  const sum = { doneDates, wk: myWeekStats(), name: boardName(), day: Math.min(R.dayNum, 90), streak: R.done, best: R.best, attempt: R.attemptNo, parts: [P.mealsOk, P.w >= P.goal, P.trained, P.sDone === P.req.length].filter(Boolean).length, done: ev.complete, date: today(), victory: !!R.victory, ...leagueSummary(R), foods: sharedFoods() };
+  const sum = { doneDates, wk: myWeekStats(), name: boardName(), mode: R.tracker ? 't' : 'c', day: Math.min(R.dayNum, 90), streak: R.done, best: R.best, attempt: R.attemptNo, parts: [P.mealsOk, P.w >= P.goal, P.trained, P.sDone === P.req.length].filter(Boolean).length, done: ev.complete, date: today(), victory: !!R.victory, ...leagueSummary(R), foods: sharedFoods() };
   const key = code + JSON.stringify(sum);
   if (key === S.boardLast) return;
   S.boardLast = key; clearTimeout(boardT);
@@ -2701,7 +2768,7 @@ function friendsHTML() {
   const rows = friendRows(), t = today(), gs = groupStreak();
   return `<section class="card" id="sec-friends"><div class="card-h"><h2>Friends</h2><span class="state s-opt num">${esc(st.group)}</span></div>
   ${challengeHTML()}${gs ? `<div class="gchain${gs.todayAll ? ' all' : ''}"><b class="num">${gs.n}</b><span>${gs.n === 1 ? 'day' : 'days'} in a row that <em>everyone</em> locked in${gs.todayAll ? ' · all of you are done today' : ''}</span></div>` : ''}
-  <div class="board">${rows.length ? rows.map(m => `<div class="brow${m.me ? ' me' : ''}"><div class="bn"><b>${esc(m.name)}${m.me ? ' (you)' : ''}</b><small class="num">${m.reset && m.reset.date === t ? `Started over today · attempt ${m.reset.attempt} · ` : ''}Day ${m.day} · streak ${m.streak}${m.attempt > 1 && !(m.reset && m.reset.date === t) ? ` · attempt ${m.attempt}` : ''}</small></div>
+  <div class="board">${rows.length ? rows.map(m => `<div class="brow${m.me ? ' me' : ''}"><div class="bn"><b>${esc(m.name)}${m.me ? ' (you)' : ''}</b><small class="num">${m.mode === 't' ? `Daily tracker · ${m.streak} in a row` : `${m.reset && m.reset.date === t ? `Started over today · attempt ${m.reset.attempt} · ` : ''}Day ${m.day} · streak ${m.streak}${m.attempt > 1 && !(m.reset && m.reset.date === t) ? ` · attempt ${m.attempt}` : ''}`}</small></div>
     <div class="bend">${m.victory ? pill('done', '90 days done') : !m.fresh ? `<span class="state s-todo">Last seen ${m.date ? fmt(m.date) : '—'}</span>` : m.done ? pill('done', 'Locked in') : `<span class="state s-todo num">${m.parts}/4 today</span>`}
     ${m.me ? '' : `<div class="cbtns">${m.fresh && m.done ? `<button class="cb" data-act="cheer" data-v="${m.id}:fire" ${cheerSent(m.id, 'fire') ? 'disabled' : ''} aria-label="Send respect to ${esc(m.name)}">🔥</button>` : `<button class="cb" data-act="cheer" data-v="${m.id}:cheer" ${cheerSent(m.id, 'cheer') ? 'disabled' : ''} aria-label="Cheer ${esc(m.name)}">👏</button>`}${!m.done ? `<button class="cb" data-act="cheer" data-v="${m.id}:nudge" ${cheerSent(m.id, 'nudge') ? 'disabled' : ''} aria-label="Nudge ${esc(m.name)} to finish today">⏰</button>` : ''}</div>`}</div></div>`).join('') : '<p class="hint">Loading the board… (needs internet the first time)</p>'}</div>
   <div class="row"><button class="btn" data-act="grpinvite">Invite friends</button><button class="link" data-act="grpleave">Leave group</button></div>

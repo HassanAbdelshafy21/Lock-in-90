@@ -1,6 +1,6 @@
 # Lock In 90
 
-A 90-day challenge tracker for food, water, training and supplements. Miss one and you're back to Day 1. It's a web app you install on your phone: it works offline, syncs through Firebase, and runs entirely on free tiers.
+A daily health tracker for food, water, training and supplements, with an optional 90-day challenge: turn on Lock In 90 and every day needs all four, or you're back to Day 1. It's a web app you install on your phone: it works offline, syncs through Firebase, and runs entirely on free tiers.
 
 **Open the app:** https://hassanabdelshafy21.github.io/Lock-in-90/ (on Android: menu → Install app; on iPhone: Share → Add to Home Screen)
 
@@ -15,9 +15,11 @@ A 90-day challenge tracker for food, water, training and supplements. Miss one a
 
 One screen for the day. A navy scoreboard shows four rings around the day number, one each for meals, water, training and supplements. Below it sit one "Up next" card with the single most useful thing to do now, and a short list of the rest. Tap any pillar for its details. Light and dark mode follow the phone, and the whole app also works in Arabic, right to left.
 
-- **Every day needs all four:** every planned meal on plan, the water goal, that day's training and the core supplements. Miss one and the counter resets to Day 1. The day after a miss is flagged "Never miss twice."
+- **Two ways to use it:** a **daily tracker** (the default for new accounts) where you pick which goals make a full day, a bad day just shows lighter on the calendar, and nothing resets; or the **Lock In 90 challenge**. Switch any time in Me → Mode. In tracker mode without a meal plan, the food goal is logging what you eat, within an optional calorie target.
+- **The challenge: every day needs all four:** every planned meal on plan, the water goal, that day's training and the core supplements. Miss one and the counter resets to Day 1. The day after a miss is flagged "Never miss twice."
 - **Food:** your coach's meal plan or your own, one-tap "As planned", and calories and macros from a built-in library (Egyptian staples included, cooked weights). Drinks count toward water.
   - **Egyptian brands:** popular packaged products (Balance, Juhayna, Domty, Almarai, Lamar, Rich Bake, Abu Auf, Molto and more) checked against their labels, plus McDonald's Egypt from its published tables and Dunkin' cappuccino and latte (whole or skim milk, small to large). Anything else sold in Egypt can be searched on Open Food Facts, and entries whose calories don't add up are left out.
+  - **Egyptian home and restaurant food:** about 50 dishes: mahshy (cabbage, vine leaves, mixed), mombar, fattah, macarona béchamel, bamya, mesa'a'a, rice with vermicelli, bessara, kebda, sogo', hamam mahshy and more; koshary by box size, foul and taameya sandwiches, liver and sogo' sandwiches, shawarma, fiteer and grills; sweets like konafa, qatayef and Om Ali; and drinks like sahlab, karkade and sugarcane juice. Search in Arabic, English or Franco ("wara2 3enab"), or by shop name ("Abou Tarek"). No Egyptian chain publishes nutrition, so dishes are worked out from typical recipes with USDA values for each ingredient and marked as estimates.
   - **Servings, not just grams:** pack, slice, cup, bar and so on, with a ½-step amount. The app remembers what you used last time.
   - **More nutrients:** sodium (and salt), sugar, saturated fat, fiber, potassium and calcium for each food and for the day, against WHO limits, with the foods that gave you the most sodium.
   - **Add from a label:** per 100 g or per serving, sodium or salt, your own servings, and a check that catches typos. You can photograph the nutrition table and the phone reads the numbers (on the phone itself, English and Arabic). Also barcode scan, USDA search and recipes.
@@ -77,7 +79,7 @@ One screen for the day. A navy scoreboard shows four rings around the day number
   - Week: the weekly review and a shareable coach report.
   - Muscles: a body map of sets per muscle against the 10–20 sets range, with recovery days.
   - Body: weight trend and measurements.
-  - Chain: the 90-day chain and the history of each day.
+  - Chain (challenge) or Calendar (tracker): the 90-day chain, or a month shaded by goals hit, and the history of each day.
 - **Monthly report:** a shareable image on the 1st of each month.
 - **Strength rank:** seven ranks (Iron, Bronze, Silver, Gold, Platinum, Diamond, Legend), each with three steps, from your best estimated 1-rep max relative to bodyweight on main lifts, or reps for pull-ups, dips and push-ups. Your rank badge sits on Today, Train and Me. The ranks page lists every rank with what it takes at your bodyweight, and your friends' ranks. Warm-ups and sets over 12 reps don't count.
 - **Friends:** create a group and share the 6-letter code.

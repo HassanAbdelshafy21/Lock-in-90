@@ -116,7 +116,7 @@ const RAW = [
   ['foul', 'Foul medames, plain', 110, 7.6, 19.6, 0.4, [['plate', 200]], 'فول'],
   ['foul_oil', 'Foul with oil (est.)', 160, 7.5, 19, 6, [['plate', 200]], 'فول بالزيت'],
   ['taameya', 'Ta’ameya / falafel (est.)', 333, 13.3, 31.8, 17.8, [['piece', 25]], 'طعمية'],
-  ['koshari', 'Koshari (est.)', 175, 5.5, 30, 3.5, [['small box', 350], ['large box', 550]], 'كشري'],
+  ['koshari', 'Koshary', 175, 5.5, 30, 3.5, [['small box', 350], ['medium box', 500], ['large box', 700]], 'كشري'],
   ['chickpeas', 'Chickpeas, cooked', 164, 8.9, 27, 2.6, [], 'حمص'],
   ['hummus', 'Hummus', 166, 7.9, 14, 9.6, [['tbsp', 15]], 'حمص طحينة'],
   // vegetables
@@ -179,13 +179,61 @@ const RAW = [
   ['hawawshi', 'Hawawshi (est.)', 290, 13, 24, 16, [['piece', 250]], 'حواوشي'],
   ['feteer', 'Feteer meshaltet (est.)', 420, 7, 40, 26, [['slice', 100]], 'فطير مشلتت'],
   ['chocolate', 'Milk chocolate', 535, 7.7, 59, 30, [['bar 40 g', 40]], 'شوكولاتة'],
-  ['basbousa', 'Basbousa (est.)', 350, 4, 55, 13, [['piece', 80]], 'بسبوسة']
+  ['basbousa', 'Basbousa (est.)', 350, 4, 55, 13, [['piece', 80]], 'بسبوسة'],
+  /* Egyptian dishes: worked out from typical recipes with USDA ingredient values (see EG below) */
+  ["mahshy_cabbage", "Mahshy, cabbage", 112.4, 2.1, 18, 3.7, [["roll", 30], ["plate", 300]], "محشي كرنب"],
+  ["mahshy_vine", "Mahshy, vine leaves", 144, 3, 22.9, 4.8, [["piece", 12], ["plate", 250]], "ورق عنب"],
+  ["mahshy_mix", "Mahshy, mixed (zucchini, eggplant, pepper)", 99.8, 2, 16.2, 3.2, [["piece", 80], ["plate", 300]], "محشي مشكل"],
+  ["mombar", "Mombar", 215.7, 4.5, 23.4, 11.4, [["piece", 25], ["plate", 250]], "ممبار"],
+  ["hamam", "Hamam mahshy (stuffed pigeon)", 219.7, 13, 12.8, 13.3, [["pigeon", 300]], "حمام محشي"],
+  ["fattah", "Fattah with meat", 159.6, 9, 19.7, 4.8, [["plate", 400]], "فتة باللحمة"],
+  ["bechamel", "Macarona béchamel", 172.3, 7.3, 18.2, 7.7, [["piece", 200], ["plate", 300]], "مكرونة بشاميل"],
+  ["bamya", "Bamya with meat", 85.9, 6.6, 5.8, 4.5, [["bowl", 250]], "بامية باللحمة"],
+  ["moussaka", "Mesa’a’a (eggplant)", 176.6, 4, 7, 15.4, [["plate", 250]], "مسقعة"],
+  ["roz_shareya", "Rice with vermicelli", 165.5, 3, 30.7, 3, [["cup", 160], ["plate", 250]], "أرز بالشعرية"],
+  ["roz_meammar", "Roz me’ammar (baked rice)", 185.1, 3.6, 27, 6.7, [["piece", 200]], "أرز معمر"],
+  ["bessara", "Bessara", 99.2, 5.1, 12.2, 3.8, [["plate", 200]], "بصارة"],
+  ["ads", "Lentil soup", 64, 3.7, 10.6, 1, [["bowl", 300]], "شوربة عدس"],
+  ["tagen_potato", "Potato tagen with meat", 113.3, 7, 11.3, 4.6, [["plate", 300]], "طاجن بطاطس باللحمة"],
+  ["goulash", "Goulash with mince", 299.9, 10.9, 21.5, 18.6, [["piece", 150]], "جلاش باللحمة"],
+  ["pane", "Chicken pané", 248.4, 20.9, 10.5, 13.1, [["piece", 120]], "فراخ بانيه"],
+  ["fish_fried", "Fried fish (tilapia)", 244.4, 25.4, 6, 13.3, [["fish", 200]], "سمك بلطي مقلي"],
+  ["kebda", "Kebda Iskandarani (liver)", 211.2, 22, 6.9, 10.4, [["plate", 200]], "كبدة إسكندراني"],
+  ["sogo2", "Sogo’ (Egyptian sausage)", 276.9, 12.1, 4.3, 23.4, [["plate", 200]], "سجق"],
+  ["shakshuka", "Shakshuka", 96.8, 5.4, 3.7, 6.8, [["plate", 250]], "شكشوكة"],
+  ["pastirma_egg", "Eggs with pastirma", 203.1, 17.3, 0.8, 14.2, [["plate", 150]], "بيض بالبسطرمة"],
+  ["tahina_salad", "Tahina salad", 210.3, 6.1, 9.8, 18.1, [["tbsp", 15], ["small dish", 60]], "سلطة طحينة"],
+  ["torshi", "Torshi (pickles)", 18, 0.8, 3.5, 0.2, [["small dish", 50]], "طرشي"],
+  ["foul_sand", "Foul sandwich", 200, 8.1, 32.2, 4.2, [["sandwich", 150]], "ساندوتش فول"],
+  ["taameya_sand", "Taameya sandwich", 261.1, 9.8, 34.4, 9.8, [["sandwich", 165]], "ساندوتش طعمية"],
+  ["kebda_sand", "Alexandrian liver sandwich", 234.7, 16.4, 23.7, 8.3, [["sandwich", 190]], "ساندوتش كبدة إسكندراني"],
+  ["sogo2_sand", "Sogo’ sandwich", 272.5, 10.6, 23.2, 15.4, [["sandwich", 180]], "ساندوتش سجق"],
+  ["shawarma_plate", "Chicken shawarma plate", 162.6, 14.2, 12.6, 6.2, [["plate", 430]], "طبق شاورما فراخ"],
+  ["fiteer_cheese", "Fiteer with cheese", 345.7, 9.5, 31.1, 20.3, [["quarter", 125], ["whole medium", 500]], "فطير جبنة"],
+  ["fiteer_meat", "Fiteer with meat", 324.4, 9.1, 30.1, 18.4, [["quarter", 125], ["whole medium", 500]], "فطير لحمة"],
+  ["kebab", "Kebab, grilled", 235, 26, 0, 14.5, [["¼ kg", 250], ["piece", 30]], "كباب"],
+  ["tarb", "Tarb", 330, 18, 1, 28.5, [["piece", 50], ["¼ kg", 250]], "طرب"],
+  ["shish_tawook", "Shish tawook", 165, 26, 3, 5.5, [["skewer", 150], ["¼ kg", 250]], "شيش طاووك"],
+  ["grilled_chicken", "Grilled half chicken (meat only)", 230, 27, 1, 13, [["half chicken", 300]], "نص فرخة مشوية"],
+  ["konafa", "Konafa", 383.9, 3.9, 44.3, 22.3, [["piece", 120]], "كنافة"],
+  ["qatayef", "Qatayef, fried with nuts", 402.1, 6.4, 51.5, 20.4, [["piece", 55]], "قطايف"],
+  ["om_ali", "Om Ali", 300.6, 5.2, 26.4, 20.1, [["bowl", 250]], "أم علي"],
+  ["roz_laban", "Roz bel laban (rice pudding)", 139.7, 3.6, 24.4, 3.1, [["cup", 200]], "أرز باللبن"],
+  ["mahalabeya", "Mahalabeya", 130, 2.8, 23.6, 2.8, [["cup", 180]], "مهلبية"],
+  ["lokma", "Lokmet el qady", 396.7, 4, 69.2, 11.9, [["piece", 12], ["5 pieces", 60]], "لقمة القاضي"],
+  ["kahk", "Kahk", 576, 6.2, 49.9, 39.6, [["piece", 35]], "كحك"],
+  ["sahlab", "Sahlab", 149.8, 3.8, 19.9, 6.5, [["cup", 250]], "سحلب"],
+  ["karkade", "Karkade, sweetened", 34, 0, 8.5, 0, [["glass", 250]], "كركديه"],
+  ["qasab", "Sugarcane juice", 70, 0.2, 17.5, 0, [["glass", 300]], "عصير قصب"],
+  ["sobia", "Sobia", 90, 1, 16, 2.6, [["glass", 250]], "سوبيا"],
+  ["tamr_hindi", "Tamr hindi", 52, 0.2, 13, 0.1, [["glass", 250]], "تمر هندي"]
 ];
 
 /* More nutrients per 100 g: [sodium mg, sugars g, saturated fat g, fiber g, potassium mg, calcium mg].
    Plain foods follow USDA FoodData Central (SR Legacy) values, cooked without added salt.
    Items marked (est.) in the library are typical Egyptian home or street versions, salted as usually served. */
 const MICRO = {
+  mahshy_cabbage: [265.5, 1.9, 1.2, 1.4, 150.7, 24], mahshy_vine: [320.1, 2.1, 1.5, 2.7, 162.5, 77.8], mahshy_mix: [253, 2.3, 1, 1.5, 206.9, 17.3], mombar: [388.3, 1, 3.2, 0.8, 136.9, 17.9], hamam: [373, 0.3, 5, 2.9, 195.2, 15.9], fattah: [326.2, 0.8, 2.4, 1, 200.3, 13.4], bechamel: [191.9, 2.8, 3.6, 0.9, 175.3, 50.5], bamya: [301.8, 2, 1.8, 1.9, 315.1, 41.9], moussaka: [242.9, 3.9, 2.6, 2.7, 320.2, 17.8], roz_shareya: [215.8, 0.2, 1.3, 0.6, 49, 10.7], roz_meammar: [214.3, 2.1, 4.1, 0.4, 91.1, 56.3], bessara: [227.9, 1.5, 0.5, 4.9, 293.2, 47.8], ads: [258.4, 0.8, 0.5, 1.8, 143.4, 10.2], tagen_potato: [357.7, 1.6, 1.1, 1.6, 394.9, 12.7], goulash: [222.9, 1.3, 8.2, 0.9, 166.3, 30.3], pane: [445.3, 0.8, 2.1, 0.6, 304.4, 31], fish_fried: [632.4, 0, 2.2, 0.3, 393.7, 22.7], kebda: [483.3, 0.7, 2.1, 0.6, 399.9, 22.3], sogo2: [710.2, 2.2, 8.2, 0.7, 295.2, 18.7], shakshuka: [250.3, 2.2, 1.6, 1, 206.8, 29.7], pastirma_egg: [618, 0.3, 5.9, 0, 183.4, 48.2], tahina_salad: [427.9, 0.7, 2.5, 3.8, 184.4, 157.1], torshi: [1500, 1.5, 0, 1.5, 150, 30], foul_sand: [398, 1.4, 0.7, 5.4, 224, 28], taameya_sand: [403.8, 1.9, 1.4, 4.9, 337.8, 46.6], kebda_sand: [479.2, 1.9, 1.6, 1.5, 281.8, 32.2], sogo2_sand: [605, 2.8, 5, 1.6, 217, 30.8], shawarma_plate: [297.9, 1.1, 2, 0.8, 190.5, 28.1], fiteer_cheese: [275.9, 0.3, 12.3, 1.1, 62.4, 128.5], fiteer_meat: [258, 0.5, 10.4, 1.2, 132.3, 13.8], kebab: [420, 0, 6, 0, 300, 12], tarb: [450, 0, 12, 0, 250, 12], shish_tawook: [480, 1.5, 1.2, 0.3, 330, 15], grilled_chicken: [520, 0, 3.8, 0, 240, 15], konafa: [62.1, 25.3, 12.2, 0.9, 66.8, 22.7], qatayef: [1.8, 30.4, 2.3, 2.1, 167.6, 34.4], om_ali: [94.8, 13.1, 7.7, 1.3, 162.8, 79], roz_laban: [41, 16, 1.8, 0.1, 134.8, 108.7], mahalabeya: [38.1, 17.4, 1.6, 0.1, 115.3, 98.5], lokma: [1.3, 38.5, 1.6, 1.1, 42, 6.2], kahk: [2, 8.3, 23.6, 1.6, 76.1, 13.8], sahlab: [37.3, 12.8, 2.8, 0.7, 149.4, 102.3], karkade: [3, 8.5, 0, 0, 20, 5], qasab: [10, 17, 0, 0, 60, 10], sobia: [20, 13, 2.2, 0.2, 60, 30], tamr_hindi: [5, 12, 0, 0.5, 60, 7],
   chicken_breast: [74, 0, 1, 0, 256, 15], chicken_thigh: [95, 0, 2.7, 0, 269, 12], chicken_fried: [450, 0.3, 4.5, 0.5, 250, 25], beef_lean: [65, 0, 6, 0, 320, 18], beef_mince: [75, 0, 6.6, 0, 300, 20],
   kofta: [500, 0.5, 7, 0.5, 300, 25], liver: [79, 0, 1.6, 0, 351, 6], tuna_water: [247, 0, 0.2, 0, 237, 11], tuna_oil: [354, 0, 1.5, 0, 207, 13], salmon: [61, 0, 3.1, 0, 384, 15], tilapia: [56, 0, 0.9, 0, 380, 14],
   shrimp: [111, 0, 0.1, 0, 259, 70], egg: [124, 1.1, 3.3, 0, 126, 50], egg_fried: [207, 0.4, 4.3, 0, 152, 62], egg_white: [166, 0.7, 0, 0, 163, 7], turkey: [1000, 3, 0.6, 0, 350, 10], whey: [300, 5, 3, 0, 500, 450],
@@ -206,7 +254,10 @@ const MICRO = {
 export const MICRO_KEYS = ['na', 'sug', 'sat', 'fib', 'pot', 'ca'];
 export const microsFrom = a => a ? Object.fromEntries(MICRO_KEYS.map((k, i) => [k, a[i]])) : {};
 import { DRINK_IDS } from './core.js';
-export const FOODS = RAW.map(([id, name, k, p, c, f, units, ar]) => ({ id, name, per: { k, p, c, f, ...microsFrom(MICRO[id]) }, units: units || [], ar: ar || '', src: 'lib', drink: DRINK_IDS.includes(id) }));
+/* Egyptian food groups for the food filters: cat home | rest | sweet | drink, grp = restaurant section, kw = other spellings and shop names people search for */
+export const EG = {"mahshy_cabbage": {"cat": "home", "kw": "mahshi mahshy mahshey koronb kromb cabbage rolls malfouf محشى ملفوف"}, "mahshy_vine": {"cat": "home", "kw": "mahshi mahshy wara2 3enab warak enab waraq enab grape leaves dolma محشي محشى"}, "mahshy_mix": {"cat": "home", "kw": "mahshi mahshy kousa kosa betengan filfil محشى كوسة باذنجان فلفل"}, "mombar": {"cat": "home", "kw": "mombar mumbar sausage rice mahshi محشي"}, "hamam": {"cat": "home", "kw": "hamam pigeon mahshi freekeh فريك"}, "fattah": {"cat": "home", "kw": "fatta fattah fatteh eid"}, "bechamel": {"cat": "home", "kw": "macarona macaroni bechamel bashamel pasta"}, "bamya": {"cat": "home", "kw": "bamya bamia okra"}, "moussaka": {"cat": "home", "kw": "mesa2a3a msa2a3a moussaka musakka eggplant betengan بتنجان"}, "roz_shareya": {"cat": "home", "kw": "roz rice shareya sha3reya vermicelli ruz رز"}, "roz_meammar": {"cat": "home", "kw": "roz meammar me3ammar rice baked رز"}, "bessara": {"cat": "home", "kw": "bessara besara fava"}, "ads": {"cat": "home", "kw": "ads 3ads lentil soup shorba"}, "tagen_potato": {"cat": "home", "kw": "tagen tajine batates potato meat"}, "goulash": {"cat": "home", "kw": "goulash gollash phyllo mince"}, "pane": {"cat": "home", "kw": "pane panee breaded chicken frakh"}, "fish_fried": {"cat": "home", "kw": "samak fish bolti tilapia fried"}, "kebda": {"cat": "home", "kw": "kebda kibda liver alexandrian eskandarani"}, "sogo2": {"cat": "home", "kw": "sogo2 sogo sujuk sausage"}, "shakshuka": {"cat": "home", "kw": "shakshuka eggs tomato"}, "pastirma_egg": {"cat": "home", "kw": "basterma pastirma bastorma eggs beid"}, "tahina_salad": {"cat": "home", "kw": "tahina tehina tahini salad"}, "torshi": {"cat": "home", "kw": "torshi mekhalel pickles مخلل"}, "koshari": {"cat": "rest", "grp": "Koshary shop", "kw": "koshary koshari kushari abou tarek abu tarek tahrir el tahrir zooba ابو طارق التحرير"}, "foul_sand": {"cat": "rest", "grp": "Foul and taameya", "kw": "foul ful sandwich gad zooba felfela جاد"}, "taameya_sand": {"cat": "rest", "grp": "Foul and taameya", "kw": "taameya ta3meya falafel sandwich gad zooba felfela جاد"}, "kebda_sand": {"cat": "rest", "grp": "Sandwich shops", "kw": "kebda kibda liver sandwich alexandrian gad"}, "sogo2_sand": {"cat": "rest", "grp": "Sandwich shops", "kw": "sogo2 sausage sandwich gad"}, "shawarma_plate": {"cat": "rest", "grp": "Sandwich shops", "kw": "shawarma shawerma plate fatta mo2men momen mo'men gad cook door مؤمن كوك دور"}, "fiteer_cheese": {"cat": "rest", "grp": "Fiteer", "kw": "fiteer feteer cheese gebna"}, "fiteer_meat": {"cat": "rest", "grp": "Fiteer", "kw": "fiteer feteer meat lahma"}, "kebab": {"cat": "rest", "grp": "Grills", "kw": "kebab kabab grill mashwyat sobhy kaber refaey abou shakra صبحي كابر الرفاعي ابو شقرة مشويات"}, "tarb": {"cat": "rest", "grp": "Grills", "kw": "tarb grill mashwyat مشويات"}, "shish_tawook": {"cat": "rest", "grp": "Grills", "kw": "shish tawook taouk chicken grill"}, "grilled_chicken": {"cat": "rest", "grp": "Grills", "kw": "frakh farkha grilled chicken half mashwy"}, "konafa": {"cat": "sweet", "kw": "konafa kunafa knafeh ramadan"}, "qatayef": {"cat": "sweet", "kw": "qatayef atayef katayef ramadan"}, "om_ali": {"cat": "sweet", "kw": "om ali umm ali"}, "roz_laban": {"cat": "sweet", "kw": "roz bel laban rice pudding"}, "mahalabeya": {"cat": "sweet", "kw": "mahalabeya mehalabeya muhallebi pudding"}, "lokma": {"cat": "sweet", "kw": "lokma loqmet el kady zalabya zalabia زلابية"}, "kahk": {"cat": "sweet", "kw": "kahk ka3k eid cookies"}, "sahlab": {"cat": "drink", "kw": "sahlab sahleb salep"}, "karkade": {"cat": "drink", "kw": "karkade karkadeh hibiscus"}, "qasab": {"cat": "drink", "kw": "qasab asab sugarcane juice"}, "sobia": {"cat": "drink", "kw": "sobia sobya ramadan"}, "tamr_hindi": {"cat": "drink", "kw": "tamr hindi tamarind ramadan"}, "foul": {"old": 1, "cat": "home", "kw": ""}, "foul_oil": {"old": 1, "cat": "home", "kw": ""}, "taameya": {"old": 1, "cat": "home", "kw": ""}, "molokhia": {"old": 1, "cat": "home", "kw": ""}, "vegetable_stew": {"old": 1, "cat": "home", "kw": ""}, "basbousa": {"old": 1, "cat": "sweet", "kw": ""}, "hawawshi": {"old": 1, "cat": "rest", "grp": "Sandwich shops", "kw": "hawawshi hawawshy gad"}, "shawarma": {"old": 1, "cat": "rest", "grp": "Sandwich shops", "kw": "shawarma shawerma sandwich mo2men momen mo'men gad cook door مؤمن كوك دور"}, "feteer": {"old": 1, "cat": "rest", "grp": "Fiteer", "kw": "fiteer feteer meshaltet"}, "kofta": {"old": 1, "cat": "rest", "grp": "Grills", "kw": "kofta grill mashwyat sobhy kaber refaey abou shakra صبحي كابر الرفاعي ابو شقرة مشويات"}};
+const EG_NOTE = {"home": "Worked out from a typical Egyptian home recipe, using USDA values for each ingredient. Recipes vary: add extra ghee with Cooking fat.", "sweet": "Worked out from a typical Egyptian recipe, using USDA values for each ingredient. Recipes vary.", "drink": "Worked out from a typical Egyptian recipe, using USDA values for each ingredient. Recipes vary.", "rest": "Estimate for a typical portion. No Egyptian restaurant chain publishes its nutrition."};
+export const FOODS = RAW.map(([id, name, k, p, c, f, units, ar]) => ({ id, name, per: { k, p, c, f, ...microsFrom(MICRO[id]) }, units: units || [], ar: ar || '', src: 'lib', drink: DRINK_IDS.includes(id), ...(EG[id] ? { cat: EG[id].cat, grp: EG[id].grp, kw: EG[id].kw, egOld: !!EG[id].old, ...(EG_NOTE[EG[id].cat] && !EG[id].old ? { note: EG_NOTE[EG[id].cat] } : {}) } : {}) }));
 export const foodById = id => FOODS.find(f => f.id === id);
 const it = (id, g) => { const f = foodById(id); return { fid: id, name: f.name, g, per: { ...f.per } }; };
 
