@@ -37,20 +37,27 @@ One screen for the day. A navy scoreboard shows four rings around the day number
 ## Train
 
 <p>
-<img src="docs/screens/train.webp" width="200" alt="Your training plan">
+<img src="docs/screens/gear.webp" width="200" alt="Choosing your home equipment">
+<img src="docs/screens/train.webp" width="200" alt="Your training plan with the Gym / Home switch">
 <img src="docs/screens/workout.webp" width="200" alt="Logging a workout with the rest timer">
 <img src="docs/screens/exercise.webp" width="200" alt="Exercise page">
 <img src="docs/screens/summary.webp" width="200" alt="Workout summary">
 </p>
 
-- **A plan for anyone:** a short setup asks where you train (full gym, dumbbells, or no equipment), your goal, experience and days per week. It then builds a plan: full body, push/pull/legs, upper/lower, PPL + upper/lower, body-part split, or PPL ×2. You can edit any workout or build your own.
-- **Guided logging:**
-  - Start and end photos for each exercise, with last time's numbers pre-filled and a tip on when to add weight.
+- **A plan built from your equipment:** setup asks where you train (gym, home, or both), then what you have at home: dumbbells, barbell, resistance bands, bench, pull-up bar, rack, kettlebell, dip bars, cables or machines, and how heavy your weights go. It then asks your goal, experience, days per week and session length.
+  - Splits follow current evidence: full body A · B · C for 3 days, upper/lower for 4, upper/lower + push/pull/legs for 5, push/pull/legs twice for 6. Push/pull/legs once a week is still there if you want it.
+  - Every muscle is trained at least twice a week with about 10 or more hard sets. An "Every muscle covered?" check shows weekly sets per muscle and adds sets where one is low.
+  - Each exercise shows the equipment it needs and alternatives for the same muscle with your other equipment.
+- **Home is programmed differently, not just with other exercises:** higher reps, exercises paired back to back to save time, a slower lowering on light weights, one leg or arm at a time when the dumbbells are light, and a "make it harder" step after a session where every set hit the top of the range. Gym-and-home plans get a Gym / Home switch that turns the day's workout into its home version.
+- **Pick any workout:** the next one in your plan is suggested, but you can start any other, an empty workout, or a quick 30-minute version. Each shows whether its main muscles are fresh or were trained yesterday. Doing another workout doesn't skip the suggested one.
+- **Band exercises with drawings:** 10 resistance-band exercises (rows, pulldown, face pull, chest press, curl, pushdown, overhead extension, Romanian deadlift, split squat) with step-by-step instructions and two-position drawings made for the app.
+- **Fast logging:** the whole workout on one screen. Each set shows last time's numbers and today's target in grey; ticking a set fills in the target and starts the rest timer. The ⋯ menu on each exercise has swap, how-to, warm-up sets, rest time, a note, move, pair and remove. Swapping offers the same muscle with your equipment, for today or for the plan.
+- **Logging details:**
   - Warm-up (W), drop (D) and to-failure (F) sets, an optional effort score (RPE), supersets, and a pinned note per exercise.
   - A warm-up and plate calculator.
-- **Rest timer:** sits next to the exercise name (0:30 by default, changeable per exercise or for all), with a small bar for −15 / +15 / Skip. On Android, the lock-screen notification has **Set done** and **Skip rest** buttons.
-- **After the workout:** a summary compared with last time, records, and optional cardio after lifting.
-- **Library:** 873 exercises covering machines, cables, barbell, dumbbells, kettlebells, bands, bodyweight and stretches. Search and filter by muscle or equipment. Each exercise page has a progress chart and records.
+- **Rest timer:** automatic by default (about 2 minutes for big lifts, 75 seconds for small ones), changeable per exercise or for all, with a small bar for −15 / +15 / Skip. On Android, the lock-screen notification has **Set done** and **Skip rest** buttons.
+- **After the workout:** a summary compared with last time, records, the muscles you trained, what's next, and optional cardio after lifting.
+- **Library:** 886 exercises covering machines, cables, barbell, dumbbells, kettlebells, bands, bodyweight and stretches. Search and filter by muscle or equipment. Each exercise page has a progress chart and records.
 - **Import:** bring workout history over from Lyfta, Hevy or Strong (CSV export).
 - **Sports and cardio:** log football, padel, tennis and more. Calories come from the 2024 Compendium of Physical Activities, or your average heart rate. A 12-week stamina plan is included.
 
@@ -107,7 +114,8 @@ _Screenshots use a demo account with made-up data._
 
 ## Credits
 
-- Exercises and photos: [free-exercise-db](https://github.com/yuhonas/free-exercise-db), public domain (`ex/LICENSE-free-exercise-db.md`).
+- Exercises and photos: [free-exercise-db](https://github.com/yuhonas/free-exercise-db), public domain (`ex/LICENSE-free-exercise-db.md`). The band exercise drawings were made for Lock In 90.
+- Training rules: ACSM 2026 resistance training position stand (each muscle at least twice a week, about 10+ weekly sets); Ramos-Campo 2024 and Pelland 2024 meta-analyses (split vs full body, counting indirect sets as half); Schoenfeld 2017 and Lasevicius 2022 (light loads work close to failure); Lopes 2019 (bands vs weights); Singer 2024 (rest periods).
 - Food data: [Open Food Facts](https://world.openfoodfacts.org) (ODbL), [USDA FoodData Central](https://fdc.nal.usda.gov) (public domain), McDonald's Egypt published nutrition tables, Dunkin' nutrition guide (calories; the rest worked out from the milk). Label reading: [Tesseract.js](https://github.com/naptha/tesseract.js) (Apache 2.0), loaded only when you use it.
 - Font: [Alexandria](https://fonts.google.com/specimen/Alexandria), SIL Open Font License (`fonts/OFL-Alexandria.txt`).
 - Sports calories: 2024 Adult Compendium of Physical Activities. Body numbers: NICE 2022 waist-to-height bands and the US Navy body-fat formula.

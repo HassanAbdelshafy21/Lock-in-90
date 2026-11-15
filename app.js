@@ -4,7 +4,7 @@ import { initializeFirestore, getFirestore, persistentLocalCache, persistentMult
 import * as C from './core.js';
 import { trText, addFoodNames } from './i18n.js';
 import * as TR from './train.js';
-const APP_VERSION = '32 · daily tracker mode, Egyptian home and restaurant food';
+const APP_VERSION = '33 · equipment plan builder, pick any workout, faster logging';
 import { EX, POSE, figSVG, YT, LINES, FOODS, COACH_MEALS, DEFAULT_SUPPS, COACH_ENC, SLOTS, CARDIO_MODES } from './data.js';
 import { BRANDS, BRAND_BY_CODE } from './brands.js';
 addFoodNames(FOODS); addFoodNames(BRANDS);
@@ -1081,7 +1081,7 @@ function trainCardHTML(date, d, P) {
   const acts = actsOn(date);
   let h = `<section class="card" id="sec-train"><div class="card-h"><h2>Training</h2>${pill(P.trained ? 'done' : 'todo', P.tt === 'rest' ? 'Rest' : P.trained ? (d.trainingSource === 'strava' ? 'Done · Strava' : 'Done') : 'Not yet')}</div>`;
   if (P.tt === 'rest') h += `<p class="hint">${C.TT.rest.sub}. Change your weekly plan in Me.</p>`;
-  else h += `<button class="check" data-act="train" aria-pressed="${!!d.trainingDone}"><span class="box"></span><span><b>${C.TT[P.tt].label}</b><span>${C.TT[P.tt].sub}</span></span></button>${(P.tt === 'gym' || P.tt === 'cali') ? (() => { const tl = TR.todayLine(); return tl ? `<button class="btn ${tl.done ? '' : 'primary'} block" data-act="tab" data-v="train">${esc(tl.done ? `${tl.name} done · see summary` : tl.live ? `Back to ${tl.name}` : `Start ${tl.name}`)}</button>` : `<button class="btn primary block" data-act="tab" data-v="train">Set up your training plan</button>`; })() : ''}`;
+  else h += `<button class="check" data-act="train" aria-pressed="${!!d.trainingDone}"><span class="box"></span><span><b>${C.TT[P.tt].label}</b><span>${d.trainingDone ? (d.wo && d.wo.t1 && !d.wo.imported ? esc(`Done: ${d.wo.name}`) : 'Done for today') : C.TT[P.tt].sub}</span></span></button>${(P.tt === 'gym' || P.tt === 'cali') ? (() => { const tl = TR.todayLine(); return tl ? `<button class="btn ${tl.done ? '' : 'primary'} block" data-act="tab" data-v="train">${esc(tl.done ? `${tl.name} done · see summary` : tl.live ? `Back to ${tl.name}` : `Start ${tl.name}`)}</button>` : `<button class="btn primary block" data-act="tab" data-v="train">Set up your training plan</button>`; })() : ''}`;
   if (acts.length) h += `<div class="acts">${acts.map(a => `<div class="act"><span><b>${esc(a.name || a.type)}</b> · from Strava</span><span class="num">${a.min} min${a.dist ? ' · ' + C.round(a.dist / 1000, 2) + ' km' : ''}</span></div>`).join('')}</div>`;
   h += sportsListHTML(date, d);
   h += `<div class="spread"><span class="hint">Gym time today</span><div class="seg" role="group" aria-label="Gym time"><button data-act="gymtime" data-v="am" aria-pressed="${gym === 'am'}">Morning</button><button data-act="gymtime" data-v="pm" aria-pressed="${gym === 'pm'}">Night</button></div></div></section>`;
@@ -2137,6 +2137,7 @@ document.addEventListener('click', async ev => {
     case 'signout': S.unsub.forEach(u => u()); S.unsub = []; S.photosOn = false; S.photos = {}; if (S.boardUnsub) S.boardUnsub(); S.boardUnsub = null; S.boardCode = null; S.board = {}; S.boardLast = null; await signOut(auth); return;
     case 'tab': return go(v);
     case 'jump': { if (v.startsWith('sec-') && S.view === 'today') { S.panel = v.slice(4); return draw(); } const el = $(v); if (el) el.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' }); return; }
+    case 'wmode': { const keep = ['w-start', 'w-water', 'w-weight', 'w-goal'].map(id => [id, $(id) && $(id).value]); S.wMode = v; draw(); keep.forEach(([id, val]) => { if ($(id) && val != null) $(id).value = val; }); return; }
     case 'start': {
       const num = id => parseFloat($(id).value) || null;
       const sd = $('w-start').value || today();
@@ -2375,7 +2376,6 @@ document.addEventListener('click', async ev => {
     }
     case 'goaltog': { const G = C.goalsOf(S.settings), on = Object.keys(G).filter(k => G[k]); if (G[v] && on.length === 1) { toast('Keep at least one goal.'); break; } S.settings.goals = { ...G, [v]: !G[v] }; saveSettings(); return draw(); }
     case 'calm': S.calMonth = v; return draw();
-    case 'wmode': S.wMode = v; return draw();
     case 'cheatfix': { const f = cheatFix(v); if (!f || f.blocked) { toast('This day can’t become a free cheat meal.'); break; } if (f.turnOn) S.settings.cheat = { per: '1w', kind: 'meal', ...(S.settings.cheat || {}), on: true }, saveSettings(); S.days[v] = f.nd; saveDay(v); toast('Counted as your free cheat meal. Your streak is back.'); if (SH && SH.scope === 'day') drawDay(); break; }
     case 'dailyedit': S.dailyEdit = !S.dailyEdit; break;
     case 'usualrm2': S.settings.usuals = (S.settings.usuals || []).filter((_, i) => i !== +v); saveSettings(); break;
