@@ -4,7 +4,7 @@ import { initializeFirestore, getFirestore, persistentLocalCache, persistentMult
 import * as C from './core.js';
 import { trText, addFoodNames } from './i18n.js';
 import * as TR from './train.js';
-const APP_VERSION = '33 · equipment plan builder, pick any workout, faster logging';
+const APP_VERSION = '34 · build your own plans, edit any workout, replace mid-workout';
 import { EX, POSE, figSVG, YT, LINES, FOODS, COACH_MEALS, DEFAULT_SUPPS, COACH_ENC, SLOTS, CARDIO_MODES } from './data.js';
 import { BRANDS, BRAND_BY_CODE } from './brands.js';
 addFoodNames(FOODS); addFoodNames(BRANDS);
@@ -58,6 +58,7 @@ const LANG = () => (S.settings && S.settings.lang) || (() => { try { return loca
 function trNode(n) {
   if (n.nodeType === 3) { const v = n.nodeValue, core = v.trim(); if (core && /[A-Za-z]/.test(core)) { const r = trText(core); if (r != null) n.nodeValue = v.replace(core, r); } return; }
   if (n.nodeType !== 1 || n.matches('script,style,svg,canvas')) return;
+  if (n.dataset && n.dataset.ar != null) { n.textContent = n.dataset.ar; return; } // a word that means something else elsewhere ("Back" the muscle vs the button)
   ['placeholder', 'aria-label', 'title'].forEach(a => { const v = n.getAttribute(a); if (v && /[A-Za-z]/.test(v)) { const r = trText(v.trim()); if (r != null) n.setAttribute(a, r); } });
   for (const c of n.childNodes) trNode(c);
 }
@@ -2125,7 +2126,7 @@ function closeTimer(log) {
 }
 
 /* ---------- events ---------- */
-document.addEventListener('click', ev => { if (ev.target && ev.target.id === 'panel') { S.panel = null; draw(); } else if (ev.target && ev.target.id === 'sheet' && SH && SH.scope !== 'crave') closeSheet(); });
+document.addEventListener('click', ev => { if (ev.target && ev.target.id === 'panel') { S.panel = null; draw(); } else if (ev.target && ev.target.id === 'sheet' && SH && SH.scope !== 'crave') { if (TR.closeGuard(SH.scope)) return; closeSheet(); } });
 document.addEventListener('click', async ev => {
   const b = ev.target.closest('[data-act]'); if (!b) return;
   if (b.tagName === 'BUTTON') buzz(8);
@@ -2154,7 +2155,7 @@ document.addEventListener('click', async ev => {
   if (act === 'panelclose') { S.panel = null; return draw(); }
   if (act === 'ptab') { S.ptab = v; S.panel = null; if (S.view !== 'progress') return go('progress'); window.scrollTo(0, 0); return draw(); }
   if (act === 'mesec') { S.meSec = v || null; window.scrollTo(0, 0); return draw(); }
-  if (act === 'closesheet') return closeSheet();
+  if (act === 'closesheet') { if (SH && TR.closeGuard(SH.scope)) return; return closeSheet(); }
   if (act === 'ftab') { S.ftab = v; return draw(); }
   if (act === 'fstr') { S.fstr = v; return draw(); }
   if (act === 'lghelp') return leagueHelp();

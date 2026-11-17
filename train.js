@@ -4,7 +4,12 @@ import * as C from './core.js';
 import * as PG from './program.js';
 
 let X = null;                       // app context (state + helpers), set by initTrain
-export function initTrain(ctx) { X = ctx; }
+export function initTrain(ctx) {
+  X = ctx;
+  document.addEventListener('pointerdown', sortStart, { passive: false });
+  document.addEventListener('pointermove', sortMove, { passive: false });
+  document.addEventListener('pointerup', sortEnd); document.addEventListener('pointercancel', sortEnd);
+}
 const $ = id => document.getElementById(id);
 const esc = s => X.esc(s);
 
@@ -180,7 +185,7 @@ const thumb = (id, cls = '') => DB && !ex(id).img ? `<span class="exthumb none $
 const photos = id => { const x = ex(id); return x.img > 1 ? `<div class="exph" data-act="tr-flip"><img src="${img(id, 0)}" alt="${esc(x.name)}, start" decoding="async"><img class="b" src="${img(id, 1)}" alt="${esc(x.name)}, end" decoding="async"><span class="exph-l"><i></i><i></i></span></div>` : x.img ? `<div class="exph one"><img src="${img(id, 0)}" alt="${esc(x.name)}"></div>` : ''; };
 const meta = x => [...x.pm.map(musL), eqL(x.eq)].filter(Boolean).join(' · ');
 // rest: your setting for this exercise > your default > the plan's rest > by exercise type (big lifts 2 min, small ones 75 s)
-const restFor = (id, e) => { const t = T() || {}; const v = (t.restBy || {})[id]; if (v != null) return v; if (id !== '*' && t.restDefault != null) return t.restDefault; if (e && e.rest) return e.rest; if (id === '*') return t.restDefault != null ? t.restDefault : 0; const x = DB && DB.by[id]; return x && x.mech === 'isolation' ? 75 : 120; };
+const restFor = (id, e) => { if (e && e.restU) return e.rest || 0; const t = T() || {}; const v = (t.restBy || {})[id]; if (v != null) return v; if (id !== '*' && t.restDefault != null) return t.restDefault; if (e && e.rest) return e.rest; if (id === '*') return t.restDefault != null ? t.restDefault : 0; const x = DB && DB.by[id]; return x && x.mech === 'isolation' ? 75 : 120; };
 const exf = id => (DB && DB.by[id]) || null;
 const nLib = () => DB ? DB.list.length : 880;
 const LEGACY_GEAR = { gym: PG.FULL_GYM, db: ['db', 'bench'], home: [] };
@@ -192,6 +197,88 @@ function cfgOf(t, where) {
 }
 const SPLN = k => ({ bro5: 'Body-part split', lyfta: 'ULTIMATE PPL/UL (from Lyfta)', ...Object.fromEntries(Object.entries(PG.SPLITS).map(([a, b]) => [a, b.name])) })[k] || 'Custom';
 const mmss = s => `${Math.floor(s / 60)}:${String(Math.max(0, s % 60)).padStart(2, '0')}`;
+
+/* ---------- plans: the active plan lives on settings.train; the others wait in t.shelf ("My plans") ---------- */
+const PLAN_KEYS = ['routines', 'next', 'split', 'place', 'gear', 'homeGear', 'wt', 'ctx', 'equip', 'goal', 'level', 'days', 'len', 'planName', 'planId'];
+const newId = p => p + Math.random().toString(36).slice(2, 7);
+const clone = o => JSON.parse(JSON.stringify(o));
+const planName = p => p.planName || (p.split === 'own' ? 'My plan' : SPLN(p.split));
+const builtFor = p => !!(p.split && (PG.SPLITS[p.split] || p.split === 'lyfta' || p.split === 'bro5'));
+function shelve(t) {
+  if (!t || !t.routines || !t.routines.length) return;
+  const p = {}; PLAN_KEYS.forEach(k => { if (t[k] != null) p[k] = clone(t[k]); });
+  p.planId = p.planId || newId('P'); p.planName = planName(t);
+  t.shelf = [...(t.shelf || []).filter(x => x.planId !== p.planId), p];
+}
+function unshelve(t, id) {
+  const sh = t.shelf || [], i = sh.findIndex(x => x.planId === id); if (i < 0) return false;
+  const p = sh.splice(i, 1)[0]; PLAN_KEYS.forEach(k => delete t[k]); Object.assign(t, p); t.shelf = sh; return true;
+}
+const gL = c => `<span${c.g === 'back' ? ' data-ar="الضهر"' : ''}>${esc(c.label)}</span>`;
+const nWk = n => n === 1 ? '1 workout' : `${n} workouts`;
+const setsOf = r => (r.ex || []).reduce((a, e) => a + (+e.sets || 0), 0);
+const mv = (arr, a, b) => { const [x] = arr.splice(a, 1); arr.splice(b, 0, x); };
+// a routine exercise as a per-set plan [{t, kg, lo, hi}]; t: '' normal, 'w' warm-up, 'd' drop, 'f' to failure
+const spOf = e => e.sp ? e.sp.map(x => ({ ...x })) : Array.from({ length: +e.sets || 3 }, () => ({ t: '', kg: null, lo: e.lo, hi: e.hi }));
+function fromSp(e) { // keep sets/lo/hi in step with the per-set plan, and drop the plan when it adds nothing
+  const sp = e.sp || [], work = sp.filter(x => x.t !== 'w'), f = work[0] || sp[0] || { lo: e.lo, hi: e.hi };
+  e.sets = work.length || 1; e.lo = +f.lo || e.lo || 8; e.hi = Math.max(e.lo, +f.hi || e.lo);
+  if (sp.every(x => !x.t && x.kg == null && +x.lo === e.lo && +x.hi === e.hi)) delete e.sp;
+  return e;
+}
+function normSS(list) { // superset members must sit next to each other; lone or split-off members lose the link
+  const seen = new Set();
+  list.forEach((e, i) => { if (!e.ss) return; if (!(i > 0 && list[i - 1].ss === e.ss) && seen.has(e.ss)) delete e.ss; else seen.add(e.ss); });
+  list.forEach((e, i) => { if (e.ss && !(list[i - 1] && list[i - 1].ss === e.ss) && !(list[i + 1] && list[i + 1].ss === e.ss)) delete e.ss; });
+  return list;
+}
+// a logged workout as a plan workout
+function routineFromWo(w, name) {
+  return { id: newId('C-'), name: name || w.name || 'My workout', ex: w.ex.filter(e => e.sets.length).map(e => {
+    const work = e.sets.filter(x => !isW(x)), rs = work.map(x => x.r).filter(Boolean), lo = rs.length ? Math.min(...rs) : (e.lo || 8), hi = rs.length ? Math.max(...rs) : (e.hi || 12);
+    return { id: e.id, ...(e.nm ? { nm: e.nm } : {}), sets: work.length || e.sets.length, lo, hi: hi > lo ? hi : lo + 2, ...(e.ss ? { ss: e.ss } : {}) };
+  }) };
+}
+
+/* Start buttons need a second tap within 3 s, so a workout never starts by accident */
+let armT = null;
+function armed(b, key) {
+  const S = X.S;
+  if (S.trArm === key) { S.trArm = null; clearTimeout(armT); return true; }
+  S.trArm = key; clearTimeout(armT); X.buzz(8);
+  const old = b && b.innerHTML;
+  if (b) { b.classList.add('armed'); b.innerHTML = `<span>${b.classList.contains('small') ? 'Tap again' : 'Tap again to start'}</span><i class="armbar"></i>`; }
+  armT = setTimeout(() => { if (S.trArm === key) S.trArm = null; if (b && b.isConnected) { b.classList.remove('armed'); b.innerHTML = old; } }, 3000);
+  return false;
+}
+
+/* drag to reorder: any [data-sortk] list whose rows have data-si and a .hdl handle */
+let drag = null;
+function sortStart(ev) {
+  const h = ev.target && ev.target.closest && ev.target.closest('.hdl'); if (!h) return;
+  const item = h.closest('[data-si]'), list = item && item.closest('[data-sortk]'); if (!list) return;
+  ev.preventDefault();
+  const items = [...list.querySelectorAll('[data-si]')].filter(el => el.closest('[data-sortk]') === list);
+  drag = { list, item, items, from: items.indexOf(item), to: items.indexOf(item), y0: ev.clientY, mids: items.map(el => { const r = el.getBoundingClientRect(); return r.top + r.height / 2; }) };
+  item.classList.add('dragging'); try { h.setPointerCapture(ev.pointerId); } catch (e) { }
+}
+function sortMove(ev) {
+  if (!drag) return; ev.preventDefault();
+  const dy = ev.clientY - drag.y0; drag.item.style.transform = `translateY(${dy}px)`;
+  const y = drag.mids[drag.from] + dy; drag.to = drag.mids.filter((m, k) => k !== drag.from && m < y).length;
+  drag.items.forEach((el, k) => el.classList.toggle('dropat', k !== drag.from && ((drag.to > drag.from && k === drag.to) || (drag.to < drag.from && k === drag.to))));
+}
+function sortEnd() {
+  if (!drag) return; const d = drag; drag = null;
+  d.item.style.transform = ''; d.item.classList.remove('dragging'); d.items.forEach(el => el.classList.remove('dropat'));
+  if (d.to !== d.from) sorted(d.list.dataset.sortk, d.from, d.to);
+}
+function sorted(k, a, b) {
+  const S = X.S, t = T();
+  if (k === 'plan') { const nx = nextRoutine(); mv(t.routines, a, b); if (nx) t.next = t.routines.indexOf(nx); X.saveSettings(); return X.draw(); }
+  if (k === 'edit') { mv(S.trEdit.ex, a, b); normSS(S.trEdit.ex); return drawEdit(); }
+  if (k === 'live') { const w = active(); if (!w) return; mv(w.ex, a, b); normSS(w.ex); X.saveDay(D()); openReorder(); return X.draw(); }
+}
 const isOwner = () => X.isOwner && X.isOwner();
 
 /* ---------- views ---------- */
@@ -210,9 +297,15 @@ export function trainHTML() {
 function lyftaCard() { return isOwner() && !(T() && T().routines && T().routines.some(r => r.lyfta)) ? `<section class="card lyfta"><span class="sub">From your Lyfta</span><h3>ULTIMATE PPL/UL</h3><p class="hint">Push 1, Pull 1, Leg 1, Upper 1 and Lower, with your sets and reps, plus incline walk or stairs after each one.</p><button class="btn primary block" data-act="tr-lyfta">Use my program</button></section>` : ''; }
 /* ---------- new plan: where, what you have, how heavy, goal, level, days, split ---------- */
 const PLACES = [['gym', 'At a gym', 'Machines, cables, barbells, dumbbells'], ['home', 'At home', 'With what you have, even nothing'], ['both', 'Both', 'A gym plan, with a home version for the days you can’t go']];
+const HOWS = [['own', '✍️', 'Build my own', 'Name it, add your own workouts and exercises. Nothing is decided for you.'],
+  ['auto', '⚡', 'Build it for me', 'A few questions about your equipment, goal and days. Every workout stays editable after.'],
+  ['tpl', '📋', 'Start from a template', 'Push · Pull · Legs, Upper · Lower, Full body, Arnold split, Bro split. Then change anything.'],
+  ['past', '🔁', 'From a past workout', 'Pick a workout you logged here or imported from Lyfta or Hevy.']];
 function wizSteps(w) {
+  if (w.how === 'own') return ['how'];
+  if (w.how === 'tpl' || w.how === 'past') return ['how', w.how];
   const home = w.place !== 'gym', g = w.gear || [], weights = home && (g.includes('db') || g.includes('bb') || g.includes('bands'));
-  return ['place', ...(home ? ['gear'] : []), ...(weights ? ['weights'] : []), 'goal', 'level', 'days', 'split'];
+  return ['how', 'place', ...(home ? ['gear'] : []), ...(weights ? ['weights'] : []), 'goal', 'level', 'days', 'split'];
 }
 function gearNotes(g) {
   const n = [];
@@ -223,11 +316,18 @@ function gearNotes(g) {
   return n;
 }
 function setupHTML() {
-  const w = X.S.trWiz = X.S.trWiz || { step: 0, place: 'gym', gear: [...PG.PRESETS.home], wt: { db: 20, dbAdj: true, bb: 60, bands: ['l', 'm', 'h'], anchor: 'door' }, goal: 'muscle', level: 'some', days: 3, len: 60 };
+  const w = X.S.trWiz = X.S.trWiz || { step: 0, how: 'auto', tpl: 'fb3', place: 'gym', gear: [...PG.PRESETS.home], wt: { db: 20, dbAdj: true, bb: 60, bands: ['l', 'm', 'h'], anchor: 'door' }, goal: 'muscle', level: 'some', days: 3, len: 60 };
   const steps = wizSteps(w), k = steps[Math.min(w.step, steps.length - 1)], g = w.gear || [];
   const opt = (key, v, label, sub) => `<button class="opt" data-act="tr-wiz" data-v="${key}:${v}" aria-pressed="${String(w[key]) === String(v)}"><b>${esc(label)}</b>${sub ? `<small>${esc(sub)}</small>` : ''}</button>`;
   let q = '', body = '', sub = '';
-  if (k === 'place') { q = 'Where do you train?'; body = PLACES.map(([v, l, d]) => opt('place', v, l, d)).join(''); }
+  if (k === 'how') { q = 'How do you want to build your plan?'; body = HOWS.map(([v, ic, l, d]) => `<button class="opt how" data-act="tr-wiz" data-v="how:${v}" aria-pressed="${w.how === v}"><span class="em">${ic}</span><span><b>${esc(l)}</b><small>${esc(d)}</small></span></button>`).join(''); }
+  else if (k === 'tpl') { q = 'Pick a template'; sub = T() && T().gear ? 'Built with the equipment from your last plan. You can change every exercise after.' : 'Built for a full gym. You can change every exercise after.'; body = PG.TEMPLATES.map(([v, l, r, d]) => opt('tpl', v, l, d)).join(''); }
+  else if (k === 'past') {
+    const ss = sessions().slice(-30).reverse(); q = 'Pick a workout you did'; sub = 'It becomes the first workout in your new plan. You can add more after.';
+    if (ss.length && !w.past) w.past = ss[0];
+    body = ss.length ? ss.map(k2 => { const w2 = X.S.days[k2].wo; return opt('past', k2, `${w2.name} · ${X.fmt(k2)}`, `${w2.ex.length} exercises · ${woSummary(w2)}`); }).join('') : '<p class="hint">No logged workouts yet. Log one, or import your history from Lyfta or Hevy first.</p>';
+  }
+  else if (k === 'place') { q = 'Where do you train?'; body = PLACES.map(([v, l, d]) => opt('place', v, l, d)).join(''); }
   else if (k === 'gear') {
     q = w.place === 'both' ? 'What do you have at home?' : 'What do you have?'; sub = 'Pick everything you can use. Bodyweight is always included.';
     body = `<div class="gpre">${[['gym', '🏋️ Full gym'], ['home', '🏠 Home basics'], ['none', '✋ Nothing']].map(([v, l]) => `<button data-act="tr-gpre" data-v="${v}">${l}</button>`).join('')}</div>
@@ -254,7 +354,7 @@ function setupHTML() {
       + `<p class="hint" style="margin-top:10px">Why: training each muscle at least twice a week and about 10+ hard sets per muscle per week matter more than the split’s name.</p>`;
   }
   return (w.step === 0 ? lyftaCard() : '') + `<section class="card trsetup"><span class="sub">New plan · step ${w.step + 1} of ${steps.length}</span><h3>${esc(q)}</h3>${sub ? `<p class="hint">${esc(sub)}</p>` : ''}<div class="wzbar">${steps.map((_, i) => `<i class="${i <= w.step ? 'on' : ''}"></i>`).join('')}</div><div class="opts">${body}</div>
-  <div class="row">${w.step ? `<button class="btn ghost" data-act="tr-wizback">Back</button>` : ''}${w.step < steps.length - 1 ? `<button class="btn primary grow" data-act="tr-wiznext">Next</button>` : `<button class="btn primary grow" data-act="tr-wizdone">Create my plan</button>`}</div></section>
+  <div class="row">${w.step ? `<button class="btn ghost" data-act="tr-wizback">Back</button>` : T() && (T().shelf || []).length ? `<button class="btn ghost" data-act="tr-wizcancel">Cancel</button>` : ''}${w.step < steps.length - 1 ? `<button class="btn primary grow" data-act="tr-wiznext">Next</button>` : `<button class="btn primary grow" data-act="tr-wizdone"${k === 'past' && !w.past ? ' disabled' : ''}>Create my plan</button>`}</div></section>
   <p class="hint center">Exercises and photos: <a href="https://github.com/yuhonas/free-exercise-db" target="_blank" rel="noopener">free-exercise-db</a> (public domain). Band exercises drawn for Lock In 90.</p>`;
 }
 function rngTxt(e) { return `${e.sets} × ${e.lo === e.hi ? e.lo : e.lo + '–' + e.hi}${isTimed(e.id) ? ' s' : ''}`; }
@@ -283,7 +383,7 @@ function readiness(r, last) {
 function coverageHTML(t) {
   if (!DB) return '';
   const cov = PG.coverage(t.routines, exf), low = cov.filter(c => c.low);
-  return `<div class="cov"><span class="sub">Hard sets per week · green zone 10–20 · “3×” = trained on 3 days</span>${cov.map(c => `<div class="covr"><span>${esc(c.label)}</span><span class="covb"><u></u><i class="${c.low ? 'lo' : ''}" style="width:${Math.min(100, c.sets / 30 * 100)}%"></i></span><em class="num${c.low ? ' lo' : ''}">${c.sets}<small>${c.days}×${c.low ? ' · low' : ''}</small></em></div>`).join('')}
+  return `<div class="cov"><span class="sub">Hard sets per week · green zone 10–20 · “3×” = trained on 3 days</span>${cov.map(c => `<div class="covr">${gL(c)}<span class="covb"><u></u><i class="${c.low ? 'lo' : ''}" style="width:${Math.min(100, c.sets / 30 * 100)}%"></i></span><em class="num${c.low ? ' lo' : ''}">${c.sets}<small>${c.days}×${c.low ? ' · low' : ''}</small></em></div>`).join('')}
   ${low.map(c => `<button class="btn block small" data-act="tr-fix" data-v="${c.g}">+ Add 2 sets for ${esc(c.label.toLowerCase())}</button>`).join('')}
   <p class="hint">Sets that hit a muscle indirectly (rows for biceps, presses for triceps) count as half.</p></div>`;
 }
@@ -294,22 +394,24 @@ function homeHTML() {
   if (done) h += `<section class="card trtoday done"><span class="sub">${date === X.today() ? 'Today' : 'Yesterday'}</span><h3>${esc(d.wo.name)} done</h3><p class="hint">${woSummary(d.wo)}</p><div class="row"><button class="btn" data-act="tr-summary">See summary</button>${t.cardio && t.cardio.on && !cardioDone(d) ? `<button class="btn primary" data-act="tr-cardio">Cardio: ${t.cardio.min} min</button>` : ''}</div></section>`;
   if (r) {
     const rest = tt === 'rest' || tt === 'recovery', vr = view(r), last = groupLast();
-    if (!done) h += `<section class="sug"><span class="sub">${rest ? (tt === 'rest' ? 'Rest day · next in your plan' : 'Mobility day · next in your plan') : 'Next in your plan'}</span><b class="t">${esc(r.name)}</b><small>${vr.ex.length} exercises · ~${estMin(vr)} min · ${esc(focusOf(vr).toLowerCase())}</small>
+    if (!done) h += `<section class="sug"><button class="sugm" data-act="tr-rmenu" data-v="${r.id}" aria-label="Options for ${esc(r.name)}">⋯</button><span class="sub">${rest ? (tt === 'rest' ? 'Rest day · next in your plan' : 'Mobility day · next in your plan') : 'Next in your plan'}</span><b class="t">${esc(r.name)}</b><small>${vr.ex.length} exercises · ~${estMin(vr)} min · ${esc(focusOf(vr).toLowerCase())}</small>
       ${both ? `<div class="tg2" role="group" aria-label="Where are you training today"><button data-act="tr-place" data-v="gym" aria-pressed="${where === 'gym'}">🏋️ Gym</button><button data-act="tr-place" data-v="home" aria-pressed="${where === 'home'}">🏠 Home</button></div>` : ''}
       <button class="go" data-act="tr-start" data-v="${r.id}">${rest ? 'Start anyway' : `Start ${esc(r.name)}`}</button>
       <details class="sugd"><summary>See the exercises</summary>${routineList(vr, cfg)}</details></section>`;
     const others = t.routines.filter(x => x.id !== r.id);
-    if (others.length) h += `<p class="lbl2">${done ? 'Train again' : 'Or train something else today'}</p>${others.map(x => `<div class="rtrow"><span><b>${esc(x.name)}</b><small>${esc(focusOf(view(x)))}</small>${readiness(view(x), last)}</span><button class="btn small" data-act="tr-start" data-v="${x.id}">Start</button></div>`).join('')}`;
+    if (others.length) h += `<p class="lbl2">${done ? 'Train again' : 'Or train something else today'}</p>${others.map(x => `<div class="rtrow"><span><b>${esc(x.name)}</b><small>${esc(focusOf(view(x)))}</small>${readiness(view(x), last)}</span><button class="btn small" data-act="tr-start" data-v="${x.id}">Start</button><button class="more" data-act="tr-rmenu" data-v="${x.id}" aria-label="Options for ${esc(x.name)}">⋯</button></div>`).join('')}`;
     h += `<div class="qs"><button data-act="tr-empty">＋ Empty workout</button><button data-act="tr-quick">⚡ Quick 30 min</button></div>`;
     if (!done && others.length) h += `<p class="hint" style="margin:6px 4px 12px">Doing another workout today moves ${esc(r.name)} to next time. Nothing is skipped.</p>`;
-  }
+  } else h += `<section class="card"><h3>No workouts in this plan yet</h3><p class="hint">Add your first workout below, or start an empty one and save it after.</p><div class="qs"><button data-act="tr-empty">＋ Empty workout</button></div></section>`;
   h += `<section class="card list2">${rankRow()}
   <button class="lrow" data-act="tr-import"><span class="lic">⇩</span><span class="lt"><b>Import history</b><small>From Lyfta, Hevy or Strong</small></span><span class="le">›</span></button></section>`;
   const gearTxt = t.gear ? (t.place === 'gym' ? 'Full gym' : t.place === 'both' ? `Gym, plus home: ${(t.homeGear || []).filter(x => x !== 'anchor').map(x => PG.GEAR_L[x]).join(', ') || 'bodyweight'}` : (t.gear.filter(x => x !== 'anchor').map(x => PG.GEAR_L[x]).join(', ') || 'Bodyweight only')) : esc((EQUIP.find(e => e[0] === t.equip) || [, ''])[1]);
-  h += `<section class="card"><div class="card-h"><h2>Your plan</h2><button class="btn small ghost" data-act="tr-redo">Change plan</button></div><p class="hint">${esc(SPLN(t.split))} · ${esc(gearTxt)}. Workouts go in order, and you can do any of them any day.</p>
-  <div class="card list2 flat">${t.routines.map((rr, i) => `<button class="lrow" data-act="tr-edit" data-v="${rr.id}"><span class="lic${rr.id === (r && r.id) ? ' on' : ''}">${i + 1}</span><span class="lt"><b>${esc(rr.name)}</b><small>${rr.ex.length} exercises · ${esc(focusOf(rr))}</small></span><span class="le">›</span></button>`).join('')}
-  <button class="lrow" data-act="tr-new"><span class="lic">+</span><span class="lt"><b>New workout</b><small>Build your own from ${nLib()} exercises</small></span></button></div>
-  ${t.split !== 'lyfta' ? `<details class="covd"${X.S.trCovOpen ? ' open' : ''}><summary>Every muscle covered?</summary>${coverageHTML(t)}</details>` : ''}
+  const cov = DB && t.routines.length ? PG.coverage(t.routines, exf) : [];
+  h += `<section class="card"><div class="card-h"><h2>${esc(planName(t))}</h2><button class="btn small ghost" data-act="tr-plans">My plans${(t.shelf || []).length ? ` · ${t.shelf.length + 1}` : ''}</button></div><p class="hint">${builtFor(t) ? `${esc(SPLN(t.split))} · ${esc(gearTxt)}. ` : ''}The next one is suggested, but you can do any of them any day.</p>
+  <div class="card list2 flat plist" data-sortk="plan">${t.routines.map((rr, i) => `<div class="lrow prow" data-si="${i}"><span class="hdl" aria-label="Drag to reorder">≡</span><span class="lic${rr.id === (r && r.id) ? ' on' : ''}">${i + 1}</span><button class="lt bare" data-act="tr-rmenu" data-v="${rr.id}"><b>${esc(rr.name)}</b><small>${rr.ex.length} exercises · ${setsOf(rr)} sets</small></button><button class="more" data-act="tr-rmenu" data-v="${rr.id}" aria-label="Options for ${esc(rr.name)}">⋯</button></div>`).join('')}
+  <button class="lrow" data-act="tr-addw"><span class="lic">+</span><span class="lt"><b>Add workout</b><small>Empty, or from a workout you’ve done</small></span></button></div>
+  ${cov.length ? `<div class="covchips">${cov.map(c => `<i class="${c.low ? 'lo' : ''}">${gL(c)} ${C.round(c.sets, 1)}</i>`).join('')}</div><p class="hint" style="font-size:11.5px;margin:2px 2px 0">Weekly sets per muscle. Amber means under 8.</p>` : ''}
+  ${t.split !== 'lyfta' && t.routines.length ? `<details class="covd"${X.S.trCovOpen ? ' open' : ''}><summary>Every muscle covered?</summary>${coverageHTML(t)}</details>` : ''}
   <div class="setup-r"><span>Default rest<small class="sub" style="display:block">Auto: 2 min for big lifts, 75 s for small ones</small></span><button class="btn small" data-act="tr-restpick" data-v="*">⏱ ${t.restDefault != null ? mmss(t.restDefault) : 'Auto'}</button></div>
   ${'Notification' in window && Notification.maxActions > 0 ? `<div class="setup-r"><span>Lock-screen controls<small class="sub" style="display:block">Tick sets and run the rest from the notification</small></span><div class="seg"><button data-act="tr-notif" data-v="1" aria-pressed="${t.notif !== false}">On</button><button data-act="tr-notif" data-v="0" aria-pressed="${t.notif === false}">Off</button></div></div>` : ''}</section>`;
   const cd = t.cardio || { on: false };
@@ -321,7 +423,7 @@ function homeHTML() {
 }
 function focusOf(r) { const c = {}; r.ex.forEach(e => { const m = ex(e.id).pm[0]; if (m) c[m] = (c[m] || 0) + (+e.sets || 0); }); return Object.entries(c).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([m]) => musL(m)).join(', ') || '—'; }
 function woStats(w) { let sets = 0, vol = 0; (w.ex || []).forEach(e => (e.sets || []).forEach(s => { if (s.done && !isW(s)) { sets++; vol += (s.kg || 0) * (s.r || 0); } })); const min = w.t1 && w.t0 ? Math.max(1, Math.round((w.t1 - w.t0) / 60000)) : 0; return { sets, vol: Math.round(vol), min }; }
-function woSummary(w) { const s = woStats(w); return [s.min && `${s.min} min`, `${s.sets} sets`, s.vol && `${C.round(s.vol / 1000, 1)} t lifted`].filter(Boolean).join(' · '); }
+function woSummary(w) { const s = woStats(w); return [s.min && `${s.min} min`, (s.sets === 1 ? "1 set" : `${s.sets} sets`), s.vol && `${C.round(s.vol / 1000, 1)} t lifted`].filter(Boolean).join(' · '); }
 const cardioDone = d => (d.stamina || []).some(s => s.src === 'finisher');
 
 /* ---------- live workout ---------- */
@@ -329,18 +431,20 @@ function group(w, i) { const e = w.ex[i]; if (!e || !e.ss) return [i]; let a = i
 const curSet = e => e.sets.findIndex(s => !s.done);
 // today's target for a set: last time plus one step (one more rep, or more weight once every set hit the top)
 function tgt(w, i, j) {
-  const e = w.ex[i], s = e.sets[j]; if (!s || isW(s)) return { kg: s && s.kg, r: s && s.r };
+  const e = w.ex[i], s = e.sets[j]; if (!s) return { kg: null, r: null }; if (isW(s)) return { kg: s.kg ?? s.tk ?? null, r: s.r ?? s.tlo ?? null };
+  const lo = s.tlo || e.lo, hi = s.thi || e.hi;
   const x = ex(e.id), last = hist(e.id, D()).pop(), lw = last ? last.sets.filter(z => !isW(z)) : [], n = e.sets.slice(0, j).filter(z => !isW(z)).length, p = lw[n];
   const prev = e.sets.slice(0, j).reverse().find(z => z.done && !isW(z)), top = Math.max(0, ...lw.map(z => z.kg || 0));
-  const allTop = lw.length > 0 && lw.every(z => (z.r || 0) >= e.hi), inc = x.eq === 'dumbbell' || x.eq === 'kettlebells' ? 2 : /barbell|machine|cable|e-z/.test(x.eq) ? 2.5 : 0;
+  const allTop = lw.length > 0 && lw.every(z => (z.r || 0) >= hi), inc = x.eq === 'dumbbell' || x.eq === 'kettlebells' ? 2 : /barbell|machine|cable|e-z/.test(x.eq) ? 2.5 : 0;
   const wt = (T() || {}).wt || {}, cap = w.place === 'home' || (T() || {}).ctx === 'home' ? (x.eq === 'dumbbell' ? wt.db : x.eq === 'barbell' ? wt.bb : 0) : 0;
-  if (prev && prev.kg != null && p && p.kg != null && prev.kg !== p.kg) return { kg: prev.kg, r: prev.r || e.lo };
+  if (prev && prev.kg != null && p && p.kg != null && prev.kg !== p.kg) return { kg: prev.kg, r: prev.r || lo };
   if (p) {
-    if (allTop && top && inc) return cap && top + inc > cap ? { kg: top, r: e.hi } : { kg: C.round(top + inc, 2), r: e.lo };
-    return { kg: p.kg ?? (prev && prev.kg) ?? null, r: Math.min(e.hi, (p.r || e.lo) + ((p.r || 0) < e.hi ? 1 : 0)) };
+    if (allTop && top && inc) return cap && top + inc > cap ? { kg: top, r: hi } : { kg: C.round(top + inc, 2), r: lo };
+    return { kg: p.kg ?? (prev && prev.kg) ?? s.tk ?? null, r: Math.min(hi, (p.r || lo) + ((p.r || 0) < hi ? 1 : 0)) };
   }
-  if (prev) return { kg: prev.kg ?? null, r: prev.r || e.lo };
-  return { kg: null, r: e.lo };
+  if (s.tk != null) return { kg: s.tk, r: lo };
+  if (prev) return { kg: prev.kg ?? null, r: prev.r || lo };
+  return { kg: null, r: lo };
 }
 function liveHTML(w) {
   const st = woStats(w), total = w.ex.reduce((a, e) => a + e.sets.filter(s => !isW(s)).length, 0), dn = w.ex.reduce((a, e) => a + e.sets.filter(s => s.done && !isW(s)).length, 0);
@@ -356,12 +460,12 @@ function liveHTML(w) {
   return h + restBarHTML();
 }
 function exCardHTML(w, i, pre) {
-  const e = w.ex[i], x = ex(e.id), last = hist(e.id, D()).pop(), timed = isTimed(e.id), bw = BW(x), tip = suggest(e, x), cs = curSet(e), note = (((T() || {}).notes || {})[e.id] || '').trim();
+  const e = w.ex[i], x = ex(e.id), last = hist(e.id, D()).pop(), timed = isTimed(e.id), bw = BW(x), tip = suggest(e, x), cs = curSet(e), note = (e.note || ((T() || {}).notes || {})[e.id] || '').trim();
   const lastWork = last ? last.sets.filter(s => !isW(s)) : [], done = e.sets.length && e.sets.every(s => s.done), rs = restFor(e.id, e);
   // only the set you're on now gets the gold outline (both exercises of a pair share it)
   const fo = w.ex.findIndex(x2 => x2.sets.some(s => !s.done)), here = i === fo || (e.ss && fo >= 0 && w.ex[fo].ss === e.ss);
   let n = 0;
-  return `<section class="card exc${done ? ' dn' : ''}" id="ex-${i}"><div class="exh2"><button class="thb" data-act="tr-exinfo" data-v="${e.id}" aria-label="How to do ${esc(exName(e))}">${thumb(e.id)}</button><div class="exn"><b>${esc(pre + exName(e))}</b><small>${e.sets.filter(s => !isW(s)).length} × ${e.lo === e.hi ? e.lo : e.lo + '–' + e.hi}${timed ? ' s' : ''}${e.ss && !e.rest ? '' : ` · rest ${rs ? mmss(rs) : 'off'}`}${e.cue ? ` · <i class="cue">${esc(e.cue)}</i>` : ''}${done ? ' · done ✓' : ''}</small></div><button class="dots" data-act="tr-exmenu" data-v="${i}" aria-label="More options for ${esc(exName(e))}">⋯</button></div>
+  return `<section class="card exc${done ? ' dn' : ''}" id="ex-${i}"><div class="exh2"><button class="thb" data-act="tr-exinfo" data-v="${e.id}" aria-label="How to do ${esc(exName(e))}">${thumb(e.id)}</button><div class="exn"><b>${esc(pre + exName(e))}${e.from ? ' <i class="tag rep">replaced</i>' : ''}</b><small>${e.sets.filter(s => !isW(s)).length} × ${e.lo === e.hi ? e.lo : e.lo + '–' + e.hi}${timed ? ' s' : ''}${e.ss && !e.rest ? '' : ` · rest ${rs ? mmss(rs) : 'off'}`}${e.cue ? ` · <i class="cue">${esc(e.cue)}</i>` : ''}${done ? ' · done ✓' : ''}</small></div><button class="rep${here && !done ? ' wide' : ''}" data-act="tr-swap" data-v="${i}" aria-label="Replace ${esc(exName(e))}">${here && !done ? '⇄ Replace' : '⇄'}</button><button class="dots" data-act="tr-exmenu" data-v="${i}" aria-label="More options for ${esc(exName(e))}">⋯</button></div>
   ${note ? `<button class="note" data-act="tr-note" data-v="${e.id}">📌 ${esc(note)}</button>` : ''}
   ${tip && !done ? `<p class="tip">${esc(tip)}</p>` : ''}
   <div class="setgrid2" role="table"><div class="sg-h" role="row"><span>Set</span><span>Last time</span><span>${bw ? '+kg' : 'kg'}</span><span>${timed ? 'sec' : 'reps'}</span><span></span></div>
@@ -372,8 +476,8 @@ function exCardHTML(w, i, pre) {
 function openExMenu(i) {
   const w = active(); if (!w) return; const e = w.ex[i], x = ex(e.id), heavy = /barbell|dumbbell|machine|cable|e-z|kettle/.test(x.eq);
   const it = (a, v, ic, l, cls = '') => `<button class="mrow ${cls}" data-act="${a}" data-v="${v}"><span class="ic">${ic}</span><span><b>${l}</b></span></button>`;
-  sheet(`<div class="mlist">${it('tr-swap', i, '🔁', 'Swap exercise')}${it('tr-exinfo', e.id, '📷', 'How to do it')}${heavy ? it('tr-warm', i, '🔥', 'Warm-up sets') : ''}${it('tr-restpick', e.id, '⏱', `Rest time: ${restFor(e.id, e) ? mmss(restFor(e.id, e)) : 'off'}`)}${it('tr-note', e.id, '📌', 'Add a note')}
-  ${i > 0 ? it('tr-mv', i + ':-1', '↑', 'Move up') : ''}${i < w.ex.length - 1 ? it('tr-mv', i + ':1', '↓', 'Move down') : ''}${i < w.ex.length - 1 ? it('tr-pairnext', i, '⇅', e.ss && w.ex[i + 1].ss === e.ss ? 'Unpair from the next one' : 'Pair with the next one') : ''}${it('tr-rmex', i, '✕', 'Remove', 'danger')}</div>`, exName(e));
+  sheet(`<div class="mlist">${it('tr-swap', i, '⇄', 'Replace exercise')}${w.ex.length > 1 ? it('tr-reorder', '', '↕', 'Reorder exercises') : ''}${it('tr-exinfo', e.id, '📷', 'How to do it')}${heavy ? it('tr-warm', i, '🔥', 'Warm-up sets') : ''}${it('tr-restpick', e.id, '⏱', `Rest time: ${restFor(e.id, e) ? mmss(restFor(e.id, e)) : 'off'}`)}${it('tr-note', e.id, '📌', 'Add a note')}
+  ${i > 0 ? it('tr-mv', i + ':-1', '↑', 'Move up') : ''}${i < w.ex.length - 1 ? it('tr-mv', i + ':1', '↓', 'Move down') : ''}${i < w.ex.length - 1 ? it('tr-pairnext', i, '⇅', e.ss && w.ex[i + 1].ss === e.ss ? 'Unpair from the next one' : 'Pair with the next one') : ''}${it('tr-rmex', i, '✕', 'Remove from this workout', 'danger')}</div><button class="btn block" data-act="tr-add">＋ Add exercise to this workout</button>`, exName(e));
 }
 function clock(w) { const s = Math.max(0, Math.floor((Date.now() - w.t0) / 1000)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; }
 
@@ -590,20 +694,33 @@ function openLibPick(target) {
     sheet(`<input class="in" id="tr-q" type="search" placeholder="Search ${nLib()} exercises" value="${esc(f.q)}" autocomplete="off"><div class="chips">${['', ...MUSCLES.slice(0, 14)].map(m => `<button data-act="tr-fm" data-v="${m}" aria-pressed="${f.m === m}">${m ? esc(musL(m)) : 'All'}</button>`).join('')}</div><div id="tr-res">${resHTML(filterLib(f), 'tr-pickex')}</div>`, 'Add exercise', 'trpick');
   });
 }
-function openSwap(i, all) {
-  const w = active(), e = w.ex[i], x = ex(e.id), alts = new Set(), pat = e.pat || PG.patternOf(e.id);
-  X.S.trSwap = i;
-  if (pat && !all) {
-    const cfg = cfgOf(T(), w.place), A = PG.alternatives(pat, e.id, cfg.gear, cfg.ctx, exf);
-    return sheet(`<p class="hint">Same muscle, with what you have${w.place === 'home' ? ' at home' : ''}.</p><div class="card list2 flat">${A.ok.map(id => `<button class="lrow exr" data-act="tr-swapto" data-v="${id}">${thumb(id)}<span class="lt"><b>${esc(ex(id).name)} <i class="eqb">${PG.eqTag(id, exf)}</i></b><small>${esc(meta(ex(id)))}</small></span><span class="le">›</span></button>`).join('') || '<p class="hint">Nothing else fits your equipment.</p>'}
-    ${A.need.slice(0, 4).map(o => `<div class="lrow exr dis">${thumb(o.id)}<span class="lt"><b>${esc(ex(o.id).name)}</b><small>Needs: ${esc(o.miss)}</small></span></div>`).join('')}</div>
-    <label class="chk"><input type="checkbox" id="tr-swaptoday"${w.place === 'home' ? ' checked disabled' : ''}> Swap only today${w.place === 'home' ? ' (home version)' : ''}</label>
-    <button class="btn block ghost" data-act="tr-swapall" data-v="${i}">Show every exercise for this muscle</button>`, `Swap: ${exName(e)}`);
-  }
-  Object.values(PAT).forEach(t => { const all = t.flat(); if (all.includes(e.id)) all.forEach(id => id !== e.id && alts.add(id)); });
+function swapSrc() { const S = X.S; return S.trSwapMode === 'edit' ? S.trEdit.ex[S.trSwap] : S.trSwapMode === 'wedit' ? S.days[S.trWE].wo.ex[S.trSwap] : (active() || { ex: [] }).ex[S.trSwap]; }
+function lastTxt(id) { const h = hist(id).pop(); if (!h) return 'never done'; const b = bestSet(h.sets); return b ? `last ${setTxt(b)}` : 'done before'; }
+function swapList() {
+  const S = X.S, e = swapSrc(), x = ex(e.id), q = (S.trSwapQ || '').trim();
+  if (q) return { ok: filterLib({ q, m: '', e: '' }).map(y => y.id).filter(id => id !== e.id), need: [] };
+  if (S.trSwapTab === 'recent') { const seen = new Set(); sessions().reverse().forEach(k => X.S.days[k].wo.ex.forEach(z => { if (z.id !== e.id && DB.by[z.id]) seen.add(z.id); })); return { ok: [...seen].slice(0, 30), need: [] }; }
+  if (S.trSwapTab === 'all') return { ok: filterLib({ q: '', m: x.pm[0] || '', e: '' }).map(y => y.id).filter(id => id !== e.id), need: [] };
+  const pat = e.pat || PG.patternOf(e.id), w = S.trSwapMode === 'live' ? active() : null;
+  if (pat) { const cfg = cfgOf(T(), w && w.place), A = PG.alternatives(pat, e.id, cfg.gear, cfg.ctx, exf); if (A.ok.length) return { ok: A.ok, need: A.need.slice(0, 4) }; }
+  const alts = new Set(); Object.values(PAT).forEach(tt => { const all = tt.flat(); if (all.includes(e.id)) all.forEach(id => id !== e.id && alts.add(id)); });
   DB.list.filter(y => y.id !== e.id && y.pm[0] === x.pm[0] && y.cat === 'strength').sort((a, b) => (a.eq === x.eq) - (b.eq === x.eq) || (a.lv === 'b' ? -1 : 1)).slice(0, 25).forEach(y => alts.add(y.id));
-  X.S.trSwap = i;
-  sheet(`<p class="hint">Same muscles, different machine or tool. Handy when the gym is busy.</p>${resHTML([...alts].map(ex), 'tr-swapto')}`, `Swap ${exName(e)}`);
+  return { ok: [...alts], need: [] };
+}
+function swapResHTML() {
+  const L = swapList();
+  return `<div class="card list2 flat">${L.ok.map(id => `<button class="lrow exr" data-act="tr-swapto" data-v="${id}">${thumb(id)}<span class="lt"><b>${esc(ex(id).name)} <i class="eqb">${PG.eqTag(id, exf)}</i></b><small>${esc(ex(id).pm.map(musL).slice(0, 2).join(', '))} · ${lastTxt(id)}</small></span><span class="le">›</span></button>`).join('') || '<p class="hint">Nothing here. Try the search or another tab.</p>'}
+  ${L.need.map(o => `<div class="lrow exr dis">${thumb(o.id)}<span class="lt"><b>${esc(ex(o.id).name)}</b><small>Needs: ${esc(o.miss)}</small></span></div>`).join('')}</div>`;
+}
+function openSwap(i, mode = 'live') { const S = X.S; S.trSwap = i; S.trSwapMode = mode; S.trSwapTab = 'same'; S.trSwapQ = ''; S.trSwapScope = 'today'; drawSwap(); }
+function drawSwap() {
+  const S = X.S, e = swapSrc(); if (!e) return X.closeSheet();
+  const w = S.trSwapMode === 'live' ? active() : null, r = w && T().routines && T().routines.find(x => x.id === w.rid), canPlan = !!(r && w.place !== 'home' && r.ex.some(z => z.id === e.id));
+  sheet(`<input class="in" id="tr-sq" type="search" placeholder="Search all ${nLib()} exercises" value="${esc(S.trSwapQ || '')}" autocomplete="off">
+  <div class="seg wide swtabs">${[['same', 'Same muscle'], ['recent', 'Recent'], ['all', 'All']].map(([k, l]) => `<button data-act="tr-swaptab" data-v="${k}" aria-pressed="${S.trSwapTab === k && !S.trSwapQ}">${l}</button>`).join('')}</div>
+  <div id="tr-sres">${swapResHTML()}</div>
+  ${canPlan ? `<div class="seg wide">${[['today', 'Only this workout'], ['plan', 'Also in my plan']].map(([k, l]) => `<button data-act="tr-swapscope" data-v="${k}" aria-pressed="${S.trSwapScope === k}">${l}</button>`).join('')}</div>` : ''}
+  ${w && e.sets.some(x => x.done) ? `<p class="hint">Sets you already ticked stay as ${esc(exName(e))}.</p>` : ''}`, `Replace ${exName(e)}`, S.trSwapMode === 'live' ? 'tr' : 'trpick');
 }
 function prevSame(date, w) { const ks = sessions(date).filter(k => { const p = X.S.days[k].wo; return p.rid === w.rid || p.name === w.name; }); return ks.length ? { k: ks[ks.length - 1], w: X.S.days[ks[ks.length - 1]].wo } : null; }
 function openSummary(date) {
@@ -631,7 +748,7 @@ function sumExtrasHTML(w, date) {
   const cov = PG.coverage([{ ex: w.ex.map(e => ({ id: e.id, sets: (e.sets || []).filter(s => s.done && !isW(s)).length })) }], exf).filter(c => c.sets >= 1);
   const t = T() || {}, nx = t.routines && nextRoutine(), cfg = cfgOf(t, w.place);
   const steps = cfg.ctx === 'home' ? w.ex.map((e, i) => ({ e, i, st: PG.ladderStep(e, (e.sets || []).filter(s => s.done), cfg, exf) })).filter(x => x.st) : [];
-  return `${cov.length ? `<h3 class="grp">Trained today</h3><div class="musc">${cov.map(c => `<i>${esc(c.label)}</i>`).join('')}</div>` : ''}
+  return `${cov.length ? `<h3 class="grp">Trained today</h3><div class="musc">${cov.map(c => `<i>${gL(c)}</i>`).join('')}</div>` : ''}
   ${steps.map(({ e, i, st }) => `<div class="ladder"><b>Time to make ${esc(exName(e).toLowerCase())} harder</b><p class="hint">${(e.sets || []).filter(s => s.done && !isW(s)).map(setTxt).join(', ')}: every set at the top of the range with your heaviest weight.</p><div class="lad n"><u>→</u><span><b>${esc(st.title)}</b>${esc(st.txt)}</span></div>${st.k !== 'buy' ? `<button class="btn primary block" data-act="tr-ladder" data-v="${date}:${i}:${st.k}${st.id ? ':' + st.id : ''}">Use this next time</button>` : ''}</div>`).join('')}
   ${nx && date === X.today() ? `<p class="hint">Next time: ${esc(nx.name)}.</p>` : ''}`;
 }
@@ -642,15 +759,76 @@ function cardioBlock(cd, mode) {
 }
 function openEdit(rid) {
   const t = T(), r = rid === 'new' ? null : t.routines.find(x => x.id === rid);
-  X.S.trEdit = r ? JSON.parse(JSON.stringify(r)) : { id: 'C-' + Math.random().toString(36).slice(2, 7), name: 'My workout', ex: [] };
+  X.S.trEdit = r ? clone(r) : { id: newId('C-'), name: 'My workout', ex: [] };
+  X.S.trEdit.ex.forEach(e => { e.sp = spOf(e); });
+  X.S.trEditOrig = JSON.stringify(X.S.trEdit); X.S.trPick = null;
   drawEdit();
 }
+export function closeGuard(scope) {
+  const S = X.S;
+  if (scope === 'trpick' && S.trEdit && (S.trPick === 'edit' || S.trSwapMode === 'edit')) { S.trPick = null; S.trSwapMode = null; drawEdit(); return true; }
+  if (scope === 'trpick' && S.trWE && (S.trPick === 'wedit' || S.trSwapMode === 'wedit')) { S.trPick = null; S.trSwapMode = null; openWEdit(S.trWE); return true; }
+  if (scope === 'tredit' && S.trEdit) { if (editDirty() && !confirm('Discard your changes to this workout?')) return true; S.trEdit = null; }
+  return false;
+}
+export const editDirty = () => !!(X.S.trEdit && JSON.stringify(X.S.trEdit) !== X.S.trEditOrig);
 function drawEdit() {
-  const r = X.S.trEdit, isNew = !T().routines.some(x => x.id === r.id);
-  sheet(`<label class="full">Name<input class="in" id="tr-rname" value="${esc(r.name)}" maxlength="40"></label>
-  <div class="card list2 flat edlist">${r.ex.map((e, i) => `<div class="lrow static ed${e.ss ? ' ssr' : ''}">${thumb(e.id)}<span class="lt"><b>${esc(exName(e))}</b><span class="edn"><input class="in num" type="number" inputmode="numeric" min="1" max="10" data-tre="${i}:sets" value="${e.sets}" aria-label="Sets"><em>sets of</em><input class="in num" type="number" inputmode="numeric" min="1" data-tre="${i}:lo" value="${e.lo}" aria-label="Fewest reps"><em>–</em><input class="in num" type="number" inputmode="numeric" min="1" data-tre="${i}:hi" value="${e.hi}" aria-label="Most reps"></span></span><span class="edb"><button class="x" data-act="tr-eup" data-v="${i}" aria-label="Move up">↑</button><button class="x" data-act="tr-erm" data-v="${i}" aria-label="Remove">×</button></span></div>${i < r.ex.length - 1 ? `<button class="sslink${e.ss && r.ex[i + 1].ss === e.ss ? ' on' : ''}" data-act="tr-elink" data-v="${i}">${e.ss && r.ex[i + 1].ss === e.ss ? '⛓ Superset · tap to unlink' : '+ Link as superset'}</button>` : ''}`).join('') || `<p class="hint">No exercises yet.</p>`}</div>
-  <button class="btn block" data-act="tr-eadd">+ Add exercise</button>
-  <div class="row"><button class="btn primary grow" data-act="tr-esave">${isNew ? 'Add to my plan' : 'Save'}</button>${isNew ? '' : `<button class="btn ghost danger" data-act="tr-edel">Delete</button>`}</div>`, isNew ? 'New workout' : 'Edit workout', 'tredit');
+  const r = X.S.trEdit, t = T(), isNew = !t.routines.some(x => x.id === r.id), old = $('sheet') && $('sheet').querySelector('.sheet'), top = old && old.classList.contains('full') ? old.scrollTop : 0;
+  let pair = 0;
+  const cov = DB ? PG.coverage([{ ex: r.ex.map(e => ({ id: e.id, sets: e.sp.filter(x => x.t !== 'w').length })) }], exf).filter(c => c.sets > 0) : [];
+  const rows = r.ex.map((e, i) => {
+    const first = e.ss && !(r.ex[i - 1] && r.ex[i - 1].ss === e.ss), timed = isTimed(e.id); let n = 0;
+    return `${first ? `<p class="sslab">Superset ${String.fromCharCode(65 + pair++)} · alternate, rest after the last one</p>` : ''}<div class="edx${e.ss ? ' ss' : ''}" data-si="${i}">
+    <div class="exh2 ed"><span class="hdl" aria-label="Drag to reorder">≡</span>${thumb(e.id)}<div class="exn"><b>${esc(exName(e))}</b><small>${esc(ex(e.id).pm.map(musL).slice(0, 2).join(', '))} · rest ${e.restU ? (e.rest ? mmss(e.rest) : 'off') : 'auto'}</small></div><button class="rep" data-act="tr-erep" data-v="${i}" aria-label="Replace ${esc(exName(e))}">⇄</button><button class="dots" data-act="tr-emenu" data-v="${i}" aria-label="More options for ${esc(exName(e))}">⋯</button></div>
+    ${e.note ? `<button class="note" data-act="tr-enote" data-v="${i}">📌 ${esc(e.note)}</button>` : ''}
+    <div class="edg"><span class="h">Set</span><span class="h">kg</span><span class="h">${timed ? 'Seconds' : 'Reps'}</span><span></span>
+    ${e.sp.map((x, j) => { const lbl = x.t === 'w' ? 'W' : x.t === 'd' ? 'D' : x.t === 'f' ? 'F' : String(++n); return `<button class="sn ${x.t || ''}" data-act="tr-estype" data-v="${i}:${j}" aria-label="Set ${j + 1} type">${lbl}</button><input class="in num" type="number" inputmode="decimal" step="0.5" min="0" data-tres="${i}:${j}:kg" value="${x.kg ?? ''}" placeholder="auto" aria-label="Set ${j + 1} weight"><span class="rr"><input class="in num" type="number" inputmode="numeric" min="1" data-tres="${i}:${j}:lo" value="${x.lo ?? ''}" aria-label="Set ${j + 1} fewest reps"><em>–</em><input class="in num" type="number" inputmode="numeric" min="1" data-tres="${i}:${j}:hi" value="${x.hi ?? ''}" aria-label="Set ${j + 1} most reps"></span><button class="x" data-act="tr-esrm" data-v="${i}:${j}" aria-label="Remove set ${j + 1}">×</button>`; }).join('')}</div>
+    <div class="row edb2"><button class="btn small" data-act="tr-esadd" data-v="${i}">＋ Set</button><button class="btn small" data-act="tr-emenu" data-v="${i}">⏱ Rest</button><button class="btn small" data-act="tr-enote" data-v="${i}">📌 Note</button></div></div>`;
+  }).join('');
+  sheet(`<input class="in edname" id="tr-rname" value="${esc(r.name)}" maxlength="40" aria-label="Workout name">
+  <div class="edlist" data-sortk="edit">${rows || '<p class="hint">No exercises yet. Add the first one.</p>'}</div>
+  <button class="btn block" data-act="tr-eadd">＋ Add exercises</button>
+  ${cov.length ? `<div class="covchips">${cov.map(c => `<i>${gL(c)} ${C.round(c.sets, 1)}</i>`).join('')}</div>` : ''}
+  <p class="hint">Tap a set number to make it a warm-up (W), drop set (D) or to-failure set (F). Leave kg empty to use last time’s weight.</p>
+  <div class="edsave">${isNew ? '' : `<button class="btn ghost danger" data-act="tr-edel" id="tr-edel">Delete</button>`}<button class="btn ghost" data-act="tr-ecancel">Cancel</button><button class="btn primary grow" data-act="tr-esave">${isNew ? 'Add to my plan' : 'Save'}</button></div>`, isNew ? 'New workout' : 'Edit workout', 'tredit');
+  const sc = $('sheet').querySelector('.sheet'); if (sc) { sc.classList.add('full'); sc.scrollTop = top; }
+}
+function openEMenu(i) {
+  const r = X.S.trEdit, e = r.ex[i], linked = e.ss && r.ex[i + 1] && r.ex[i + 1].ss === e.ss;
+  sheet(`<div class="mlist">${mItem('tr-erep', i, '⇄', 'Replace exercise')}${i > 0 ? mItem('tr-emv', i + ':-1', '↑', 'Move up') : ''}${i < r.ex.length - 1 ? mItem('tr-emv', i + ':1', '↓', 'Move down') : ''}${i < r.ex.length - 1 ? mItem('tr-elink', i, '🔗', linked ? 'Unlink from the next one' : 'Superset with the next one') : ''}${mItem('tr-enote', i, '📌', e.note ? 'Edit note' : 'Add a note', 'Shows every time you do this workout')}${mItem('tr-erm', i, '✕', 'Remove', '', 'danger')}</div>
+  <p class="hint" style="margin:6px 0 0">Rest after each set</p><div class="ropts">${[-1, 0, 45, 60, 90, 120, 150, 180].map(v => `<button data-act="tr-erestv" data-v="${i}:${v}" aria-pressed="${v < 0 ? !e.restU : !!e.restU && (e.rest || 0) === v}">${v < 0 ? 'Auto' : v ? mmss(v) : 'Off'}</button>`).join('')}</div>
+  <button class="btn block" data-act="tr-eback">Back to the workout</button>`, exName(e), 'tredit');
+}
+// ⋯ on any workout in the plan
+const mItem = (a, v, ic, l, d = '', cls = '') => `<button class="mrow ${cls}" data-act="${a}" data-v="${esc(String(v))}"><span class="ic">${ic}</span><span><b>${l}</b>${d ? `<small>${d}</small>` : ''}</span></button>`;
+function openRMenu(id) {
+  const t = T(), r = t.routines.find(x => x.id === id); if (!r) return; X.S.trDel = null;
+  const isNext = nextRoutine() && nextRoutine().id === id;
+  sheet(`<p class="hint">${r.ex.length} exercises · ${setsOf(r)} sets · ~${estMin(r)} min</p><div class="mlist">
+  ${mItem('tr-edit', id, '✏️', 'Edit workout', 'Exercises, sets, reps, rest, notes, order')}${mItem('tr-preview', id, '👁', 'Preview exercises')}${mItem('tr-rdup', id, '⧉', 'Duplicate')}${(t.shelf || []).length ? mItem('tr-rmove', id, '↗', 'Move to another plan') : ''}${isNext ? '' : mItem('tr-setnext', id, '⏭', 'Make it next in the plan')}${mItem('tr-rdel', id, '🗑', 'Delete from plan', '', 'danger')}</div>
+  <button class="btn primary block" data-act="tr-start" data-v="${id}">Start ${esc(r.name)}</button>`, r.name);
+}
+function openPlans() {
+  const t = T(), all = [{ ...t, cur: true }, ...(t.shelf || [])]; X.S.trDel = null;
+  sheet(`<div class="card list2 flat">${all.map(p => `<div class="lrow plrow"><span class="lt"><b>${esc(planName(p))}</b><small>${nWk((p.routines || []).length)}${builtFor(p) ? ' · built for you' : p.split === 'tpl' ? ' · from a template' : ''}</small></span>${p.cur ? '<span class="state s-done">Active</span>' : `<button class="btn small" data-act="tr-puse" data-v="${p.planId}">Use</button>`}<button class="more" data-act="tr-pmenu" data-v="${p.cur ? '*' : p.planId}" aria-label="Options for ${esc(planName(p))}">⋯</button></div>`).join('')}</div>
+  <button class="btn primary block" data-act="tr-redo">＋ New plan</button>
+  <p class="hint">Plans you aren’t using keep their workouts. Your workout history isn’t tied to a plan, so switching never loses anything.</p>`, 'My plans');
+}
+function openPMenu(id) {
+  const t = T(), p = id === '*' ? t : (t.shelf || []).find(x => x.planId === id); if (!p) return; X.S.trDel = null;
+  sheet(`<div class="mlist">${mItem('tr-pren', id, '✏️', 'Rename')}${mItem('tr-pdup', id, '⧉', 'Duplicate')}${id === '*' ? '' : mItem('tr-pdel', id, '🗑', 'Delete this plan', 'Its workouts go; your logged workouts stay', 'danger')}</div>
+  <button class="btn block" data-act="tr-plans">Back to My plans</button>`, planName(p));
+}
+function openAddW() {
+  sheet(`<div class="mlist">${mItem('tr-new', '', '✍️', 'Empty workout', 'Pick the exercises yourself')}${sessions().length ? mItem('tr-addpast', '', '🔁', 'From a workout you did', 'Copies its exercises and sets, then you can change them') : ''}</div>`, 'Add workout');
+}
+function openPastPick() {
+  const ss = sessions().slice(-30).reverse();
+  sheet(`<div class="card list2 flat">${ss.map(k => { const w = X.S.days[k].wo; return `<button class="lrow" data-act="tr-addpastgo" data-v="${k}"><span class="lt"><b>${esc(w.name)}</b><small>${X.fmt(k)} · ${w.ex.length} exercises · ${woSummary(w)}</small></span><span class="le">›</span></button>`; }).join('')}</div>`, 'From a workout you did');
+}
+function openReorder() {
+  const w = active(); if (!w) return;
+  sheet(`<p class="hint">Drag ≡ or use the arrows.</p><div class="card list2 flat" data-sortk="live">${w.ex.map((e, i) => `<div class="lrow prow" data-si="${i}"><span class="hdl" aria-label="Drag to reorder">≡</span>${thumb(e.id)}<span class="lt"><b>${esc(exName(e))}</b><small>${e.sets.filter(x => x.done).length} of ${e.sets.length} sets done</small></span><button class="x" data-act="tr-rmv" data-v="${i}:-1" aria-label="Move up"${i ? '' : ' disabled'}>↑</button><button class="x" data-act="tr-rmv" data-v="${i}:1" aria-label="Move down"${i < w.ex.length - 1 ? '' : ' disabled'}>↓</button></div>`).join('')}</div><button class="btn primary block" data-act="closesheet">Done</button>`, 'Reorder exercises');
 }
 function openRestPick(id) {
   X.S.trRest = { id, v: id === '*' ? ((T() || {}).restDefault ?? -1) : restFor(id, (active() || { ex: [] }).ex.find(e => e.id === id)), all: id === '*' };
@@ -692,12 +870,15 @@ function openWarm(i) {
 function openNote(id) { sheet(`<textarea class="in" rows="3" maxlength="140" data-trnote="${esc(id)}" placeholder="Seat height, grip, cues…">${esc(((T().notes || {})[id]) || '')}</textarea><p class="hint">Shows every time you do this exercise.</p><button class="btn primary block" data-act="closesheet">Done</button>`, `Note · ${exName(id)}`); }
 function openWMenu(date) {
   const w = X.S.days[date].wo; X.S.trDel = null;
-  sheet(`<p class="hint">${woSummary(w)}</p><button class="btn block" data-act="tr-summary" data-v="${date}">See summary</button><button class="btn block" data-act="tr-wedit" data-v="${date}">Edit sets</button><button class="btn block danger-soft" data-act="tr-wdel" data-v="${date}" id="tr-wdel">Delete this workout</button>
+  sheet(`<p class="hint">${woSummary(w)}</p><button class="btn block" data-act="tr-summary" data-v="${date}">See summary</button><button class="btn block" data-act="tr-wedit" data-v="${date}">Edit workout</button><button class="btn block" data-act="tr-wsave" data-v="${date}">Save as a workout in my plan</button><button class="btn block danger-soft" data-act="tr-wdel" data-v="${date}" id="tr-wdel">Delete this workout</button>
   <p class="hint" style="margin-top:10px">Deleting removes its sets and records. If it was that day's training, the day's training tick goes too, and your plan goes back to this workout.</p>`, `${w.name} · ${X.fmt(date)}`);
 }
 function openWEdit(date) {
-  const w = X.S.days[date].wo;
-  sheet(`${w.ex.map((e, i) => `<h3 class="grp">${esc(exName(e))}</h3>${e.sets.map((s, j) => `<div class="weed"><span class="sn ${s.t || ''}">${s.t ? s.t.toUpperCase() : j + 1}</span><input class="in num" type="number" inputmode="decimal" step="0.5" data-woe="${date}:${i}:${j}:kg" value="${s.kg ?? ''}" aria-label="Weight"><em>kg ×</em><input class="in num" type="number" inputmode="numeric" data-woe="${date}:${i}:${j}:r" value="${s.r ?? ''}" aria-label="Reps"><button class="x" data-act="tr-wesrm" data-v="${date}:${i}:${j}" aria-label="Remove set">×</button></div>`).join('')}`).join('')}<button class="btn primary block" data-act="closesheet">Done</button>`, `Edit ${w.name}`);
+  const w = X.S.days[date].wo; X.S.trWE = date; X.S.trPick = null;
+  const mins = w.t1 && w.t0 ? Math.max(1, Math.round((w.t1 - w.t0) / 60000)) : '';
+  sheet(`<label class="wrow"><span>Duration</span><span class="kgin"><input class="in num" type="number" inputmode="numeric" min="1" max="400" data-wedur="${date}" value="${mins}"> min</span></label>
+  ${w.ex.map((e, i) => `<div class="wex"><div class="spread"><h3 class="grp">${esc(exName(e))}</h3><span class="row"><button class="rep" data-act="tr-werep" data-v="${i}" aria-label="Replace ${esc(exName(e))}">⇄</button><button class="x" data-act="tr-werm" data-v="${i}" aria-label="Remove ${esc(exName(e))}">✕</button></span></div>${e.sets.map((s, j) => `<div class="weed"><span class="sn ${s.t || ''}">${s.t ? s.t.toUpperCase() : j + 1}</span><input class="in num" type="number" inputmode="decimal" step="0.5" data-woe="${date}:${i}:${j}:kg" value="${s.kg ?? ''}" aria-label="Weight"><em>kg ×</em><input class="in num" type="number" inputmode="numeric" data-woe="${date}:${i}:${j}:r" value="${s.r ?? ''}" aria-label="Reps"><button class="x" data-act="tr-wesrm" data-v="${date}:${i}:${j}" aria-label="Remove set">×</button></div>`).join('')}<button class="btn small" data-act="tr-weadd" data-v="${i}">＋ Set</button></div>`).join('')}
+  <button class="btn block" data-act="tr-weaddex">＋ Add exercise</button><button class="btn primary block" data-act="closesheet">Done</button>`, `Edit ${w.name}`);
 }
 
 /* ---------- import from Lyfta, Hevy or Strong (CSV) ---------- */
@@ -773,18 +954,57 @@ function startWorkout(r, place) {
   const t = T() || {}, home = t.place === 'both' && place === 'home';
   if (home && DB) r = PG.convertRoutine(r, cfgOf(t, 'home'), exf);
   const d = X.dayDoc(D());
-  d.wo = { rid: r.id, name: r.name, t0: Date.now(), cur: 0, ...(home ? { place: 'home' } : {}), ex: r.ex.map(e => ({ id: e.id, ...(e.nm ? { nm: e.nm } : {}), ...(e.ss ? { ss: e.ss } : {}), ...(e.pat ? { pat: e.pat } : {}), ...(e.cue ? { cue: e.cue } : {}), ...(e.rest ? { rest: e.rest } : {}), lo: e.lo, hi: e.hi, sets: Array.from({ length: e.sets }, () => ({})) })) };
+  const inPlan = !home && !!(t.routines || []).find(x => x.id === r.id);
+  d.wo = { rid: r.id, name: r.name, t0: Date.now(), cur: 0, ...(home ? { place: 'home' } : {}), ...(inPlan ? { orig: r.ex.map(e => [e.id, +e.sets]) } : {}),
+    ex: r.ex.map(e => ({ id: e.id, ...(e.nm ? { nm: e.nm } : {}), ...(e.ss ? { ss: e.ss } : {}), ...(e.pat ? { pat: e.pat } : {}), ...(e.cue ? { cue: e.cue } : {}), ...(e.rest ? { rest: e.rest } : {}), ...(e.restU ? { restU: 1, rest: e.rest || 0 } : {}), ...(e.note ? { note: e.note } : {}), lo: e.lo, hi: e.hi,
+      sets: e.sp ? e.sp.map(x => ({ ...(x.t ? { t: x.t } : {}), ...(x.kg != null ? { tk: x.kg } : {}), ...(x.lo ? { tlo: +x.lo, thi: +x.hi || +x.lo } : {}) })) : Array.from({ length: e.sets }, () => ({})) })) };
   X.saveDay(D()); X.toast(r.ex.length ? `${r.name} started. Tick ✓ after each set; the grey numbers are today’s target.` : 'Empty workout started. Add your first exercise.'); X.draw(); window.scrollTo(0, 0); notifyWorking();
 }
 function finishWorkout() {
   const date = D(), d = X.dayDoc(date), w = d.wo; if (!w) return;
   if (!w.ex.some(e => e.sets.some(s => s.done))) { if (!confirm('No sets ticked. End this workout without saving it?')) return; delete d.wo; X.saveDay(date); RS = null; saveRS(); notifyClear(); return X.draw(); }
+  const shape = structOf(w), ch = diffOf(w, shape), t0 = T() || {}, planned = w.rid && (t0.routines || []).some(r => r.id === w.rid);
+  X.S.trUpd = (planned && ch.length) || (!w.rid && shape.length && t0.routines) ? { date, shape, ch: planned ? ch : null } : null;
   w.t1 = Date.now(); w.ex.forEach(e => e.sets = e.sets.filter(s => s.done || s.kg || s.r)); w.ex = w.ex.filter(e => e.sets.length);
   // only the plan's next workout moves the plan on; doing another one leaves it waiting for next time
   const t = T() || {}, idx = t.routines ? t.routines.findIndex(r => r.id === w.rid) : -1; if (idx >= 0 && idx === (t.next || 0) % t.routines.length) { t.next = (idx + 1) % t.routines.length; X.saveSettings(); }
   if (!d.trainingDone) { d.trainingDone = true; d.trainingSource = 'workout'; }
   RS = null; overT = null; saveRS(); notifyClear(); RKC = null;
-  X.saveDay(date); X.buzz([30, 40, 80]); X.draw(); openSummary(date);
+  X.saveDay(date); X.buzz([30, 40, 80]); X.draw(); if (X.S.trUpd) openUpd(); else openSummary(date);
+}
+// the workout as it would go back into the plan: [{id, sets, from, e}] (a part-done exercise that was replaced counts toward its replacement)
+function structOf(w) {
+  const n = e => e.sets.filter(s => !isW(s)).length, carry = {};
+  w.ex.forEach(e => { if (e.cut) carry[e.cut] = (carry[e.cut] || 0) + n(e); });
+  return w.ex.filter(e => !e.cut).map(e => { const c = carry[e.id] || 0; delete carry[e.id]; return { id: e.id, sets: n(e) + c, from: e.from, e }; }).filter(x => x.sets > 0);
+}
+function diffOf(w, N) {
+  if (!w.orig) return [];
+  const O = w.orig, oIds = O.map(o => o[0]), ch = [], swapped = new Set();
+  N.forEach(n => { if (n.from && oIds.includes(n.from) && !N.some(m => m.id === n.from)) { ch.push({ k: 's', a: n.from, b: n.id }); swapped.add(n.from); } });
+  O.forEach(([id]) => { if (!swapped.has(id) && !N.some(n => n.id === id)) ch.push({ k: 'r', a: id }); });
+  N.forEach(n => { const o = O.find(z => z[0] === n.id); if (!o && !(n.from && swapped.has(n.from))) ch.push({ k: 'a', a: n.id, n: n.sets }); else if (o && o[1] !== n.sets) ch.push({ k: 'n', a: n.id, n: n.sets, was: o[1] }); });
+  const common = N.map(n => n.from && swapped.has(n.from) ? n.from : n.id).filter(id => oIds.includes(id)), oc = oIds.filter(id => common.includes(id));
+  if (common.join() !== oc.join()) ch.push({ k: 'm' });
+  return ch;
+}
+function openUpd() {
+  const u = X.S.trUpd, w = X.S.days[u.date].wo, nm = id => esc(ex(id).name || id);
+  if (!u.ch) return sheet(`<p class="hint">Save it so you can start it again with one tap, or change it later.</p><button class="btn primary block" data-act="tr-upd" data-v="new">Save as a workout in my plan</button><button class="btn block" data-act="tr-upd" data-v="skip">Not now</button>`, 'Save this workout?');
+  const row = c => c.k === 's' ? `<div><u class="u-s">⇄</u><span><b>${nm(c.a)} → ${nm(c.b)}</b><small>Replaced</small></span></div>` : c.k === 'a' ? `<div><u class="u-a">＋</u><span><b>${nm(c.a)}</b><small>Added · ${c.n} sets</small></span></div>` : c.k === 'r' ? `<div><u class="u-r">−</u><span><b>${nm(c.a)}</b><small>Removed</small></span></div>` : c.k === 'n' ? `<div><u class="u-a">＋</u><span><b>${nm(c.a)}</b><small>${c.n} sets instead of ${c.was}</small></span></div>` : `<div><u class="u-m">↕</u><span><b>Order changed</b><small>Exercises moved</small></span></div>`;
+  sheet(`<p class="hint">You changed this workout today. Keep the changes for next time?</p><div class="udiff">${u.ch.map(row).join('')}</div>
+  <button class="btn primary block" data-act="tr-upd" data-v="update">Update ${esc(w.name)}</button><button class="btn block" data-act="tr-upd" data-v="keep">Keep ${esc(w.name)} as it was</button><button class="btn block ghost" data-act="tr-upd" data-v="new">Save as a new workout…</button>
+  <p class="hint">Weights and reps never ask this. They always carry over as last time.</p>`, `Update “${w.name}”?`);
+}
+function shapeToEx(shape, base) {
+  return normSS(shape.map(s2 => {
+    const o = (base || []).find(z => z.id === s2.id) || (s2.from && (base || []).find(z => z.id === s2.from)) || {};
+    const ne = { ...clone(o), id: s2.id, sets: s2.sets, lo: o.lo || s2.e.lo || 8, hi: o.hi || s2.e.hi || 12 };
+    if (s2.e.ss) ne.ss = s2.e.ss; else delete ne.ss;
+    if (o.id !== s2.id) { delete ne.nm; delete ne.pat; if (s2.e.nm) ne.nm = s2.e.nm; }
+    if (ne.sp && ne.sp.filter(x => x.t !== 'w').length !== s2.sets) delete ne.sp;
+    return ne;
+  }));
 }
 function tickSet(i, j, fromNotif) {
   const w = active(); if (!w || !w.ex[i]) return; const e = w.ex[i], s = e.sets[j]; if (!s) return;
@@ -813,13 +1033,57 @@ export async function act(a, v, b) {
     case 'tr-wt': { const [k, val] = v.split(':'); S.trWiz.wt[k] = k === 'dbAdj' ? val === '1' : val; return X.draw(); }
     case 'tr-band': { const B = S.trWiz.wt.bands = S.trWiz.wt.bands || []; const i = B.indexOf(v); if (i >= 0) B.splice(i, 1); else B.push(v); return X.draw(); }
     case 'tr-place': S.trPlace = v; return X.draw();
-    case 'tr-empty': { if (wo() && wo().t1 && !wo().imported && !confirm('You already finished a workout today. Start another?')) return; await loadDB(); return startWorkout({ id: '', name: 'Workout', ex: [] }); }
-    case 'tr-quick': { await loadDB(); const r = nextRoutine(); if (!r) return; if (wo() && wo().t1 && !wo().imported && !confirm('You already finished a workout today. Start another?')) return; return startWorkout({ ...r, id: 'quick-' + r.id, name: r.name + ' · quick', ex: r.ex.slice(0, 5).map(e => ({ ...e, sets: Math.min(2, e.sets) })) }, S.trPlace); }
+    case 'tr-empty': { if (!armed(b, a)) return; if (wo() && wo().t1 && !wo().imported && !confirm('You already finished a workout today. Start another?')) return; await loadDB(); return startWorkout({ id: '', name: 'Workout', ex: [] }); }
+    case 'tr-quick': { if (!armed(b, a)) return; await loadDB(); const r = nextRoutine(); if (!r) return; if (wo() && wo().t1 && !wo().imported && !confirm('You already finished a workout today. Start another?')) return; return startWorkout({ ...r, id: 'quick-' + r.id, name: r.name + ' · quick', ex: r.ex.slice(0, 5).map(e => ({ ...e, sets: Math.min(2, e.sets) })) }, S.trPlace); }
     case 'tr-fix': { await loadDB(); const res = PG.fixGroup(t.routines, v, cfgOf(t), exf); S.trCovOpen = true; if (!res) { X.toast('Nothing fits your equipment for that muscle.'); return X.draw(); } X.saveSettings(); X.toast(`Added ${ex(res.id).name} (2 sets) to ${res.r.name}.`); return X.draw(); }
     case 'tr-exmenu': return openExMenu(+v);
     case 'tr-mv': { const w = active(), [i, dlt] = v.split(':').map(Number), k = i + dlt; if (!w || k < 0 || k >= w.ex.length) return; [w.ex[i], w.ex[k]] = [w.ex[k], w.ex[i]]; X.saveDay(D()); X.closeSheet(); return X.draw(); }
     case 'tr-pairnext': { const w = active(), i = +v, a1 = w.ex[i], a2 = w.ex[i + 1]; if (!a2) return; if (a1.ss && a2.ss === a1.ss) { delete a2.ss; delete a1.ss; } else { const g = 'S' + Math.random().toString(36).slice(2, 5); a1.ss = g; a2.ss = g; } X.saveDay(D()); X.closeSheet(); return X.draw(); }
-    case 'tr-swapall': await loadDB(); return openSwap(+v, true);
+    case 'tr-swaptab': S.trSwapTab = v; S.trSwapQ = ''; return drawSwap();
+    case 'tr-swapscope': S.trSwapScope = v; return drawSwap();
+    case 'tr-reorder': return openReorder();
+    case 'tr-rmv': { const w = active(), [i, dl] = v.split(':').map(Number), k = i + dl; if (!w || k < 0 || k >= w.ex.length) return; mv(w.ex, i, k); normSS(w.ex); X.saveDay(D()); openReorder(); return X.draw(); }
+    // workouts in the plan
+    case 'tr-rmenu': await loadDB(); return openRMenu(v);
+    case 'tr-preview': { const r = t.routines.find(x => x.id === v); if (!r) return; await loadDB(); return sheet(`${routineList(r, cfgOf(t))}<div class="row"><button class="btn grow" data-act="tr-edit" data-v="${r.id}">Edit</button><button class="btn primary grow" data-act="tr-start" data-v="${r.id}">Start</button></div>`, r.name); }
+    case 'tr-rdup': { const i = t.routines.findIndex(x => x.id === v); if (i < 0) return; const c = { ...clone(t.routines[i]), id: newId('C-'), name: t.routines[i].name + ' (copy)' }; delete c.key; t.routines.splice(i + 1, 0, c); X.saveSettings(); X.closeSheet(); X.toast(`${c.name} added.`); return X.draw(); }
+    case 'tr-rmove': return sheet(`<div class="card list2 flat">${(t.shelf || []).map(p => `<button class="lrow" data-act="tr-rmovego" data-v="${v}|${p.planId}"><span class="lt"><b>${esc(planName(p))}</b><small>${nWk((p.routines || []).length)}</small></span><span class="le">›</span></button>`).join('')}</div>`, 'Move to which plan?');
+    case 'tr-rmovego': { const [rid, pid] = v.split('|'), p = (t.shelf || []).find(x => x.planId === pid), i = t.routines.findIndex(x => x.id === rid); if (!p || i < 0) return; const nx = nextRoutine(), [r] = t.routines.splice(i, 1); p.routines = [...(p.routines || []), r]; t.next = Math.max(0, nx && nx.id !== rid ? t.routines.indexOf(nx) : 0); X.saveSettings(); X.closeSheet(); X.toast(`Moved to ${planName(p)}.`); return X.draw(); }
+    case 'tr-rdel': { if (S.trDel !== 'r' + v) { S.trDel = 'r' + v; if (b) { b.querySelector('b').textContent = 'Tap again to delete'; } return; } S.trDel = null; const nx = nextRoutine(); t.routines = t.routines.filter(x => x.id !== v); t.next = Math.max(0, nx && nx.id !== v ? t.routines.indexOf(nx) : 0); X.saveSettings(); X.closeSheet(); X.toast('Workout deleted from the plan.'); return X.draw(); }
+    case 'tr-addw': return openAddW();
+    case 'tr-addpast': return openPastPick();
+    case 'tr-addpastgo': { const w = S.days[v] && S.days[v].wo; if (!w) return; await loadDB(); const r = routineFromWo(w); t.routines.push(r); X.saveSettings(); X.draw(); X.toast(`${r.name} added to your plan.`); return openEdit(r.id); }
+    // plans
+    case 'tr-plans': return openPlans();
+    case 'tr-puse': { if (active()) return X.toast('Finish the workout first.'); shelve(t); if (!unshelve(t, v)) return; X.saveSettings(); X.closeSheet(); X.toast(`Now using ${planName(t)}.`); return X.draw(); }
+    case 'tr-pmenu': return openPMenu(v);
+    case 'tr-pren': { const p = v === '*' ? t : (t.shelf || []).find(x => x.planId === v); if (!p) return; const n = prompt('Plan name', planName(p)); if (n == null || !n.trim()) return; p.planName = n.trim().slice(0, 40); X.saveSettings(); X.draw(); return openPlans(); }
+    case 'tr-pdup': { const p = v === '*' ? t : (t.shelf || []).find(x => x.planId === v); if (!p) return; const c = {}; PLAN_KEYS.forEach(k => { if (p[k] != null) c[k] = clone(p[k]); }); c.planId = newId('P'); c.planName = planName(p) + ' (copy)'; c.routines = (c.routines || []).map(r => ({ ...r, id: newId('C-') })); t.shelf = [...(t.shelf || []), c]; X.saveSettings(); X.toast(`${c.planName} added to My plans.`); return openPlans(); }
+    case 'tr-pdel': { if (S.trDel !== 'p' + v) { S.trDel = 'p' + v; if (b) { b.querySelector('b').textContent = 'Tap again to delete'; } return; } S.trDel = null; t.shelf = (t.shelf || []).filter(x => x.planId !== v); X.saveSettings(); X.toast('Plan deleted.'); return openPlans(); }
+    // workout editor
+    case 'tr-emenu': return openEMenu(+v);
+    case 'tr-eback': return drawEdit();
+    case 'tr-erep': await loadDB(); return openSwap(+v, 'edit');
+    case 'tr-emv': { const r = S.trEdit, [i, dl] = v.split(':').map(Number), k = i + dl; if (k >= 0 && k < r.ex.length) { mv(r.ex, i, k); normSS(r.ex); } return drawEdit(); }
+    case 'tr-enote': { const e = S.trEdit.ex[+v], n = prompt('Note for this exercise. It shows every time you do this workout.', e.note || ''); if (n != null) { if (n.trim()) e.note = n.trim().slice(0, 140); else delete e.note; } return drawEdit(); }
+    case 'tr-erestv': { const [i, sec] = v.split(':').map(Number), e = S.trEdit.ex[i]; if (sec < 0) { delete e.restU; } else { e.rest = sec; e.restU = 1; } return drawEdit(); }
+    case 'tr-estype': { const [i, j] = v.split(':').map(Number), x = S.trEdit.ex[i].sp[j], seq = ['', 'w', 'd', 'f']; x.t = seq[(seq.indexOf(x.t || '') + 1) % 4]; return drawEdit(); }
+    case 'tr-esrm': { const [i, j] = v.split(':').map(Number), sp = S.trEdit.ex[i].sp; if (sp.length < 2) return X.toast('Keep at least one set. Remove the exercise from ⋯ instead.'); sp.splice(j, 1); return drawEdit(); }
+    case 'tr-esadd': { const sp = S.trEdit.ex[+v].sp, l = sp[sp.length - 1] || {}; sp.push({ t: l.t === 'w' ? '' : (l.t || ''), kg: l.kg ?? null, lo: l.lo || 8, hi: l.hi || 12 }); return drawEdit(); }
+    case 'tr-ecancel': { if (editDirty() && !confirm('Discard your changes to this workout?')) return; S.trEdit = null; return X.closeSheet(); }
+    // logged workouts
+    case 'tr-wsave': { const w = S.days[v] && S.days[v].wo; if (!w || !t.routines) return; await loadDB(); const r = routineFromWo(w); t.routines.push(r); X.saveSettings(); X.closeSheet(); X.toast(`Saved to your plan as ${r.name}.`); return X.draw(); }
+    case 'tr-werep': await loadDB(); return openSwap(+v, 'wedit');
+    case 'tr-werm': { const w = S.days[S.trWE].wo; if (!confirm(`Remove ${exName(w.ex[+v])} from this workout?`)) return; w.ex.splice(+v, 1); X.saveDay(S.trWE); X.draw(); return openWEdit(S.trWE); }
+    case 'tr-weadd': { const e = S.days[S.trWE].wo.ex[+v], l = [...e.sets].reverse().find(x => !isW(x)) || {}; e.sets.push({ done: true, ...(l.kg != null ? { kg: l.kg } : {}), ...(l.r != null ? { r: l.r } : {}) }); X.saveDay(S.trWE); return openWEdit(S.trWE); }
+    case 'tr-weaddex': return openLibPick('wedit');
+    // after Finish: keep today's changes in the plan?
+    case 'tr-upd': {
+      const u = S.trUpd; if (!u) return; const w = S.days[u.date].wo, r = t.routines && t.routines.find(x => x.id === w.rid);
+      if (v === 'update' && r) { r.ex = shapeToEx(u.shape, r.ex); X.saveSettings(); X.toast(`${r.name} updated.`); }
+      if (v === 'new') { const n = prompt('Name for this workout', w.rid ? `${w.name} (new)` : 'My workout'); if (n == null) return; const nr = { id: newId('C-'), name: n.trim().slice(0, 40) || 'My workout', ex: shapeToEx(u.shape, r && r.ex) }; t.routines.push(nr); X.saveSettings(); X.toast(`${nr.name} saved to your plan.`); }
+      S.trUpd = null; X.draw(); return openSummary(u.date);
+    }
     case 'tr-ladder': {
       const [dt, i, k, id] = v.split(':'), w = S.days[dt] && S.days[dt].wo, e = w && w.ex[+i], r = w && t.routines && t.routines.find(x => x.id === w.rid), re = r && r.ex.find(x => x.id === e.id);
       if (!re) { X.toast('That exercise isn’t in your plan anymore.'); return; }
@@ -830,11 +1094,21 @@ export async function act(a, v, b) {
     case 'tr-wizback': S.trWiz.step = Math.max(0, S.trWiz.step - 1); return X.draw();
     case 'tr-wizdone': {
       await loadDB(); const w = S.trWiz, place = w.place || 'gym';
+      if (w.how && w.how !== 'auto') {
+        const base = { ...(t || {}) }; delete base.planName; delete base.planId;
+        let routines = [], name = 'My plan', split = 'own';
+        if (w.how === 'tpl') { const tp = PG.TEMPLATES.find(x => x[0] === (w.tpl || 'fb3')) || PG.TEMPLATES[0]; routines = PG.fromTemplate(tp[0], cfgOf(t), exf); name = tp[1]; split = 'tpl'; }
+        if (w.how === 'past') { const pw = S.days[w.past] && S.days[w.past].wo; if (!pw) return X.toast('Pick a workout first.'); routines = [routineFromWo(pw)]; }
+        S.settings.train = { ...(base.gear ? {} : { place: 'gym', gear: PG.FULL_GYM, ctx: 'gym', goal: 'muscle', level: 'some' }), ...base, routines, next: 0, split, planName: name, planId: newId('P'), cardio: base.cardio || cardioDefault(base.goal || 'muscle') };
+        S.trWiz = null; X.saveSettings(); X.draw(); window.scrollTo(0, 0);
+        if (w.how === 'own') { X.toast('Your plan is ready. Add your first workout.'); return openEdit('new'); }
+        return X.toast(`${name} is ready. Tap ⋯ on any workout to change it.`);
+      }
       const homeG = place === 'gym' ? null : [...new Set((w.gear || []).filter(x => x !== 'anchor').concat((w.gear || []).includes('bands') && w.wt.anchor !== 'none' ? ['anchor'] : []))];
       const gear = place === 'home' ? homeG : PG.FULL_GYM, ctx = place === 'home' ? PG.ctxOf(gear) : 'gym', split = w.split || PG.recSplit(w.days);
       const cfg = { gear, ctx, wt: w.wt, goal: w.goal, level: w.level, days: w.days, len: w.len || 60, split };
-      const old = { ...(t || {}) }; delete old.homeGear; delete old.restDefault;
-      S.settings.train = { ...old, v: 2, place, gear, ...(place === 'both' ? { homeGear: homeG } : {}), wt: w.wt, ctx, equip: place === 'gym' ? 'gym' : 'home', goal: w.goal, level: w.level, days: w.days, len: cfg.len, split, routines: PG.makePlan(cfg, exf), next: 0, cardio: (t && t.cardio) || cardioDefault(w.goal) };
+      const old = { ...(t || {}) }; delete old.homeGear; delete old.restDefault; delete old.planName; delete old.planId;
+      S.settings.train = { ...old, v: 2, place, gear, ...(place === 'both' ? { homeGear: homeG } : {}), wt: w.wt, ctx, equip: place === 'gym' ? 'gym' : 'home', goal: w.goal, level: w.level, days: w.days, len: cfg.len, split, routines: PG.makePlan(cfg, exf), next: 0, planId: newId('P'), cardio: (t && t.cardio) || cardioDefault(w.goal) };
       if (t && t.restDefault != null) S.settings.train.restDefault = t.restDefault;
       const nd = PG.SPLITS[split].days, wd = WEEKDAYS[nd] || WEEKDAYS[3], kind = 'gym', plan = { ...(S.settings.plan || C.DEFAULT_PLAN) };
       const have = Object.values(plan).filter(x => x === 'gym' || x === 'cali').length;
@@ -845,8 +1119,9 @@ export async function act(a, v, b) {
       await loadDB(); S.settings.train = { ...(t || { equip: 'gym', goal: 'fat', level: 'some' }), days: 5, split: 'lyfta', routines: lyftaRoutines(), next: 0, cardio: { on: true, min: 15, mode: 'Walking_Treadmill', kind: 'z2', ...((t && t.cardio) || {}), on: true } };
       S.trWiz = null; X.saveSettings(); X.toast('ULTIMATE PPL/UL is your plan. Cardio after each workout is on.'); return X.draw();
     }
-    case 'tr-redo': { if (!confirm('Make a new plan? Your workout history stays.')) return; S.trWiz = { step: 0, place: t.place || (t.equip === 'gym' || !t.equip ? 'gym' : 'home'), gear: [...(t.homeGear || (t.place === 'home' ? t.gear : null) || (t.equip === 'db' ? ['db', 'bench'] : t.equip === 'home' ? [] : PG.PRESETS.home))], wt: t.wt || { db: 20, dbAdj: true, bb: 60, bands: ['l', 'm', 'h'], anchor: 'door' }, goal: t.goal || 'muscle', level: t.level || 'some', days: t.days && t.days >= 2 && t.days <= 6 ? t.days : 3, len: t.len || 60, split: null }; S.settings.train = { ...t, routines: null }; X.saveSettings(); return X.draw(); }
-    case 'tr-start': { await loadDB(); const r = t.routines.find(x => x.id === v) || nextRoutine(); if (wo() && wo().t1 && !wo().imported && !confirm('You already finished a workout today. Start another?')) return; return startWorkout(r, S.trPlace); }
+    case 'tr-redo': { if (active()) return X.toast('Finish the workout first.'); shelve(t); S.trWiz = { step: 0, how: 'auto', tpl: 'fb3', place: t.place || (t.equip === 'gym' || !t.equip ? 'gym' : 'home'), gear: [...(t.homeGear || (t.place === 'home' ? t.gear : null) || (t.equip === 'db' ? ['db', 'bench'] : t.equip === 'home' ? [] : PG.PRESETS.home))], wt: t.wt || { db: 20, dbAdj: true, bb: 60, bands: ['l', 'm', 'h'], anchor: 'door' }, goal: t.goal || 'muscle', level: t.level || 'some', days: t.days && t.days >= 2 && t.days <= 6 ? t.days : 3, len: t.len || 60, split: null }; S.settings.train = { ...t, routines: null }; X.saveSettings(); X.closeSheet(); window.scrollTo(0, 0); if ((t.shelf || []).length) X.toast('Your current plan is kept under My plans.'); return X.draw(); }
+    case 'tr-wizcancel': { const sh = t.shelf || []; if (!sh.length) return; unshelve(t, sh[sh.length - 1].planId); S.trWiz = null; X.saveSettings(); return X.draw(); }
+    case 'tr-start': { if (!armed(b, a + v)) return; X.closeSheet(); await loadDB(); const r = t.routines.find(x => x.id === v) || nextRoutine(); if (!r) return; if (wo() && wo().t1 && !wo().imported && !confirm('You already finished a workout today. Start another?')) return; return startWorkout(r, S.trPlace); }
     case 'tr-pick': return sheet(`<div class="card list2 flat">${t.routines.map((r, i) => `<button class="lrow" data-act="tr-setnext" data-v="${r.id}"><span class="lic">${i + 1}</span><span class="lt"><b>${esc(r.name)}</b><small>${esc(focusOf(r))}</small></span></button>`).join('')}</div>`, 'Pick today’s workout');
     case 'tr-setnext': t.next = t.routines.findIndex(r => r.id === v); X.saveSettings(); X.closeSheet(); return X.draw();
     case 'tr-go': { const w = active(); w.cur = +v; X.saveDay(D()); X.draw(); window.scrollTo(0, 0); return; }
@@ -862,7 +1137,7 @@ export async function act(a, v, b) {
     case 'tr-restpick': return openRestPick(v);
     case 'tr-rv': S.trRest.v = +v; return drawRestPick();
     case 'tr-rall': S.trRest.all = v === '1'; return drawRestPick();
-    case 'tr-rsave': { const r = S.trRest; if (r.all || r.id === '*') { if (r.v < 0) delete t.restDefault; else t.restDefault = r.v; if (r.id !== '*' && t.restBy) delete t.restBy[r.id]; } else t.restBy = { ...(t.restBy || {}), [r.id]: r.v }; X.saveSettings(); X.closeSheet(); X.toast(`Rest set to ${r.v < 0 ? 'auto' : r.v ? mmss(r.v) : 'off'}${r.all || r.id === '*' ? ' for all exercises' : ''}.`); return X.draw(); }
+    case 'tr-rsave': { const r = S.trRest; if (r.all || r.id === '*') { if (r.v < 0) delete t.restDefault; else t.restDefault = r.v; if (r.id !== '*' && t.restBy) delete t.restBy[r.id]; } else { t.restBy = { ...(t.restBy || {}), [r.id]: r.v }; const aw = active(); if (aw) aw.ex.forEach(z => { if (z.id === r.id) delete z.restU; }); if (aw) X.saveDay(D()); } X.saveSettings(); X.closeSheet(); X.toast(`Rest set to ${r.v < 0 ? 'auto' : r.v ? mmss(r.v) : 'off'}${r.all || r.id === '*' ? ' for all exercises' : ''}.`); return X.draw(); }
     case 'tr-smenu': { const [i, j] = v.split(':').map(Number); return openSetMenu(i, j); }
     case 'tr-stype': { const [i, j] = S.trSM, s = active().ex[i].sets[j]; if (v) s.t = v; else delete s.t; X.saveDay(D()); X.closeSheet(); return X.draw(); }
     case 'tr-rpe': { const [i, j] = S.trSM, s = active().ex[i].sets[j]; s.rpe = s.rpe === +v ? undefined : +v; if (!s.rpe) delete s.rpe; X.saveDay(D()); X.closeSheet(); return X.draw(); }
@@ -874,13 +1149,21 @@ export async function act(a, v, b) {
     case 'tr-wkg': S.trWarm.kg = Math.max(0, +v); return openWarm(S.trWarm.i);
     case 'tr-addwarm': { const e = active().ex[+v]; e.sets.unshift(...S.trWarmSteps.map(s => ({ t: 'w', kg: s.kg, r: s.r }))); const fw = e.sets.find(s => !isW(s)); if (fw && fw.kg == null) fw.kg = S.trWarm.kg; X.saveDay(D()); X.closeSheet(); X.toast(`${S.trWarmSteps.length} warm-up sets added.`); return X.draw(); }
     case 'tr-note': return openNote(v);
-    case 'tr-swap': await loadDB(); return openSwap(+v);
+    case 'tr-swap': await loadDB(); return openSwap(+v, 'live');
     case 'tr-swapto': {
-      const w = active(), e = w.ex[S.trSwap], old = e.id, cb = $('tr-swaptoday'), today = !cb || cb.checked || w.place === 'home';
-      e.id = v; delete e.nm; e.sets.forEach(s => { if (!s.done) delete s.kg; }); X.saveDay(D());
-      const r = !today && t.routines && t.routines.find(x => x.id === w.rid), re = r && r.ex.find(x => x.id === old);
-      if (re) { re.id = v; delete re.nm; X.saveSettings(); }
-      X.closeSheet(); X.toast(`Swapped to ${ex(v).name}${re ? ' in your plan too' : ' for today'}.`); return X.draw();
+      if (S.trSwapMode === 'edit') { const e = S.trEdit.ex[S.trSwap]; e.id = v; delete e.nm; delete e.pat; return drawEdit(); }
+      if (S.trSwapMode === 'wedit') { const e = S.days[S.trWE].wo.ex[S.trSwap]; e.id = v; delete e.nm; X.saveDay(S.trWE); X.draw(); return openWEdit(S.trWE); }
+      const w = active(), i = S.trSwap, e = w.ex[i], old = e.id, plan = S.trSwapScope === 'plan';
+      if (e.sets.some(x => x.done)) {
+        // the ticked sets stay as the old exercise; the rest move to the new one
+        const left = e.sets.filter(x => !x.done).map(x => (x.t ? { t: x.t } : {}));
+        e.sets = e.sets.filter(x => x.done); e.cut = v;
+        w.ex.splice(i + 1, 0, { id: v, from: old, lo: e.lo, hi: e.hi, ...(e.ss ? { ss: e.ss } : {}), ...(e.restU ? { restU: 1, rest: e.rest || 0 } : {}), sets: left.length ? left : [{}] });
+      } else { e.from = e.from || old; e.id = v; delete e.nm; delete e.pat; e.sets.forEach(x => { delete x.kg; delete x.tk; }); }
+      X.saveDay(D());
+      const r = plan && t.routines && t.routines.find(x => x.id === w.rid), re = r && r.ex.find(x => x.id === old);
+      if (re) { re.id = v; delete re.nm; delete re.pat; X.saveSettings(); if (w.orig) w.orig.forEach(o => { if (o[0] === old) o[0] = v; }); w.ex.forEach(z => { if (z.from === old && z.id === v) delete z.from; }); X.saveDay(D()); }
+      X.closeSheet(); X.toast(`Replaced with ${ex(v).name}${re ? ' here and in your plan' : ' for this workout'}.`); return X.draw();
     }
     case 'tr-exinfo': case 'tr-how': return openExercise(v);
     case 'tr-chart': { const [m, id] = v.split(':'); S.trChart = m; return openExercise(id); }
@@ -889,7 +1172,8 @@ export async function act(a, v, b) {
     case 'tr-eadd': return openLibPick('edit');
     case 'tr-pickex': {
       if (S.trImpFix) { S.trImp.names[S.trImpFix] = { id: v, sc: 1 }; S.trImpFix = null; S.trPick = null; return drawImport(); }
-      if (S.trPick === 'edit' && S.trEdit) { const x = ex(v), iso = x.mech === 'isolation'; S.trEdit.ex.push({ id: v, sets: 3, lo: isTimed(v) ? 20 : iso ? 10 : 8, hi: isTimed(v) ? 45 : iso ? 15 : 12 }); S.trPick = null; return drawEdit(); }
+      if (S.trPick === 'edit' && S.trEdit) { const x = ex(v), iso = x.mech === 'isolation', ne = { id: v, sets: 3, lo: isTimed(v) ? 20 : iso ? 10 : 8, hi: isTimed(v) ? 45 : iso ? 15 : 12 }; ne.sp = spOf(ne); S.trEdit.ex.push(ne); S.trPick = null; return drawEdit(); }
+      if (S.trPick === 'wedit' && S.trWE) { const x = ex(v), iso = x.mech === 'isolation'; S.days[S.trWE].wo.ex.push({ id: v, lo: iso ? 10 : 8, hi: iso ? 15 : 12, sets: [{ done: true }] }); S.trPick = null; X.saveDay(S.trWE); X.draw(); return openWEdit(S.trWE); }
       const w = active(); if (!w) return X.closeSheet();
       const x = ex(v), iso = x.mech === 'isolation'; w.ex.push({ id: v, lo: iso ? 10 : 8, hi: iso ? 15 : 12, sets: [{}, {}, {}] }); w.cur = w.ex.length - 1; S.trPick = null; X.saveDay(D()); X.closeSheet(); return X.draw();
     }
@@ -918,8 +1202,8 @@ export async function act(a, v, b) {
     case 'tr-eup': { const r = S.trEdit, i = +v; if (i > 0) [r.ex[i - 1], r.ex[i]] = [r.ex[i], r.ex[i - 1]]; return drawEdit(); }
     case 'tr-erm': S.trEdit.ex.splice(+v, 1); return drawEdit();
     case 'tr-elink': { const r = S.trEdit, i = +v, a1 = r.ex[i], a2 = r.ex[i + 1]; if (a1.ss && a2.ss === a1.ss) { delete a2.ss; if (!(r.ex[i - 1] && r.ex[i - 1].ss === a1.ss)) delete a1.ss; } else { const g = a1.ss || a2.ss || 'S' + Math.random().toString(36).slice(2, 5); a1.ss = g; a2.ss = g; } return drawEdit(); }
-    case 'tr-esave': { const r = S.trEdit; if (!r.ex.length) return X.toast('Add at least one exercise.'); const i = t.routines.findIndex(x => x.id === r.id); if (i >= 0) t.routines[i] = r; else t.routines.push(r); S.trEdit = null; X.saveSettings(); X.closeSheet(); X.toast('Workout saved.'); return X.draw(); }
-    case 'tr-edel': { if (t.routines.length < 2) return X.toast('Keep at least one workout in your plan.'); if (!confirm('Delete this workout from your plan?')) return; t.routines = t.routines.filter(x => x.id !== S.trEdit.id); t.next = 0; S.trEdit = null; X.saveSettings(); X.closeSheet(); return X.draw(); }
+    case 'tr-esave': { const r = S.trEdit; if (!r.ex.length) return X.toast('Add at least one exercise.'); r.ex.forEach(fromSp); normSS(r.ex); const i = t.routines.findIndex(x => x.id === r.id); if (i >= 0) t.routines[i] = r; else t.routines.push(r); S.trEdit = null; X.saveSettings(); X.closeSheet(); X.toast(`${r.name} saved.`); return X.draw(); }
+    case 'tr-edel': { if (S.trDel !== 'e') { S.trDel = 'e'; if (b) b.textContent = 'Tap again to delete'; return; } S.trDel = null; const nx = nextRoutine(), id = S.trEdit.id; t.routines = t.routines.filter(x => x.id !== id); t.next = Math.max(0, nx && nx.id !== id ? t.routines.indexOf(nx) : 0); S.trEdit = null; X.saveSettings(); X.closeSheet(); X.toast('Workout deleted from the plan.'); return X.draw(); }
     case 'tr-rank': return openRank();
     case 'tr-muscle': return openMuscle(v, ...(MUSW || [X.today(), X.today()]));
     case 'tr-import': await loadDB(); S.trImp = null; return drawImport();
@@ -935,6 +1219,9 @@ export function input(el) {
     w.ex[+i].sets[+j][f] = val; X.saveDay(D()); return true;
   }
   if (el.dataset.woe) { const [dt, i, j, f] = el.dataset.woe.split(':'), s = S.days[dt].wo.ex[+i].sets[+j]; s[f] = el.value === '' ? null : Math.max(0, parseFloat(el.value) || 0); X.saveDay(dt); return true; }
+  if (el.dataset.tres) { const [i, j, f] = el.dataset.tres.split(':'), x = S.trEdit.ex[+i].sp[+j]; x[f] = el.value === '' ? (f === 'kg' ? null : x[f]) : f === 'kg' ? Math.max(0, parseFloat(el.value) || 0) : Math.max(1, parseInt(el.value, 10) || 1); if (f === 'lo' && +x.hi < +x.lo) x.hi = x.lo; return true; }
+  if (el.dataset.wedur) { const dt = el.dataset.wedur, w = S.days[dt].wo, m = parseInt(el.value, 10); if (m > 0) { if (!w.t0) w.t0 = new Date(dt + 'T18:00:00').getTime(); w.t1 = w.t0 + m * 60000; X.saveDay(dt); } return true; }
+  if (el.id === 'tr-sq') { S.trSwapQ = el.value; const r = $('tr-sres'); if (r && DB) r.innerHTML = swapResHTML(); document.querySelectorAll('.swtabs button').forEach(x => x.setAttribute('aria-pressed', !S.trSwapQ && x.dataset.v === S.trSwapTab)); return true; }
   if (el.dataset.tre) { const [i, f] = el.dataset.tre.split(':'); S.trEdit.ex[+i][f] = Math.max(1, parseInt(el.value, 10) || 1); return true; }
   if (el.dataset.trnote) { const t = T(); t.notes = { ...(t.notes || {}), [el.dataset.trnote]: el.value.slice(0, 140) }; if (!t.notes[el.dataset.trnote]) delete t.notes[el.dataset.trnote]; X.saveSettings(); return true; }
   if (el.id === 'tr-wkg') { S.trWarm.kg = Math.max(0, parseFloat(el.value) || 0); return true; }
