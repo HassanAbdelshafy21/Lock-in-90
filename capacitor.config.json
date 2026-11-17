@@ -1,0 +1,9 @@
+{
+  "appId": "io.github.hassanabdelshafy21.lockin90",
+  "appName": "Lock In 90",
+  "webDir": "www",
+  "android": { "allowMixedContent": false },
+  "plugins": {
+    "FirebaseAuthentication": { "skipNativeAuth": true, "providers": ["google.com"] }
+  }
+}

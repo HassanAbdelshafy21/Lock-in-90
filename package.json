@@ -1,1 +1,19 @@
-{ "name": "lock-in-90", "private": true, "type": "module" }
+{
+  "name": "lock-in-90",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "www": "node native/build-www.mjs",
+    "android:init": "node native/build-www.mjs && npx cap add android && node native/patch-android.mjs && npx cap sync android",
+    "android": "node native/build-www.mjs && npx cap sync android && npx cap open android"
+  },
+  "dependencies": {
+    "@capacitor/android": "^8.5.0",
+    "@capacitor/core": "^8.5.0",
+    "@capacitor-firebase/authentication": "^8.3.0",
+    "health-bridge": "file:native/health-bridge"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^8.5.0"
+  }
+}

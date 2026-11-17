@@ -1,5 +1,5 @@
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js';
-import { getAuth, GoogleAuthProvider, signInWithPopup, getRedirectResult, onAuthStateChanged, signOut, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js';
+import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithCredential, getRedirectResult, onAuthStateChanged, signOut, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js';
 import { initializeFirestore, getFirestore, persistentLocalCache, persistentMultipleTabManager, doc, collection, onSnapshot, setDoc, getDoc, deleteDoc, writeBatch, query, where, getDocsFromCache, serverTimestamp, Timestamp } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
 import * as C from './core.js';
 import { trText, addFoodNames } from './i18n.js';
@@ -25,6 +25,9 @@ const REMINDERS = [['morning', '9:00 · Plan for the day'], ['water', 'Every 2 h
 
 const FBV = '10.14.1', fbApp = initializeApp(FIREBASE);
 const auth = getAuth(fbApp);
+// Running inside the Android app (Capacitor) rather than a browser
+const NATIVE = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+const NATIVE_AUTH = () => NATIVE && window.Capacitor.Plugins && window.Capacitor.Plugins.FirebaseAuthentication;
 let db;
 try { db = initializeFirestore(fbApp, { ignoreUndefinedProperties: true, localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }) }); }
 catch (e) { db = getFirestore(fbApp); }
@@ -2134,7 +2137,7 @@ document.addEventListener('click', async ev => {
     case 'signin': return signin();
     case 'signup': return emailAuth(true);
     case 'resetpw': { const em = ($('si-email') && $('si-email').value || '').trim(); if (!em) return toast('Type your email above first.'); try { await sendPasswordResetEmail(auth, em); toast('Reset link sent. Check your email.'); } catch (e) { toast(AUTH_MSG[e && e.code] || 'Couldn’t send the reset email.'); } return; }
-    case 'signout': S.unsub.forEach(u => u()); S.unsub = []; S.photosOn = false; S.photos = {}; if (S.boardUnsub) S.boardUnsub(); S.boardUnsub = null; S.boardCode = null; S.board = {}; S.boardLast = null; await signOut(auth); return;
+    case 'signout': S.unsub.forEach(u => u()); S.unsub = []; S.photosOn = false; S.photos = {}; if (S.boardUnsub) S.boardUnsub(); S.boardUnsub = null; S.boardCode = null; S.board = {}; S.boardLast = null; await signOut(auth); if (NATIVE_AUTH()) NATIVE_AUTH().signOut().catch(() => { }); return;
     case 'tab': return go(v);
     case 'jump': { if (v.startsWith('sec-') && S.view === 'today') { S.panel = v.slice(4); return draw(); } const el = $(v); if (el) el.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' }); return; }
     case 'wmode': { const keep = ['w-start', 'w-water', 'w-weight', 'w-goal'].map(id => [id, $(id) && $(id).value]); S.wMode = v; draw(); keep.forEach(([id, val]) => { if ($(id) && val != null) $(id).value = val; }); return; }
@@ -2577,6 +2580,20 @@ async function importBackup(file) {
 
 /* ---------- auth + data ---------- */
 async function signin() {
+  // Google blocks its sign-in page inside app WebViews, so the Android app signs in natively and hands the token to Firebase JS.
+  if (NATIVE_AUTH()) {
+    try {
+      const r = await NATIVE_AUTH().signInWithGoogle();
+      const tok = r && r.credential && r.credential.idToken;
+      if (!tok) return toast('Google sign-in didn’t finish. Try again or use email.');
+      await signInWithCredential(auth, GoogleAuthProvider.credential(tok));
+    } catch (e) {
+      const m = String((e && (e.message || e.code)) || '');
+      if (/cancel/i.test(m)) return;
+      console.warn('native sign-in', e); toast('Google sign-in failed. Try email sign-in below.');
+    }
+    return;
+  }
   try { await signInWithPopup(auth, new GoogleAuthProvider()); }
   catch (e) {
     const c = e && e.code;
@@ -2799,7 +2816,8 @@ setInterval(render, 60000);
 { const h = location.hash.slice(1); if (VIEWS.includes(h)) S.view = h; if (h === 'water') S.quickWater = true; if (h === 'sport') S.quickSport = true; }
 draw();
 // updates: check whenever the app is opened; when a new version takes over, reload once so it shows straight away
-if ('serviceWorker' in navigator) {
+// (not inside the Android app: there the files ship in the APK, so a service worker would only serve stale copies)
+if ('serviceWorker' in navigator && !NATIVE) {
   const hadCtl = !!navigator.serviceWorker.controller;
   let reloaded = false;
   navigator.serviceWorker.addEventListener('controllerchange', () => { if (hadCtl && !reloaded) { reloaded = true; location.reload(); } });
