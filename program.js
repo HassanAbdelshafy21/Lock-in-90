@@ -115,6 +115,30 @@ export const R_TPL = {
   PULL2: ['Pull B', [['hpull', 'main', 1], ['vpull', 'acc', 1], ['shrug', 'iso'], ['reardelt', 'iso', 1], ['biceps', 'iso', 1], ['hammer', 'iso', 1]]],
   LEGS2: ['Legs B', [['deadlift', 'main'], ['legpress', 'acc', 1], ['lunge', 'acc'], ['hipthrust', 'acc'], ['legcurl', 'iso', 1], ['calf', 'iso', 1]]]
 };
+// extra workouts used only by templates
+Object.assign(R_TPL, {
+  ARN1: ['Chest + back', [['hpush', 'main'], ['hpull', 'main'], ['incpush', 'acc'], ['vpull', 'acc'], ['fly', 'iso'], ['pullover', 'iso'], ['abs', 'iso']]],
+  ARN2: ['Shoulders + arms', [['vpush', 'main'], ['lateral', 'iso'], ['reardelt', 'iso'], ['biceps', 'iso'], ['triover', 'iso'], ['hammer', 'iso'], ['triceps', 'iso']]],
+  ARN3: ['Legs', R_TPL.LEGS[1]],
+  BRCH: ['Chest day', [['hpush', 'main'], ['incpush', 'acc'], ['dips', 'acc'], ['fly', 'iso'], ['incpush', 'acc', 1]]],
+  BRBK: ['Back day', [['deadlift', 'main'], ['vpull', 'acc'], ['hpull', 'acc'], ['hpull', 'acc', 1], ['pullover', 'iso']]],
+  BRSH: ['Shoulder day', [['vpush', 'main'], ['lateral', 'iso'], ['reardelt', 'iso'], ['lateral', 'iso', 1], ['shrug', 'iso']]],
+  BRLG: ['Leg day', R_TPL.LEGS[1]],
+  BRAR: ['Arm day', [['biceps', 'iso'], ['triceps', 'iso'], ['hammer', 'iso'], ['triover', 'iso'], ['biceps', 'iso', 1], ['abs', 'iso']]]
+});
+// ready-made plans to copy and change: [key, name, workouts, note]
+export const TEMPLATES = [
+  ['fb3', 'Full body A · B · C', ['FBA', 'FBB', 'FBC'], '3 days. Every muscle 3 times a week. The best start for most people.'],
+  ['ul4', 'Upper · Lower', ['UA', 'LA', 'UB', 'LB'], '4 days. Every muscle twice a week.'],
+  ['ppl', 'Push · Pull · Legs', ['PUSH', 'PULL', 'LEGS'], '3 days, or run it twice for 6.'],
+  ['ppl6', 'Push · Pull · Legs ×2', ['PUSH', 'PULL', 'LEGS', 'PUSH2', 'PULL2', 'LEGS2'], '6 days. Every muscle twice a week.'],
+  ['arnold', 'Arnold split', ['ARN1', 'ARN2', 'ARN3'], 'Chest + back, shoulders + arms, legs. 3 or 6 days.'],
+  ['bro', 'Bro split', ['BRCH', 'BRBK', 'BRSH', 'BRLG', 'BRAR'], '5 days, one muscle group a day. Each muscle once a week.']
+];
+export function fromTemplate(key, cfg, exf) {
+  const tp = TEMPLATES.find(x => x[0] === key) || TEMPLATES[0], seen = {};
+  return tp[2].map(k => { seen[k] = (seen[k] || 0) + 1; const r = buildRoutine(k, { ...cfg, len: 75 }, exf); if (seen[k] > 1) r.name += ' (2)'; return r; });
+}
 export const SPLITS = {
   fb2: { name: 'Full body A · B', days: 2, r: ['FBA', 'FBB'], why: 'Every muscle twice a week in two sessions.' },
   fb3: { name: 'Full body A · B · C', days: 3, r: ['FBA', 'FBB', 'FBC'], why: 'Every muscle 3 times a week, with fewer sets each time. Rest a day between sessions.' },
