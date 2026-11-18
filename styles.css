@@ -1073,3 +1073,14 @@ details.why{margin-top:6px}
 .wex .spread{align-items:center}.wex .grp{margin:6px 0 0}
 .prow .lt b,.prow .lt{color:var(--ink)}.prow .lt small{color:var(--muted)}
 .plrow{display:flex;align-items:center;gap:8px}.plrow .lt{flex:1;min-width:0}.plrow .state,.plrow .btn,.plrow .more{flex:none}.plrow .more{border:0;background:var(--surface-2);border-radius:10px;width:34px;height:32px;font-size:17px;color:var(--ink-2)}
+/* health band card */
+.band .rd{margin:8px 0 10px;padding-inline-start:18px;font-size:13px;color:var(--ink-2)}.band .rd li{margin:2px 0}
+.kv3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin:10px 0}
+.kv3 div{background:var(--surface-2);border-radius:12px;padding:8px 10px}.kv3 b{display:block;font-size:17px}.kv3 small{color:var(--muted);font-size:11px}
+.hctypes{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 10px}
+.hctypes i{display:inline-block;position:static;width:auto;height:auto;font:600 12px var(--f-body);font-style:normal;border-radius:99px;padding:5px 10px;background:var(--surface-2);color:var(--muted);white-space:nowrap}
+.hctypes i.hc-on{background:var(--good-soft);color:var(--good)}.hctypes i.hc-nd{background:var(--warn-soft);color:var(--warn)}
+.linkb{border:0;background:none;padding:8px 0;font:600 13px var(--f-body);color:var(--ink-2);text-decoration:underline;text-underline-offset:2px}
+.linkb.danger{color:var(--bad);text-decoration:none;display:block}
+.band-l{font-size:12.5px;margin-top:6px}.band-l .linkb{padding:0;font-size:12.5px}
+.privfr{width:100%;height:70vh;border:0;border-radius:14px;background:var(--surface)}

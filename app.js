@@ -4,6 +4,7 @@ import { initializeFirestore, getFirestore, persistentLocalCache, persistentMult
 import * as C from './core.js';
 import { trText, addFoodNames } from './i18n.js';
 import * as TR from './train.js';
+import * as HC from './health.js';
 const APP_VERSION = '34 · build your own plans, edit any workout, replace mid-workout';
 import { EX, POSE, figSVG, YT, LINES, FOODS, COACH_MEALS, DEFAULT_SUPPS, COACH_ENC, SLOTS, CARDIO_MODES } from './data.js';
 import { BRANDS, BRAND_BY_CODE } from './brands.js';
@@ -34,7 +35,7 @@ catch (e) { db = getFirestore(fbApp); }
 
 /* ---------- state ---------- */
 const S = {
-  user: null, authReady: false, settings: null, days: {}, checkins: {}, foods: {}, acts: {}, photos: {}, meta: {},
+  user: null, authReady: false, settings: null, days: {}, health: {}, hc: null, checkins: {}, foods: {}, acts: {}, photos: {}, meta: {},
   got: { settings: false, days: false }, pend: { s: false, d: false }, online: navigator.onLine,
   view: 'today', trainTab: null, phase: null, editDate: null, openMeal: null, confirm: null, deferred: false, unsub: [], photosOn: false, cut: 50, board: {}, boardCode: null, boardUnsub: null, boardLast: null
 };
@@ -87,7 +88,7 @@ function save(path, get, delay = 400) {
   }, delay);
 }
 const busy = path => !!timers[path];
-const SYNCED = ['days/', 'checkins/', 'foods/', 'photos/'];
+const SYNCED = ['days/', 'checkins/', 'foods/', 'photos/', 'health/'];
 const stamp = (path, data) => SYNCED.some(p => path.startsWith(p)) ? { ...data, u: serverTimestamp() } : data;
 function dayDoc(date) {
   const d = S.days[date] || (S.days[date] = { date });
@@ -742,6 +743,7 @@ function progressShell(G) {
 }
 const ME_GROUPS = [
   ['Plan', [['Mode', '🎯'], ['Day and week', '📅'], ['Meal plan', '🍽️'], ['Weekly training', '🏋️'], ['Supplements', '💊'], ['Stamina track', '🚴'], ['Ramadan mode', '☾']]],
+  ['Health', [['Health band', '⌚']]],
   ['Habits', [['If-then plans', '⇢'], ['Reminders', '🔔']]],
   ['Sharing', [['Coach link', '🔗'], ['Strava', '↻']]],
   ['App', [['Data', '⚙️'], ['Restart', '↺']]]
@@ -752,7 +754,7 @@ function meHTML(R) {
   const byTitle = Object.fromEntries(parts.map(p => [title(p), p]));
   if (S.meSec && byTitle[S.meSec]) return `<header class="ph sub2"><button class="back" data-act="mesec" data-v="" aria-label="Back to Me">‹</button><h1>${esc(S.meSec)}</h1></header>` + byTitle[S.meSec];
   const st = S.settings, w = curWeight();
-  const sum = { 'Meal plan': `${kc(C.sumItems((st.meals || []).flatMap(m => m.items || [])).k)} kcal · ${(st.meals || []).length} meals`, 'Supplements': `${(st.supps || []).filter(s => s.req).length} core`, 'Ramadan mode': st.ramadan && st.ramadan.on ? 'On' : 'Off', 'If-then plans': `${(st.ifthen || []).length} saved`, 'Coach link': st.coach ? 'Sharing' : 'Off', 'Reminders': pushState() === 'on' ? 'App notifications on' : st.ntfyTopic ? 'ntfy' : 'Not set up', 'Stamina track': (st.stamina || {}).on === false ? 'Off' : 'On', 'Weekly training': '' };
+  const sum = { 'Health band': bandSum(), 'Meal plan': `${kc(C.sumItems((st.meals || []).flatMap(m => m.items || [])).k)} kcal · ${(st.meals || []).length} meals`, 'Supplements': `${(st.supps || []).filter(s => s.req).length} core`, 'Ramadan mode': st.ramadan && st.ramadan.on ? 'On' : 'Off', 'If-then plans': `${(st.ifthen || []).length} saved`, 'Coach link': st.coach ? 'Sharing' : 'Off', 'Reminders': pushState() === 'on' ? 'App notifications on' : st.ntfyTopic ? 'ntfy' : 'Not set up', 'Stamina track': (st.stamina || {}).on === false ? 'Off' : 'On', 'Weekly training': '' };
   let h = `<header class="ph"><h1>Me</h1><span class="hero-chips">${syncDot()}${TR.rankChip()}${flameChip(R)}</span></header>
   <section class="card me-card"><div class="me-top"><span class="avatar">${esc((boardName() || '?').slice(0, 1).toUpperCase())}</span><span><b>${esc(boardName())}</b><small>${R.tracker ? `Daily tracker · ${R.done} day${R.done === 1 ? '' : 's'} in a row` : `Day ${Math.min(R.dayNum, 90)} of 90 · attempt ${R.attemptNo}`}</small></span></div>
   <div class="me-stats"><span><b class="num">${w ? C.round(w, 1) : '—'}</b><small>kg now</small></span><span><b class="num">${st.goalWeight || '—'}</b><small>kg goal</small></span><span><b class="num">${L(st.waterGoal || 3500)}</b><small>L water</small></span></div>
@@ -1524,6 +1526,7 @@ function setupHTML(R) {
   if (sv) h += `<section class="card"><div class="card-h"><h2>Strava</h2>${sv && sv.ok ? pill('done', 'Connected') : pill('todo', 'Not connected')}</div>
   <p class="hint">${sv && sv.lastSync ? `Last sync ${new Date(sv.lastSync).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}. ${sv.count ? sv.count + ' activities synced.' : ''}` : 'Connects once the Strava step in the setup guide is done. Checks every 30 minutes.'}</p></section>`;
   // account and data
+  h += bandHTML();
   h += `<section class="card"><div class="card-h"><h2>Data</h2></div>
   <div class="row"><button class="btn" data-act="export">Export backup</button><label class="btn" for="imp-file2">Import backup</label><input id="imp-file2" type="file" accept="application/json,.json" hidden></div>
   <div class="setup-r"><span>Language</span><div class="seg" role="group" aria-label="Language"><button data-act="lang" data-v="en" aria-pressed="${LANG() !== 'ar'}">English</button><button data-act="lang" data-v="ar" aria-pressed="${LANG() === 'ar'}">العربية</button></div></div>
@@ -2154,7 +2157,12 @@ document.addEventListener('click', async ev => {
   if (act === 'panel') { S.panel = v; buzz(6); return draw(); }
   if (act === 'panelclose') { S.panel = null; return draw(); }
   if (act === 'ptab') { S.ptab = v; S.panel = null; if (S.view !== 'progress') return go('progress'); window.scrollTo(0, 0); return draw(); }
-  if (act === 'mesec') { S.meSec = v || null; window.scrollTo(0, 0); return draw(); }
+  if (act === 'mesec') { S.meSec = v || null; window.scrollTo(0, 0); if (v === 'Health band') hcRefresh(); return draw(); }
+  if (act === 'hcconnect') return hcConnect();
+  if (act === 'hcsync') return hcSync(3);
+  if (act === 'hcperms' || act === 'hcget') return HC.openSettings().catch(() => toast('Couldn’t open Health Connect.'));
+  if (act === 'hcprivacy') { SH = { scope: 'hcpriv' }; $('sheet').hidden = false; $('sheet').innerHTML = `<div class="sheet" role="dialog" aria-modal="true" aria-label="Privacy"><div class="grab" aria-hidden="true"></div><div class="spread"><h2>Privacy</h2><button class="x" data-act="closesheet" aria-label="Close">×</button></div><iframe class="privfr" src="privacy.html" title="Privacy"></iframe></div>`; return; }
+  if (act === 'hcdel') return hcDelete(b);
   if (act === 'closesheet') { if (SH && TR.closeGuard(SH.scope)) return; return closeSheet(); }
   if (act === 'ftab') { S.ftab = v; return draw(); }
   if (act === 'fstr') { S.fstr = v; return draw(); }
@@ -2560,8 +2568,90 @@ async function saveCheckin() {
   }
   toast('Check-in saved.'); draw();
 }
+/* ---------- health band: Health Connect (Android app) -> users/{uid}/health/{date}, one writer: this phone ---------- */
+const hcLast = () => { try { return +localStorage.getItem(`lk-hc-last:${uid()}`) || 0; } catch (e) { return 0; } };
+const stableStr = o => JSON.stringify(o, (k, v) => v && typeof v === 'object' && !Array.isArray(v) ? Object.fromEntries(Object.keys(v).sort().filter(x => x !== 'u' && x !== 'syncedAt').map(x => [x, v[x]])) : v);
+const agoTxt = ms => { const m = Math.round((Date.now() - ms) / 60000); return m < 1 ? 'just now' : m < 60 ? `${m} min ago` : m < 1440 ? `${Math.round(m / 60)} h ago` : `${Math.round(m / 1440)} days ago`; };
+const hmTxt = m => `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, '0')}`;
+const bandOn = () => !!(S.settings && S.settings.band && S.settings.band.on);
+async function hcRefresh() {
+  if (!HC.supported()) return;
+  try { S.hc = { ...(await HC.status()), at: Date.now() }; } catch (e) { S.hc = { available: 'no', granted: [], err: true }; }
+  render();
+}
+async function hcConnect() {
+  try {
+    const r = await HC.connect(); S.hc = { ...r, at: Date.now() };
+    if (!r.granted.length) { render(); return toast('Nothing was allowed. You can connect again anytime.'); }
+    S.settings.band = { on: true, since: today() }; saveSettings(); render();
+    return hcSync(30); // first time: everything Health Connect allows (about the last 30 days)
+  } catch (e) { console.warn('hc connect', e); toast('Couldn’t open Health Connect.'); }
+}
+async function hcSync(nDays, quiet) {
+  if (!HC.supported() || S.hcBusy || !S.user) return;
+  S.hcBusy = true; if (!quiet) render();
+  try {
+    const end = today(), raw = await HC.read(C.addDays(end, -(nDays - 1)), end), docs = HC.summarize(raw);
+    S.hc = { available: 'yes', granted: raw.granted || [], at: Date.now() };
+    let n = 0;
+    for (const [date, d] of Object.entries(docs)) {
+      if (S.health[date] && stableStr(S.health[date]) === stableStr(d)) continue; // unchanged: no write
+      S.health[date] = d; n++;
+      setDoc(doc(db, up('health/' + date)), { ...fsEnc(clone(d)), syncedAt: Date.now(), u: serverTimestamp() }).catch(e => console.warn('health save', e));
+    }
+    try { localStorage.setItem(`lk-hc-last:${uid()}`, String(Date.now())); } catch (e) { }
+    if (!quiet) toast(n ? `Synced ${n} ${n === 1 ? 'day' : 'days'} from Health Connect.` : 'Already up to date.');
+  } catch (e) {
+    console.warn('hc sync', e);
+    if (!quiet) toast(/PERMISSION/.test((e && (e.code || e.message)) || '') ? 'A Health Connect permission was removed. Connect again.' : 'Couldn’t read Health Connect.');
+  }
+  S.hcBusy = false; render();
+}
+async function hcDelete(b) {
+  if (S.hcDel !== 1) { S.hcDel = 1; if (b) b.textContent = 'Tap again to delete all band data'; setTimeout(() => { S.hcDel = 0; }, 4000); return; }
+  S.hcDel = 0;
+  // a tombstone with no health data in it, so other devices drop their copy too
+  for (const date of Object.keys(S.health)) setDoc(doc(db, up('health/' + date)), { deleted: true, u: serverTimestamp() }).catch(e => console.warn('health delete', e));
+  S.health = {}; S.settings.band = null; saveSettings();
+  try { localStorage.removeItem(`lk-hc-last:${uid()}`); } catch (e) { }
+  toast(HC.supported() ? 'Band data deleted. Health Connect still allows access: tap Permissions to turn it off.' : 'Band data deleted.');
+  render();
+}
+const BAND_TYPES = [['sleep', 'Sleep'], ['hrv', 'HRV'], ['rhr', 'Resting HR'], ['hr', 'Heart rate'], ['spo2', 'Oxygen'], ['temp', 'Temperature'], ['steps', 'Steps'], ['activeKcal', 'Calories'], ['exercise', 'Workouts']];
+const FIELD = { activeKcal: 'kcal' };
+function latest(field) { const ds = Object.keys(S.health).sort().reverse(); for (const d of ds) { const v = S.health[d][field]; if (v != null && !(field === 'sleep' && !v.asleepMin)) return [d, v]; } return [null, null]; }
+function bandKV() {
+  const [sd, sl] = latest('sleep'), [, hv] = latest('hrv'), [, rh] = latest('rhr');
+  if (!sl && !hv && !rh) return '';
+  return `<div class="kv3"><div><b class="num">${sl ? hmTxt(sl.asleepMin) : '—'}</b><small>${sl ? (sd === today() ? 'Sleep last night' : `Sleep · ${fmt(sd)}`) : 'Sleep'}</small></div><div><b class="num">${hv ? Math.round(hv.rmssd) + ' ms' : '—'}</b><small>HRV</small></div><div><b class="num">${rh ? rh.bpm : '—'}</b><small>Resting HR</small></div></div>`;
+}
+function bandSum() {
+  if (HC.supported()) return bandOn() ? (hcLast() ? `Synced ${agoTxt(hcLast())}` : 'Connected') : 'Not connected';
+  return Object.keys(S.health).length ? 'Synced from your phone' : 'Android app';
+}
+function bandHTML() {
+  const head = (state, cls) => `<section class="card band"><div class="card-h"><h2>Health band</h2><span class="state ${cls}">${state}</span></div>`;
+  const priv = extra => `<p class="hint band-l">${extra} <button class="linkb" data-act="hcprivacy">Privacy</button></p>`;
+  if (!HC.supported()) {
+    const has = Object.keys(S.health).length;
+    return head('Android app', 's-todo') + `<p class="hint">Band data comes through Android Health Connect, so it works in the Lock In 90 Android app, not in the browser. Data already synced from your phone shows here too.</p>${has ? bandKV() + `<button class="linkb danger" data-act="hcdel">Delete band data</button>` : ''}${priv('Band data is never shown on the friends board or coach link.')}</section>`;
+  }
+  const hc = S.hc;
+  if (!hc) { if (!S.hcAsked) { S.hcAsked = true; setTimeout(hcRefresh, 0); } }
+  if (hc && hc.available !== 'yes') return head('Needs Health Connect', 's-todo') + `<p class="hint">${hc.available === 'update' ? 'Health Connect needs an update.' : 'Health Connect isn’t installed.'} It’s free from Google and is how your band shares data with this app.</p><button class="btn primary block" data-act="hcget">Get Health Connect</button></section>`;
+  const granted = (hc && hc.granted) || [];
+  if (!bandOn() || (hc && !granted.length)) return head('Not connected', 's-todo') + `<p class="hint">Bring in sleep, recovery and steps from your band through Health Connect. The app only reads; it never changes your health data.</p>
+    <ul class="rd"><li>Sleep and sleep stages</li><li>Heart rate variability and resting heart rate</li><li>Heart rate, oxygen, skin temperature</li><li>Steps, calories and workouts (also from Lyfta)</li></ul>
+    <button class="btn primary block" data-act="hcconnect">Connect Health Connect</button>${priv('You can choose which of these to allow.')}</section>`;
+  const recent = Object.keys(S.health).sort().slice(-3).map(d => S.health[d]);
+  const chip = ([k, l]) => { const f = FIELD[k] || k, ok = granted.includes(k), has = k === 'exercise' || recent.some(d => d[f] != null && !(Array.isArray(d[f]) && !d[f].length)); return `<i class="${!ok ? 'hc-off' : has ? 'hc-on' : 'hc-nd'}">${l}${ok && !has ? ' · no data yet' : !ok ? ' · off' : ''}</i>`; };
+  return head('Connected', 's-done') + `<p class="hint">${S.hcBusy ? 'Syncing…' : hcLast() ? `Synced ${agoTxt(hcLast())}` : 'Not synced yet'} · reads the last 3 days each time you open the app.</p>
+    ${bandKV()}<div class="hctypes">${BAND_TYPES.map(chip).join('')}</div>
+    <div class="row"><button class="btn small" data-act="hcsync"${S.hcBusy ? ' disabled' : ''}>Sync now</button><button class="btn small ghost" data-act="hcperms">Permissions</button></div>
+    <button class="linkb danger" data-act="hcdel">Disconnect and delete band data</button>${priv('Band data is never shown on the friends board or coach link.')}</section>`;
+}
 function exportBackup() {
-  const data = { app: 'lock-in-90', version: 2, exported: new Date().toISOString(), settings: S.settings, days: S.days, checkins: S.checkins, foods: S.foods, photos: S.photos };
+  const data = { app: 'lock-in-90', version: 2, exported: new Date().toISOString(), settings: S.settings, days: S.days, health: S.health, checkins: S.checkins, foods: S.foods, photos: S.photos };
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob([JSON.stringify(data)], { type: 'application/json' }));
   a.download = `lock-in-90-backup-${today()}.json`; document.body.appendChild(a); a.click(); a.remove();
@@ -2572,7 +2662,7 @@ async function importBackup(file) {
   try {
     const j = JSON.parse(await file.text());
     if (j.app !== 'lock-in-90' || !j.settings) return toast('That file isn’t a Lock In 90 backup.');
-    const writes = [['settings/main', j.settings], ...Object.entries(j.days || {}).map(([k, v]) => ['days/' + k, v]), ...Object.entries(j.checkins || {}).map(([k, v]) => ['checkins/' + k, v]), ...Object.entries(j.foods || {}).map(([k, v]) => ['foods/' + k, v]), ...Object.entries(j.photos || {}).map(([k, v]) => ['photos/' + k, v])];
+    const writes = [['settings/main', j.settings], ...Object.entries(j.days || {}).map(([k, v]) => ['days/' + k, v]), ...Object.entries(j.checkins || {}).map(([k, v]) => ['checkins/' + k, v]), ...Object.entries(j.health || {}).map(([k, v]) => ['health/' + k, v]), ...Object.entries(j.foods || {}).map(([k, v]) => ['foods/' + k, v]), ...Object.entries(j.photos || {}).map(([k, v]) => ['photos/' + k, v])];
     for (let i = 0; i < writes.length; i += 400) { const b = writeBatch(db); writes.slice(i, i + 400).forEach(([p, v]) => b.set(doc(db, up(p)), stamp(p, clone(v)))); b.commit().catch(() => toast('Part of the import didn’t save.')); }
     S.settings = clone(j.settings); Object.assign(S.days, clone(j.days || {})); Object.assign(S.checkins, clone(j.checkins || {}));
     toast(`Imported ${Object.keys(j.days || {}).length} days.`); draw();
@@ -2640,12 +2730,14 @@ function subscribe() {
     if (!busy('settings/main')) S.settings = snap.exists() ? fsDec(snap.data()) : null;
     S.pend.s = snap.metadata.hasPendingWrites;
     if (!snap.metadata.fromCache || snap.exists()) S.got.settings = true;
+    if (!S.hcBoot && S.settings && S.settings.band && S.settings.band.on && HC.supported()) { S.hcBoot = true; setTimeout(() => hcSync(hcLast() ? 3 : 30, true), 1500); }
     render();
   }, () => { S.got.settings = true; render(); }));
   syncCol('days', qs => {
     qs.docs.forEach(x => { if (!busy('days/' + x.id)) S.days[x.id] = fsDec(x.data()); });
     S.pend.d = qs.metadata.hasPendingWrites; S.got.days = true; render();
   }, true);
+  syncCol('health', qs => { qs.docs.forEach(x => { const v = fsDec(x.data()); if (v.deleted) delete S.health[x.id]; else S.health[x.id] = v; }); if (S.view === 'me') render(); });
   syncCol('checkins', qs => { qs.docs.forEach(x => { const v = x.data(); if (v.deleted) delete S.checkins[x.id]; else S.checkins[x.id] = v; }); render(); });
   syncCol('foods', qs => { qs.docs.forEach(x => { const v = fsDec(x.data()); if (v.deleted) delete S.foods[x.id]; else S.foods[x.id] = v; }); });
   S.unsub.push(onSnapshot(collection(db, up('activities')), qs => { qs.docs.forEach(x => S.acts[x.id] = x.data()); render(); }));
@@ -2812,7 +2904,11 @@ function go(v) { S.panel = null; S.view = VIEWS.includes(v) ? v : 'today'; if (l
 window.addEventListener('hashchange', () => { const v = location.hash.slice(1); if (v === 'water') { S.quickWater = true; return draw(); } if (v === 'sport') { S.quickSport = true; return draw(); } if (VIEWS.includes(v) && v !== S.view) { S.view = v; draw(); } });
 window.addEventListener('online', () => { S.online = true; render(); });
 window.addEventListener('offline', () => { S.online = false; render(); });
-document.addEventListener('visibilitychange', () => { if (!document.hidden) render(); });
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) return; render();
+  // coming back to the app: pick up what the band uploaded meanwhile (at most every 15 min)
+  if (S.settings && S.settings.band && S.settings.band.on && HC.supported() && Date.now() - hcLast() > 15 * 60e3) hcSync(3, true);
+});
 setInterval(render, 60000);
 { const h = location.hash.slice(1); if (VIEWS.includes(h)) S.view = h; if (h === 'water') S.quickWater = true; if (h === 'sport') S.quickSport = true; }
 draw();
