@@ -17,7 +17,7 @@ One doc per local date. The app's own day (`users/{uid}/days/{date}`) stays sepa
   rhr:  { bpm: 57, src },                   // the day's last resting-HR record
   hr:   { avg: 76, min: 52, max: 148 },     // Health Connect daily aggregate (de-duplicated across apps)
   spo2: { avg: 96.8, min: 92, n, window },
-  temp: { avgC: 34.6, loc: "wrist", n, window },   // skin temperature: compare with your own baseline, not 37 °C
+  temp: { avgC: 34.6, loc: "unknown", n, window },   // skin temperature (the plugin gives no sensor location, so loc is "unknown"): compare with your own baseline, not 37 °C
   steps: 8412,
   kcal: { active: 412, total: 2380 },
   exercise: [{ start: "18:05", min: 62, type: "strength_training", title: "Legs", src: "com.lyfta…" }],

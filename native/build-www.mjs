@@ -14,6 +14,8 @@ if (!existsSync(join(ROOT, 'app.js'))) { console.error('Run this from the repo r
 await rm(OUT, { recursive: true, force: true });
 await mkdir(OUT, { recursive: true });
 for (const f of FILES) await cp(join(ROOT, f), join(OUT, f));
+// @capgo/capacitor-health shows this page from Health Connect's permission dialog (it looks for www/privacypolicy.html)
+await cp(join(ROOT, 'privacy.html'), join(OUT, 'privacypolicy.html'));
 for (const d of DIRS) await cp(join(ROOT, d), join(OUT, d), { recursive: true });
 
 // Firebase: download every module the app imports (and what those import), then point imports at the local copies.

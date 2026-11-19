@@ -1,7 +1,0 @@
-{
-  "name": "health-bridge",
-  "version": "0.1.0",
-  "private": true,
-  "description": "Lock In 90: read-only Health Connect bridge (sleep, HRV, resting HR, SpO2, temperature, steps, calories, exercise).",
-  "capacitor": { "android": { "src": "android" } }
-}
