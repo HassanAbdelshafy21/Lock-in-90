@@ -20,6 +20,19 @@ Firebase console: add Android app, package `io.github.hassanabdelshafy21.lockin9
 `google-services.json` into `android/app/` (git-ignored). Then `npm run android` (opens Android Studio, press Run).
 Later updates: `git pull && npm run android`. On the phone: Me > Health band > Connect.
 
+## Working in WSL (Hassan's setup)
+- Keep the repo in the WSL filesystem (`~/Lock-in-90`), not `/mnt/c`: faster npm/gradle and no line-ending trouble.
+- `npm run android` ends with `cap open android` (opens Android Studio), which does nothing useful in WSL. Use instead:
+  `node native/build-www.mjs && npx cap sync android && cd android && ./gradlew assembleDebug`
+  APK: `android/app/build/outputs/apk/debug/app-debug.apk`.
+- Needs in WSL: Node 22+, JDK 21, Android SDK command-line tools (`ANDROID_HOME`, accept licenses, `platforms;android-36`,
+  `build-tools`). Versions per Capacitor 8 docs; check them if Gradle complains.
+- The debug SHA-1 belongs to the keystore of whoever builds: WSL's `~/.android/debug.keystore` differs from Windows
+  Android Studio's. Register the SHA-1 from the machine that builds (`./gradlew signingReport`) and keep building there,
+  or add both SHA-1s in Firebase.
+- WSL cannot see USB phones. Install with Windows adb: `adb.exe install -r app-debug.apk` (copy the APK to a Windows path
+  first, e.g. `/mnt/c/Users/<you>/Downloads/`), or use wireless debugging, or just copy the APK to the phone.
+
 ## Architecture decisions
 - Capacitor, files bundled in the APK (`native/build-www.mjs` copies app files to `www/` and vendors Firebase into
   `www/vendor/firebase`; `--cdn` skips that). `www/` and `android/` are git-ignored (generated).
