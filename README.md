@@ -32,8 +32,8 @@ One screen for the day. A navy scoreboard shows four rings around the day number
 - **Your own week:** weeks start on the weekday you began (or Saturday, or any day you pick) for the weekly review, focus, muscle sets and cheat meal. The friends league stays Saturday to Friday.
 - **Your day, your clock:** the new day starts at midnight by default, or at Fajr (worked out daily for 20 Egyptian cities) or a set time, so logging at 1 am still counts for the day you're in.
 - **Habits:** a morning commitment, if-then plans for risky moments, a 3-tap reflection after a missed day, a 10-minute craving tool, a sleep goal with a bedtime reminder, and one weekly focus goal.
+- **Fasting today:** a one-tap row on the Today screen for voluntary fasts. Nothing else changes (same meals, same plan, streak intact); the app works out iftar and fajr for Cairo, shows the iftar countdown and paces water between iftar and fajr.
 - **Ramadan mode:** a Suhoor / Iftar / after-Taraweeh plan, water paced from iftar to fajr, and an iftar countdown.
-- **Fasting days:** voluntary fasts on normal days. Pick usual weekdays (Me › Fasting days) or tap Today / Tomorrow on the Today screen; a fasting day uses its own Suhoor / Iftar plan and the Ramadan water window, and still counts for the streak. Times are shared with Ramadan mode.
 
 ## Train
 

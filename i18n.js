@@ -357,14 +357,7 @@ export const AR = {
   "Waist-to-height ratio: {n} (NICE: under {n} is healthy).": "نسبة الوسط للطول: {n} (NICE: أقل من {n} صحي).", "This link is missing its code. Ask for a new link.": "الرابط ناقص الكود. اطلب رابطًا جديدًا.", "This link isn’t active any more. Ask for a new one.": "الرابط لم يعد فعالًا. اطلب واحدًا جديدًا.",
   "Loading…": "جارٍ التحميل…", "Link not active": "الرابط غير فعال", "Couldn’t load right now. Check the connection and refresh.": "تعذّر التحميل الآن. تأكد من الاتصال وأعد التحميل.",
   "≈ {n} kg raw ({n} kg cooked)": "≈ {n} كجم نيء ({n} كجم مطبوخ)", "photo": "صورة", "Saved.": "تم الحفظ.",
-  "Fasting days": "أيام الصيام", "Fasting?": "صايم؟", "Tomorrow": "بكرة", "Iftar time": "وقت الفطار", "Usual fasting days": "أيام الصيام المعتادة", "Fasting day: water from iftar to fajr.": "يوم صيام: الميّه من الفطار للفجر.",
-  "Fasting day: water from iftar to fajr. Best gym time: 60–90 minutes before iftar (light) or 1–2 hours after it (heavy).": "يوم صيام: الميّه من الفطار للفجر. أحسن وقت للجيم: قبل الفطار بساعة لساعة ونص (خفيف) أو بعده بساعة لساعتين (تقيل).",
-  "Switch a day to your Suhoor / Iftar plan.": "حوّل يوم لخطة السحور والفطار.", "Edit the fasting meal plan": "تعديل خطة وجبات الصيام",
-  "For voluntary fasts on normal days. A fasting day switches to its own Suhoor / Iftar plan, paces your water between iftar and fajr, and still counts toward your streak. Pick the weekdays you usually fast, or tap Today or Tomorrow on the Today screen for a one-off like Arafah. Ramadan mode takes over during Ramadan.": "للصيام التطوّع في الأيام العادية. يوم الصيام بيتحوّل لخطة سحور وفطار خاصة بيه، وبيوزّع الميّه بين الفطار والفجر، وبيتحسب ضمن السلسلة. اختار الأيام اللي بتصومها عادةً، أو دوس «النهارده» أو «بكرة» في شاشة النهارده ليوم واحد زي عرفة. وضع رمضان بيشتغل بدالها في رمضان.",
-  "These two times are shared with Ramadan mode. Maghrib moves through the year, so update them when they drift.": "الميعادين دول مشتركين مع وضع رمضان. المغرب بيتغيّر على مدار السنة، فعدّلهم لما يبعدوا.",
-  "Fasting days on. Pick your usual days below, or use Today and Tomorrow on the Today screen.": "أيام الصيام شغّالة. اختار أيامك المعتادة تحت، أو استخدم «النهارده» و«بكرة» في شاشة النهارده.", "Fasting days off. Past days keep what they had.": "أيام الصيام اتقفلت. الأيام اللي فاتت زي ما هي.",
-  "Today is a fasting day.": "النهارده يوم صيام.", "Tomorrow is a fasting day.": "بكرة يوم صيام.", "Today is a normal day.": "النهارده يوم عادي.", "Tomorrow is a normal day.": "بكرة يوم عادي.",
-  "You already logged meals today. They stay in today’s totals, but today’s plan switches to Suhoor / Iftar. Continue?": "إنت سجّلت وجبات النهارده. هتفضل في مجموع النهارده، بس خطة النهارده هتتحوّل لسحور وفطار. تكمّل؟",
+  "Fasting today?": "صايم النهارده؟", "Tap if you are. Meals stay the same.": "دوس لو صايم. الوجبات زي ما هي.", "Iftar time": "وقت الفطار", "Suhoor: fast starts soon": "السحور: الصيام هيبدأ قريب", "Not fasting today.": "مش صايم النهارده.", "Fasting today. Your iftar time is on the Today screen.": "صايم النهارده. ميعاد الفطار على شاشة النهارده.",
 };
 
 // sentences that contain names or lists: [regex, Arabic builder]
@@ -372,6 +365,7 @@ const UNIT = { roll: 'صباع', pigeon: 'حمامة', 'small dish': 'طبق ص�
 export const AR_PATTERNS = [
   [/^Synced (\d+) (min|h|days) ago$/, m => `اتزامن من ${m[1]} ${m[2] === 'min' ? 'دقيقة' : m[2] === 'h' ? 'ساعة' : 'أيام'}`], [/^(\d+) h (\d\d)$/, m => `${m[1]} س ${m[2]}`], [/^([\d.]+) ms$/, m => `${m[1]} مللي ث`],
   [/^Sleep · (.+)$/, m => `النوم · ${m[1]}`],
+  [/^Iftar ≈ (\d\d:\d\d) \(Cairo\) · Fajr (\d\d:\d\d)\. Tap again if you’re not fasting\.$/, m => `الفطار تقريبًا ${m[1]} (القاهرة) · الفجر ${m[2]}. دوس تاني لو مش صايم.`],
   [/^(.+) · (never done|done before|last .+)$/, (m, t) => `${t(m[1])} · ${t(m[2])}`],
   [/^(.+) is ready\. Tap ⋯ on any workout to change it\.$/, (m, t) => `${t(m[1])} جاهزة. دوس ⋯ على أي تمرين عشان تغيّره.`],
   [/^Start (.+)$/, (m, t) => { const x = t(m[1]); return `ابدأ ${x}`; }],

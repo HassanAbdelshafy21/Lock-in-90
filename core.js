@@ -151,29 +151,33 @@ export const inRamadan = (settings, date) => {
   if (!r || !date || !(r.on || r.offFrom) || !r.onSince) return false;
   return date >= (r.from || RAMADAN_DEFAULT.from) && date <= (r.to || RAMADAN_DEFAULT.to) && date >= r.onSince && (!r.offFrom || date < r.offFrom);
 };
-/* Voluntary fasting on normal days (Mondays and Thursdays, Arafah, the white days...). A fasting day uses its own Suhoor / Iftar
-   plan and the Ramadan water window; the iftar and fajr times are shared with Ramadan mode, and Ramadan itself takes precedence.
-   settings.fasting = { on, patLog: { date: [weekday numbers] }, extra: { date: true|false } }.
-   patLog keeps a copy per change date, so changing the weekdays never rewrites earlier days; extra is the one-tap override. */
-export const FAST_MEALS = [{ id: 'f1', name: 'Suhoor', time: '04:00', items: [] }, { id: 'f2', name: 'Iftar', time: '17:30', items: [] }, { id: 'f3', name: 'After iftar', time: '21:00', items: [] }];
-export const fastOf = settings => ({ on: false, patLog: {}, extra: {}, ...((settings && settings.fasting) || {}) });
-export const weekdayOf = date => new Date(date + 'T12:00:00Z').getUTCDay(); // 0 = Sunday, like DAYNAMES
-export function fastPattern(settings, date) {
-  const log = fastOf(settings).patLog, k = Object.keys(log).sort().filter(d => d <= date);
-  return k.length ? log[k[k.length - 1]] || [] : [];
-}
-export function fastingDay(settings, date) {
-  if (!settings || !settings.fasting || !date || inRamadan(settings, date)) return false;
-  const f = fastOf(settings);
-  if (date in f.extra) return f.extra[date] === true;
-  return fastPattern(settings, date).includes(weekdayOf(date));
-}
+/* Fasting on a normal day: one tap on the Today screen (settings.fastDays[date] = true). Nothing else about the day changes:
+   same meals, same plan, still counts for the streak. The app works out iftar (Maghrib) and fajr itself, for Cairo, so it can
+   show the countdown and pace water between iftar and fajr. Ramadan mode has its own manual times and takes precedence. */
+export const fastingDay = (settings, date) => !!(settings && settings.fastDays && date && settings.fastDays[date]) && !inRamadan(settings, date);
 export const isFasting = (settings, date) => inRamadan(settings, date) || fastingDay(settings, date);
+const CAIRO = { lat: 30.0444, lon: 31.2357, tz: 'Africa/Cairo' };
+/* Fajr (sun 19.5 degrees below the horizon, Egyptian General Authority of Survey) and Maghrib (sunset, plus 1 minute) in Cairo, from the
+   NOAA solar equations: within about a minute or two of the printed timetables. Returns { fajr, maghrib } as minutes since local midnight. */
+export function prayerTimes(date, place = CAIRO) {
+  const d = new Date(date + 'T12:00:00Z'), N = Math.floor((d - Date.UTC(d.getUTCFullYear(), 0, 0)) / 864e5), rad = Math.PI / 180;
+  const g = 2 * Math.PI / 365 * (N - 1);
+  const eq = 229.18 * (0.000075 + 0.001868 * Math.cos(g) - 0.032077 * Math.sin(g) - 0.014615 * Math.cos(2 * g) - 0.040849 * Math.sin(2 * g));
+  const dec = 0.006918 - 0.399912 * Math.cos(g) + 0.070257 * Math.sin(g) - 0.006758 * Math.cos(2 * g) + 0.000907 * Math.sin(2 * g) - 0.002697 * Math.cos(3 * g) + 0.00148 * Math.sin(3 * g);
+  const noon = 720 - 4 * place.lon - eq; // UTC minutes
+  const ha = alt => Math.acos((Math.sin(alt * rad) - Math.sin(place.lat * rad) * Math.sin(dec)) / (Math.cos(place.lat * rad) * Math.cos(dec))) / rad * 4;
+  const utc = { fajr: noon - ha(-19.5), maghrib: noon + ha(-0.833) + 1 };
+  // UTC minutes -> minutes past midnight on the Cairo clock (Egypt observes summer time, so ask Intl for the offset on that day)
+  const p = new Intl.DateTimeFormat('en-GB', { timeZone: place.tz, hour: '2-digit', minute: '2-digit', hour12: false }).formatToParts(d);
+  const off = (+p.find(x => x.type === 'hour').value % 24) * 60 + +p.find(x => x.type === 'minute').value - 720; // Cairo clock minus UTC at 12:00Z
+  return { fajr: Math.round(utc.fajr + off), maghrib: Math.round(utc.maghrib + off) };
+}
+export const hmText = m => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
 const hm = s => { const [a, b] = String(s || '').split(':').map(Number); return isNaN(a) ? null : a * 60 + (b || 0); };
 // share of today's drinking window that has passed, for water pace (normal: 08:00-22:00; Ramadan and fasting days: midnight-fajr and iftar-midnight)
 export function waterPace(settings, date, mins) {
   if (!isFasting(settings, date)) return Math.min(1, Math.max(0, (mins - 480) / 840));
-  const r = ramadanOf(settings), fajr = hm(r.fajr) ?? 285, iftar = hm(r.iftar) ?? 1050;
+  const r = ramadanOf(settings), pt = inRamadan(settings, date) ? null : prayerTimes(date), fajr = pt ? pt.fajr : hm(r.fajr) ?? 285, iftar = pt ? pt.maghrib : hm(r.iftar) ?? 1050;
   if (dayStartMode(settings.dayStart) !== 'midnight') return Math.min(1, Math.max(0, mins - iftar) / (1440 + fajr - iftar)); // the day runs iftar -> next Fajr
   const total = fajr + (1440 - iftar);
   return Math.min(1, (Math.min(mins, fajr) + Math.max(0, mins - iftar)) / total);
@@ -183,10 +187,6 @@ export function mealsOn(settings, date) {
   if (inRamadan(settings, date)) {
     const rl = settings.ramadanLog || {}, rk = Object.keys(rl).sort().filter(k => k <= date);
     return rk.length ? rl[rk[rk.length - 1]] || [] : settings.ramadanMeals || RAMADAN_MEALS;
-  }
-  if (fastingDay(settings, date)) {
-    const fl = settings.fastLog || {}, fk = Object.keys(fl).sort().filter(k => k <= date);
-    return fk.length ? fl[fk[fk.length - 1]] || [] : settings.fastMeals || FAST_MEALS;
   }
   const log = settings.planLog || {};
   const keys = Object.keys(log).sort();

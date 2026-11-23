@@ -5,7 +5,7 @@ import * as C from './core.js';
 import { trText, addFoodNames } from './i18n.js';
 import * as TR from './train.js';
 import * as HC from './health.js';
-const APP_VERSION = '35 · fasting days: Suhoor / Iftar plan on any day you choose';
+const APP_VERSION = '35 · fasting button: one tap on Today, iftar countdown';
 import { EX, POSE, figSVG, YT, LINES, FOODS, COACH_MEALS, DEFAULT_SUPPS, COACH_ENC, SLOTS, CARDIO_MODES } from './data.js';
 import { BRANDS, BRAND_BY_CODE } from './brands.js';
 addFoodNames(FOODS); addFoodNames(BRANDS);
@@ -129,13 +129,11 @@ async function pushTest() {
 }
 // the plan editor works on the normal plan or the Ramadan plan
 const editingRamadan = () => S.planEdit === 'ramadan';
-const editingFast = () => S.planEdit === 'fast';
-function planMeals() { const st = S.settings; if (editingRamadan()) return st.ramadanMeals || (st.ramadanMeals = clone(C.RAMADAN_MEALS)); if (editingFast()) return st.fastMeals || (st.fastMeals = clone(C.FAST_MEALS)); return st.meals || (st.meals = []); }
-function setPlanMeals(ms) { if (editingRamadan()) S.settings.ramadanMeals = ms; else if (editingFast()) S.settings.fastMeals = ms; else S.settings.meals = ms; }
+function planMeals() { const st = S.settings; if (editingRamadan()) return st.ramadanMeals || (st.ramadanMeals = clone(C.RAMADAN_MEALS)); return st.meals || (st.meals = []); }
+function setPlanMeals(ms) { if (editingRamadan()) S.settings.ramadanMeals = ms; else S.settings.meals = ms; }
 function savePlan() {
   const st = S.settings;
   if (editingRamadan()) { st.ramadanLog = st.ramadanLog || {}; st.ramadanLog[today()] = clone(st.ramadanMeals); }
-  else if (editingFast()) { st.fastLog = st.fastLog || {}; st.fastLog[today()] = clone(st.fastMeals); }
   else { st.planLog = st.planLog || {}; st.planLog[today()] = clone(st.meals); }
   saveSettings();
 }
@@ -156,7 +154,7 @@ async function restoreCoach() {
   savePlan(); toast('Your coach’s meal plan is back' + ((S.settings.supps || []).length ? ', with your supplements.' : '.')); draw();
 }
 function restorePlanCard(st) {
-  if (editingRamadan() || editingFast() || planHasFood(st.meals)) return '';
+  if (editingRamadan() || planHasFood(st.meals)) return '';
   const lp = lastFullPlan(st); if (!lp) return isOwner() ? `<div class="note2 good restore"><b>Bring back your coach’s plan?</b><span>Your 5 meals and supplement stack, stored privately for your account.</span><button class="btn primary small" data-act="coachrestore">Restore it</button></div>` : '';
   const s = C.sumItems(lp.meals.flatMap(m => m.items || []));
   return `<div class="note2 good restore"><b>Bring back your previous plan?</b><span>${lp.meals.length} meals · ${kc(s.k)} kcal · ${kc(s.p)} g protein, saved ${fmt(lp.k)}</span><button class="btn primary small" data-act="planrestore" data-v="${lp.k}">Restore it</button></div>`;
@@ -723,22 +721,6 @@ function ramadanSetupHTML(st) {
   <p class="hint">Iftar moves from about 17:25 to 17:50 in Cairo over the month; update it weekly so the countdown and water pace stay right.</p>
   ${on ? `<button class="btn small" data-act="planedit" data-v="ramadan">Edit the Ramadan meal plan</button>` : ''}</section>`;
 }
-function fastSetupHTML(st) {
-  const f = C.fastOf(st), r = C.ramadanOf(st), pat = C.fastPattern(st, today()), on = !!f.on;
-  return `<section class="card" id="sec-fast"><div class="card-h"><h2>Fasting days</h2>${pill(on ? 'done' : 'opt', on ? 'On' : 'Off')}</div>
-  <p class="hint">For voluntary fasts on normal days. A fasting day switches to its own Suhoor / Iftar plan, paces your water between iftar and fajr, and still counts toward your streak. Pick the weekdays you usually fast, or tap Today or Tomorrow on the Today screen for a one-off like Arafah. Ramadan mode takes over during Ramadan.</p>
-  <div class="setup-r"><span>Fasting days</span><div class="seg"><button data-act="faston" data-v="1" aria-pressed="${on}">On</button><button data-act="faston" data-v="0" aria-pressed="${!on}">Off</button></div></div>
-  ${on ? `<p class="hint">Usual fasting days</p><div class="seg wide fastdays" role="group" aria-label="Usual fasting days">${[6, 0, 1, 2, 3, 4, 5].map(i => `<button data-act="fastwd" data-v="${i}" aria-pressed="${pat.includes(i)}">${C.DAYNAMES[i].slice(0, 3)}</button>`).join('')}</div>
-  <div class="form"><label>Iftar (Maghrib)<input class="in" type="time" data-ram="iftar" value="${r.iftar}"></label><label>Fajr (fast starts)<input class="in" type="time" data-ram="fajr" value="${r.fajr}"></label></div>
-  <p class="hint">These two times are shared with Ramadan mode. Maghrib moves through the year, so update them when they drift.</p>
-  <button class="btn small" data-act="planedit" data-v="fast">Edit the fasting meal plan</button>` : ''}</section>`;
-}
-function planSwitchHTML(st) {
-  const rOn = (st.ramadan && st.ramadan.on) || editingRamadan(), fOn = C.fastOf(st).on || editingFast();
-  if (!rOn && !fOn) return '';
-  const b = (v, l, on) => `<button data-act="planedit" data-v="${v}" aria-pressed="${on}">${l}</button>`;
-  return `<div class="seg wide" role="group" aria-label="Which plan">${b('normal', 'Normal days', !editingRamadan() && !editingFast())}${fOn ? b('fast', 'Fasting days', editingFast()) : ''}${rOn ? b('ramadan', 'Ramadan', editingRamadan()) : ''}</div>`;
-}
 function ramadanHTML(date) {
   const st = S.settings, t = today(), r = C.ramadanOf(st), n = now(), mins = n.clock * 60 + n.minute;
   const hm = s => { const [a, b] = String(s).split(':').map(Number); return a * 60 + (b || 0); };
@@ -760,7 +742,7 @@ function progressShell(G) {
   return `<div class="seg wide ptabs" role="tablist" aria-label="Progress sections">${PTABS.map(([k, l]) => `<button role="tab" data-act="ptab" data-v="${k}" aria-pressed="${tab === k}">${k === 'chain' && TRK() ? 'Calendar' : l}</button>`).join('')}</div>` + (G[tab] || '');
 }
 const ME_GROUPS = [
-  ['Plan', [['Mode', '🎯'], ['Day and week', '📅'], ['Meal plan', '🍽️'], ['Weekly training', '🏋️'], ['Supplements', '💊'], ['Stamina track', '🚴'], ['Fasting days', '🌙'], ['Ramadan mode', '☾']]],
+  ['Plan', [['Mode', '🎯'], ['Day and week', '📅'], ['Meal plan', '🍽️'], ['Weekly training', '🏋️'], ['Supplements', '💊'], ['Stamina track', '🚴'], ['Ramadan mode', '☾']]],
   ['Health', [['Health band', '⌚']]],
   ['Habits', [['If-then plans', '⇢'], ['Reminders', '🔔']]],
   ['Sharing', [['Coach link', '🔗'], ['Strava', '↻']]],
@@ -772,7 +754,7 @@ function meHTML(R) {
   const byTitle = Object.fromEntries(parts.map(p => [title(p), p]));
   if (S.meSec && byTitle[S.meSec]) return `<header class="ph sub2"><button class="back" data-act="mesec" data-v="" aria-label="Back to Me">‹</button><h1>${esc(S.meSec)}</h1></header>` + byTitle[S.meSec];
   const st = S.settings, w = curWeight();
-  const sum = { 'Health band': bandSum(), 'Meal plan': `${kc(C.sumItems((st.meals || []).flatMap(m => m.items || [])).k)} kcal · ${(st.meals || []).length} meals`, 'Supplements': `${(st.supps || []).filter(s => s.req).length} core`, 'Ramadan mode': st.ramadan && st.ramadan.on ? 'On' : 'Off', 'Fasting days': C.fastOf(st).on ? (C.fastPattern(st, today()).length ? 'On · ' + [6, 0, 1, 2, 3, 4, 5].filter(i => C.fastPattern(st, today()).includes(i)).map(i => C.DAYNAMES[i].slice(0, 3)).join(', ') : 'On') : 'Off', 'If-then plans': `${(st.ifthen || []).length} saved`, 'Coach link': st.coach ? 'Sharing' : 'Off', 'Reminders': pushState() === 'on' ? 'App notifications on' : st.ntfyTopic ? 'ntfy' : 'Not set up', 'Stamina track': (st.stamina || {}).on === false ? 'Off' : 'On', 'Weekly training': '' };
+  const sum = { 'Health band': bandSum(), 'Meal plan': `${kc(C.sumItems((st.meals || []).flatMap(m => m.items || [])).k)} kcal · ${(st.meals || []).length} meals`, 'Supplements': `${(st.supps || []).filter(s => s.req).length} core`, 'Ramadan mode': st.ramadan && st.ramadan.on ? 'On' : 'Off', 'If-then plans': `${(st.ifthen || []).length} saved`, 'Coach link': st.coach ? 'Sharing' : 'Off', 'Reminders': pushState() === 'on' ? 'App notifications on' : st.ntfyTopic ? 'ntfy' : 'Not set up', 'Stamina track': (st.stamina || {}).on === false ? 'Off' : 'On', 'Weekly training': '' };
   let h = `<header class="ph"><h1>Me</h1><span class="hero-chips">${syncDot()}${TR.rankChip()}${flameChip(R)}</span></header>
   <section class="card me-card"><div class="me-top"><span class="avatar">${esc((boardName() || '?').slice(0, 1).toUpperCase())}</span><span><b>${esc(boardName())}</b><small>${R.tracker ? `Daily tracker · ${R.done} day${R.done === 1 ? '' : 's'} in a row` : `Day ${Math.min(R.dayNum, 90)} of 90 · attempt ${R.attemptNo}`}</small></span></div>
   <div class="me-stats"><span><b class="num">${w ? C.round(w, 1) : '—'}</b><small>kg now</small></span><span><b class="num">${st.goalWeight || '—'}</b><small>kg goal</small></span><span><b class="num">${L(st.waterGoal || 3500)}</b><small>L water</small></span></div>
@@ -986,7 +968,7 @@ function todayHTML(R) {
   ${trk ? weekStripHTML(date) : ''}${commitHTML(R, d, date)}</section>`;
   // one lifted card: the most useful thing to do right now
   let lift = date === t ? reflectHTML(R) : '';
-  if (!lift && !st.planNoted && P.pm.length && P.pm.every(m => !(m.items || []).length)) lift = !C.isFasting(st, date) && !lastFullPlan(st) && isOwner() ? `<section class="card setupnudge"><h3>Your meal plan is empty</h3><p class="hint">Bring back your coach’s plan (5 meals and your supplements) in one tap.</p><div class="row"><button class="btn primary" data-act="coachrestore">Restore my coach’s plan</button><button class="btn ghost" data-act="planset">Set up a new one</button></div></section>` : !C.inRamadan(st, date) && lastFullPlan(st) ? `<section class="card setupnudge"><h3>Your meal plan is empty</h3><p class="hint">Bring back the plan you saved on ${fmt(lastFullPlan(st).k)} (${lastFullPlan(st).meals.length} meals), or set up a new one.</p><div class="row"><button class="btn primary" data-act="planrestore" data-v="${lastFullPlan(st).k}">Restore my plan</button><button class="btn ghost" data-act="planset">Set up a new one</button></div></section>` : `<section class="card setupnudge"><h3>Add your ${C.inRamadan(st, date) ? 'Ramadan ' : ''}meal plan</h3><p class="hint">Add your coach’s plan or your own in Me → Meal plan. Then one tap logs a meal and your calorie targets appear. No plan? Log what you eat in each meal.</p><div class="row"><button class="btn primary" data-act="planset">Set up my plan</button><button class="btn ghost" data-act="plannoted">I’ll log as I go</button></div></section>`;
+  if (!lift && !st.planNoted && P.pm.length && P.pm.every(m => !(m.items || []).length)) lift = !C.inRamadan(st, date) && !lastFullPlan(st) && isOwner() ? `<section class="card setupnudge"><h3>Your meal plan is empty</h3><p class="hint">Bring back your coach’s plan (5 meals and your supplements) in one tap.</p><div class="row"><button class="btn primary" data-act="coachrestore">Restore my coach’s plan</button><button class="btn ghost" data-act="planset">Set up a new one</button></div></section>` : !C.inRamadan(st, date) && lastFullPlan(st) ? `<section class="card setupnudge"><h3>Your meal plan is empty</h3><p class="hint">Bring back the plan you saved on ${fmt(lastFullPlan(st).k)} (${lastFullPlan(st).meals.length} meals), or set up a new one.</p><div class="row"><button class="btn primary" data-act="planrestore" data-v="${lastFullPlan(st).k}">Restore my plan</button><button class="btn ghost" data-act="planset">Set up a new one</button></div></section>` : `<section class="card setupnudge"><h3>Add your ${C.inRamadan(st, date) ? 'Ramadan ' : ''}meal plan</h3><p class="hint">Add your coach’s plan or your own in Me → Meal plan. Then one tap logs a meal and your calorie targets appear. No plan? Log what you eat in each meal.</p><div class="row"><button class="btn primary" data-act="planset">Set up my plan</button><button class="btn ghost" data-act="plannoted">I’ll log as I go</button></div></section>`;
   const next = upNextHTML(R, d, date, P);
   h += `<div class="lift">${lift || next}</div>`;
   if (lift && next) h += next;
@@ -1018,10 +1000,10 @@ function todayListHTML(R, date, d, P, line, shown) {
   if (logged.length) { const k = logged.reduce((s, m) => s + C.sumItems(meals[m.id].items || []).k, 0), off = logged.some(m => meals[m.id].status === 'off'); rows.push(row('panel', 'meals', off ? '!' : '✓', off ? 'bad' : 'ok', logged.length === plan.length ? 'All meals logged' : logged.map(m => m.name).join(', '), off ? 'Includes an off-plan meal' : '', `${kc(k)} kcal`)); }
   open.slice(0, 3).forEach(m => rows.push(row('panel', 'meals', esc(String(m.name).replace(/\D/g, '').slice(0, 2) || '•'), '', m.name, m.time || '', (m.items || []).length ? `${kc(C.sumItems(m.items).k)} kcal` : '')));
   if ((d.extras || []).length) rows.push(row('panel', 'meals', '+', '', `${d.extras.length} extra${d.extras.length === 1 ? '' : 's'}`, d.extras.map(x => x.name.split(',')[0]).join(', '), `${kc(d.extras.reduce((s, x) => s + C.itemMacros(x).k, 0))} kcal`));
-  if (date === t && C.fastOf(st).on && !C.inRamadan(st, date)) {
-    const r = C.ramadanOf(st), [ih, im] = r.iftar.split(':').map(Number), mins = now().clock * 60 + now().minute, left = ih * 60 + im - mins, fd = C.fastingDay(st, t), tom = C.addDays(t, 1), ft = C.fastingDay(st, tom);
-    const hint = fd && C.trainType(st, t) === 'gym' ? ' Best gym time: 60–90 minutes before iftar (light) or 1–2 hours after it (heavy).' : '';
-    rows.push(`<div class="lrow static${fd ? ' ram' : ''}"><span class="lic">🌙</span><span class="lt"><b>${esc(fd ? (left > 0 ? `Iftar in ${Math.floor(left / 60)} h ${left % 60} min` : 'Iftar time') : 'Fasting?')}</b><small>${esc(fd ? 'Fasting day: water from iftar to fajr.' + hint : 'Switch a day to your Suhoor / Iftar plan.')}</small></span><div class="seg"><button data-act="fasttoggle" data-v="0" aria-pressed="${fd}">Today</button><button data-act="fasttoggle" data-v="1" aria-pressed="${ft}">Tomorrow</button></div></div>`);
+  if (date === t && !C.inRamadan(st, date)) { // a voluntary fast: one tap, everything else about the day stays the same
+    const fd = C.fastingDay(st, t), pt = C.prayerTimes(t), mins = now().clock * 60 + now().minute, left = pt.maghrib - mins;
+    const title = !fd ? 'Fasting today?' : mins < pt.fajr ? 'Suhoor: fast starts soon' : left > 0 ? `Iftar in ${Math.floor(left / 60)} h ${left % 60} min` : 'Iftar time';
+    rows.unshift(row('fasttoggle', '', '🌙', fd ? 'ram' : '', title, fd ? `Iftar ≈ ${C.hmText(pt.maghrib)} (Cairo) · Fajr ${C.hmText(pt.fajr)}. Tap again if you’re not fasting.` : 'Tap if you are. Meals stay the same.', fd ? '✓' : ''));
   }
   if (C.inRamadan(st, date) && date === t) { const r = C.ramadanOf(st), [ih, im] = r.iftar.split(':').map(Number), mins = now().clock * 60 + now().minute, left = ih * 60 + im - mins; rows.push(row('ramsetup', '', '☾', 'ram', left > 0 ? `Iftar in ${Math.floor(left / 60)} h ${left % 60} min` : 'Iftar time. Ramadan Kareem', `Ramadan day ${C.diffDays(r.from, date) + 1}`, '')); }
   dayPlans(date).forEach(p => rows.push(`<div class="lrow static"><span class="lic">⇢</span><span class="lt"><b>If ${esc(p.when)}</b><small>then ${esc(p.then)}</small></span></div>`));
@@ -1510,7 +1492,7 @@ function setupHTML(R) {
   // meal plan
   const PM = planMeals(), planTot = C.sumItems(PM.flatMap(m => m.items || []));
   h += `<section class="card" id="sec-plan"><div class="card-h"><h2>Meal plan</h2>${pill('todo', `${kc(planTot.k)} kcal · ${kc(planTot.p)} g protein`)}</div>
-  ${planSwitchHTML(st)}<p class="hint">${isOwner() ? 'Your coach’s plan' : 'Your meal plan (from your coach, or your own)'}, in cooked weights. Add the foods and grams for each meal; the totals become your daily calorie and protein targets. When your coach changes it, edit it here: the change applies from today, and earlier days keep the plan they had.</p>${planHistoryHTML(st)}`;
+  ${(st.ramadan && st.ramadan.on) || editingRamadan() ? `<div class="seg wide" role="group" aria-label="Which plan"><button data-act="planedit" data-v="normal" aria-pressed="${!editingRamadan()}">Normal days</button><button data-act="planedit" data-v="ramadan" aria-pressed="${editingRamadan()}">Ramadan</button></div>` : ''}<p class="hint">${isOwner() ? 'Your coach’s plan' : 'Your meal plan (from your coach, or your own)'}, in cooked weights. Add the foods and grams for each meal; the totals become your daily calorie and protein targets. When your coach changes it, edit it here: the change applies from today, and earlier days keep the plan they had.</p>${planHistoryHTML(st)}`;
   h += restorePlanCard(st);
   h += cheatHTML(st) + budgetHTML(st);
   PM.forEach((m, i) => {
@@ -1522,7 +1504,6 @@ function setupHTML(R) {
     <div class="row"><button class="btn small" data-act="mealup" data-v="${m.id}" ${i === 0 ? 'disabled' : ''}>Move up</button><button class="btn small" data-act="mealdown" data-v="${m.id}" ${i === PM.length - 1 ? 'disabled' : ''}>Move down</button><button class="btn small danger" data-act="mealdel" data-v="${m.id}">Delete meal</button></div></div>`;
   });
   h += `<button class="btn" data-act="mealadd">+ Add a meal</button>${shoppingHTML({ meals: PM })}</section>`;
-  h += fastSetupHTML(st);
   h += ramadanSetupHTML(st);
   h += ifThenSetupHTML(st);
   h += coachSetupHTML(st);
@@ -2440,31 +2421,12 @@ document.addEventListener('click', async ev => {
     case 'shareweekimg': return shareWeekImage();
     case 'cheer': { const [to, kind] = v.split(':'); return sendCheer(to, kind); }
     case 'cheersok': { const code = S.settings.group; Object.keys(S.cheers || {}).forEach(id => deleteDoc(doc(db, `groups/${code}/members/${uid()}/cheers/${id}`)).catch(() => { })); S.cheers = {}; break; }
-    case 'planedit': S.planEdit = v; if (v === 'ramadan' || v === 'fast') setTimeout(() => { const el = $('sec-plan'); if (el) el.scrollIntoView({ block: 'start' }); }, 60); break;
+    case 'planedit': S.planEdit = v; if (v === 'ramadan') setTimeout(() => { const el = $('sec-plan'); if (el) el.scrollIntoView({ block: 'start' }); }, 60); break;
     case 'ramon': { const r0 = C.ramadanOf(S.settings); S.settings.ramadan = v === '1' ? { ...r0, on: true, onSince: r0.onSince && !r0.offFrom ? r0.onSince : today(), offFrom: null } : { ...r0, on: false, offFrom: today() }; } if (v === '1' && !S.settings.ramadanMeals) S.settings.ramadanMeals = clone(C.RAMADAN_MEALS); saveSettings(); toast(v === '1' ? 'Ramadan mode on. Add your Ramadan meal plan below.' : 'Ramadan mode off.'); break;
-    case 'faston': {
-      const f = C.fastOf(S.settings), cur = C.fastPattern(S.settings, today()), on = v === '1';
-      S.settings.fasting = { ...f, on, days: on ? f.days || cur : cur, patLog: { ...f.patLog, [today()]: on ? f.days || cur : [] } };
-      if (on && !S.settings.fastMeals) S.settings.fastMeals = clone(C.FAST_MEALS);
-      saveSettings(); toast(on ? 'Fasting days on. Pick your usual days below, or use Today and Tomorrow on the Today screen.' : 'Fasting days off. Past days keep what they had.'); break;
-    }
-    case 'fastwd': {
-      const f = C.fastOf(S.settings), cur = C.fastPattern(S.settings, today()), i = +v, next = cur.includes(i) ? cur.filter(x => x !== i) : [...cur, i].sort();
-      S.settings.fasting = { ...f, days: next, patLog: { ...f.patLog, [today()]: next } }; saveSettings(); break;
-    }
-    case 'fasttoggle': {
-      const t0 = today(), dt = v === '1' ? C.addDays(t0, 1) : t0, f = C.fastOf(S.settings), nv = !C.fastingDay(S.settings, dt);
-      const logged = Object.values((S.days[dt] && S.days[dt].meals) || {}).some(m => m && m.status);
-      if (nv && logged && !confirm('You already logged meals today. They stay in today’s totals, but today’s plan switches to Suhoor / Iftar. Continue?')) break;
-      const extra = { ...f.extra }, byPattern = C.fastPattern(S.settings, dt).includes(C.weekdayOf(dt));
-      if (nv === byPattern) delete extra[dt]; else extra[dt] = nv;
-      S.settings.fasting = { ...f, extra };
-      if (!S.settings.fastMeals) S.settings.fastMeals = clone(C.FAST_MEALS);
-      saveSettings(); toast(nv ? (v === '1' ? 'Tomorrow is a fasting day.' : 'Today is a fasting day.') : (v === '1' ? 'Tomorrow is a normal day.' : 'Today is a normal day.')); break;
-    }
+    case 'fasttoggle': { const t0 = today(), was = C.fastingDay(S.settings, t0), m = { ...(S.settings.fastDays || {}) }; if (was) delete m[t0]; else m[t0] = true; S.settings.fastDays = m; saveSettings(); toast(was ? 'Not fasting today.' : 'Fasting today. Your iftar time is on the Today screen.'); break; }
     case 'ramsetup': go('setup'); setTimeout(() => { const el = $('sec-ramadan'); if (el) el.scrollIntoView({ block: 'start' }); }, 60); return;
     case 'dayview': return openDay(v);
-    case 'planset': S.planEdit = C.inRamadan(S.settings, editDate()) ? 'ramadan' : C.fastingDay(S.settings, editDate()) ? 'fast' : 'normal'; go('setup'); setTimeout(() => { const el = $('sec-plan'); if (el) el.scrollIntoView({ block: 'start' }); }, 60); return;
+    case 'planset': S.planEdit = C.inRamadan(S.settings, editDate()) ? 'ramadan' : 'normal'; go('setup'); setTimeout(() => { const el = $('sec-plan'); if (el) el.scrollIntoView({ block: 'start' }); }, 60); return;
     case 'plannoted': S.settings.planNoted = true; saveSettings(); break;
     case 'sstarter': if (!S.settings.supps.some(s => s.name === v)) { S.settings.supps.push({ id: 's' + Date.now().toString(36), name: v, req: true, am: 'Any time', pm: 'Any time' }); saveSettings(); toast(`${v} added as a core supplement. Tap “core” to make it optional.`); } break;
     case 'quick': return openQuick();
