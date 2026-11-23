@@ -7,7 +7,7 @@ Working preferences: show designs and get approval before building; suggestions 
 explain decisions in detail.
 
 ## Where things stand
-- `main` = v34 (plans, workout editing, replace mid-workout). Not yet merged with `android-health`.
+- `main` = v35 (v34 plans/workout editing + fasting days). `android-health` has main merged in as of v35; the reverse merge waits for the verified APK.
 - `android-health` (head after the Capgo switch) = main + Capacitor shell + Health Connect bridge + Health band card in Me.
 - The Android side has NEVER been compiled or run on a device. First real build is the next step (see below).
 
@@ -32,6 +32,12 @@ Later updates: `git pull && npm run android`. On the phone: Me > Health band > C
   or add both SHA-1s in Firebase.
 - WSL cannot see USB phones. Install with Windows adb: `adb.exe install -r app-debug.apk` (copy the APK to a Windows path
   first, e.g. `/mnt/c/Users/<you>/Downloads/`), or use wireless debugging, or just copy the APK to the phone.
+
+## Fasting days (v35, on main)
+Voluntary fasts on normal days: `settings.fasting = { on, days, patLog: {date: [weekdays]}, extra: {date: bool} }`, own plan in
+`fastMeals`/`fastLog`, logic in `core.js` (`fastingDay`, `isFasting`, `mealsOn`, `waterPace`). Iftar/fajr times are shared with
+Ramadan mode (`settings.ramadan.iftar/fajr`); Ramadan wins when both apply. UI: Me > Fasting days, and a Today/Tomorrow row
+on the Today list. patLog/fastLog mean edits never rewrite past days. `scripts/tick.mjs` shifts water reminders on fasting days.
 
 ## Architecture decisions
 - Capacitor, files bundled in the APK (`native/build-www.mjs` copies app files to `www/` and vendors Firebase into
