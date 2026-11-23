@@ -124,9 +124,9 @@ async function reminders(uid, settings) {
       if (!(day.meals && day.meals[m.id] && day.meals[m.id].status)) await ntfy(A(`Log ${m.name}`, `سجّل ${trl(m.name)}`), A(`${m.name} (${m.time}) isn't logged yet. One tap: As planned.`, `${trl(m.name)} (${m.time}) لم تُسجَّل بعد. نقرة واحدة: حسب الخطة.`), { tags: 'fork_and_knife' });
     }
   }
-  const ram = C.inRamadan(settings, date);
+  const ram = C.inRamadan(settings, date), fastDay = C.isFasting(settings, date);
   const bedM = (() => { const [h, m] = String(settings.bedtime || '23:30').split(':').map(Number); return (isNaN(h) ? 23 * 60 + 30 : h * 60 + (m || 0)) - 30; })();
-  const list = (ram ? LIST.filter(r => r.key !== 'water' && r.key !== 'burner').concat([{ id: 'w20', key: 'water', t: at(20, 0) }, { id: 'w22', key: 'water', t: at(22, 0) }]) : LIST)
+  const list = (fastDay ? LIST.filter(r => r.key !== 'water' && r.key !== 'burner').concat([{ id: 'w20', key: 'water', t: at(20, 0) }, { id: 'w22', key: 'water', t: at(22, 0) }]) : LIST)
     .concat(rm.bedtime === false ? [] : [{ id: 'bed', key: 'bedtime', t: bedM < 0 ? bedM + 1440 : bedM }]);
   for (const r of list) {
     if (rm[r.key] === false || sent.includes(r.id)) continue;

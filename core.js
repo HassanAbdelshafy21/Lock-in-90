@@ -151,10 +151,28 @@ export const inRamadan = (settings, date) => {
   if (!r || !date || !(r.on || r.offFrom) || !r.onSince) return false;
   return date >= (r.from || RAMADAN_DEFAULT.from) && date <= (r.to || RAMADAN_DEFAULT.to) && date >= r.onSince && (!r.offFrom || date < r.offFrom);
 };
+/* Voluntary fasting on normal days (Mondays and Thursdays, Arafah, the white days...). A fasting day uses its own Suhoor / Iftar
+   plan and the Ramadan water window; the iftar and fajr times are shared with Ramadan mode, and Ramadan itself takes precedence.
+   settings.fasting = { on, patLog: { date: [weekday numbers] }, extra: { date: true|false } }.
+   patLog keeps a copy per change date, so changing the weekdays never rewrites earlier days; extra is the one-tap override. */
+export const FAST_MEALS = [{ id: 'f1', name: 'Suhoor', time: '04:00', items: [] }, { id: 'f2', name: 'Iftar', time: '17:30', items: [] }, { id: 'f3', name: 'After iftar', time: '21:00', items: [] }];
+export const fastOf = settings => ({ on: false, patLog: {}, extra: {}, ...((settings && settings.fasting) || {}) });
+export const weekdayOf = date => new Date(date + 'T12:00:00Z').getUTCDay(); // 0 = Sunday, like DAYNAMES
+export function fastPattern(settings, date) {
+  const log = fastOf(settings).patLog, k = Object.keys(log).sort().filter(d => d <= date);
+  return k.length ? log[k[k.length - 1]] || [] : [];
+}
+export function fastingDay(settings, date) {
+  if (!settings || !settings.fasting || !date || inRamadan(settings, date)) return false;
+  const f = fastOf(settings);
+  if (date in f.extra) return f.extra[date] === true;
+  return fastPattern(settings, date).includes(weekdayOf(date));
+}
+export const isFasting = (settings, date) => inRamadan(settings, date) || fastingDay(settings, date);
 const hm = s => { const [a, b] = String(s || '').split(':').map(Number); return isNaN(a) ? null : a * 60 + (b || 0); };
-// share of today's drinking window that has passed, for water pace (normal: 08:00-22:00; Ramadan: midnight-fajr and iftar-midnight)
+// share of today's drinking window that has passed, for water pace (normal: 08:00-22:00; Ramadan and fasting days: midnight-fajr and iftar-midnight)
 export function waterPace(settings, date, mins) {
-  if (!inRamadan(settings, date)) return Math.min(1, Math.max(0, (mins - 480) / 840));
+  if (!isFasting(settings, date)) return Math.min(1, Math.max(0, (mins - 480) / 840));
   const r = ramadanOf(settings), fajr = hm(r.fajr) ?? 285, iftar = hm(r.iftar) ?? 1050;
   if (dayStartMode(settings.dayStart) !== 'midnight') return Math.min(1, Math.max(0, mins - iftar) / (1440 + fajr - iftar)); // the day runs iftar -> next Fajr
   const total = fajr + (1440 - iftar);
@@ -165,6 +183,10 @@ export function mealsOn(settings, date) {
   if (inRamadan(settings, date)) {
     const rl = settings.ramadanLog || {}, rk = Object.keys(rl).sort().filter(k => k <= date);
     return rk.length ? rl[rk[rk.length - 1]] || [] : settings.ramadanMeals || RAMADAN_MEALS;
+  }
+  if (fastingDay(settings, date)) {
+    const fl = settings.fastLog || {}, fk = Object.keys(fl).sort().filter(k => k <= date);
+    return fk.length ? fl[fk[fk.length - 1]] || [] : settings.fastMeals || FAST_MEALS;
   }
   const log = settings.planLog || {};
   const keys = Object.keys(log).sort();
