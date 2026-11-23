@@ -1073,6 +1073,4 @@ details.why{margin-top:6px}
 .wex .spread{align-items:center}.wex .grp{margin:6px 0 0}
 .prow .lt b,.prow .lt{color:var(--ink)}.prow .lt small{color:var(--muted)}
 .plrow{display:flex;align-items:center;gap:8px}.plrow .lt{flex:1;min-width:0}.plrow .state,.plrow .btn,.plrow .more{flex:none}.plrow .more{border:0;background:var(--surface-2);border-radius:10px;width:34px;height:32px;font-size:17px;color:var(--ink-2)}
-.fastdays button{padding:8px 0;font-size:12px;min-width:0}
-.lrow.static .seg{margin-inline-start:auto}.lrow.static .seg button{padding:7px 9px;font-size:12px}
-.lrow.ram.static small{white-space:normal;overflow:visible;text-overflow:clip}
+.lrow.ram small{white-space:normal;overflow:visible;text-overflow:clip}
