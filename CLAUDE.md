@@ -7,7 +7,7 @@ Working preferences: show designs and get approval before building; suggestions 
 explain decisions in detail.
 
 ## Where things stand
-- `main` = v35 (v34 plans/workout editing + fasting days). `android-health` has main merged in as of v35; the reverse merge waits for the verified APK.
+- `main` = v35 (v34 plans/workout editing + one-tap fasting). `android-health` has main merged in as of v35; the reverse merge waits for the verified APK.
 - `android-health` (head after the Capgo switch) = main + Capacitor shell + Health Connect bridge + Health band card in Me.
 - The Android side has NEVER been compiled or run on a device. First real build is the next step (see below).
 
@@ -33,11 +33,13 @@ Later updates: `git pull && npm run android`. On the phone: Me > Health band > C
 - WSL cannot see USB phones. Install with Windows adb: `adb.exe install -r app-debug.apk` (copy the APK to a Windows path
   first, e.g. `/mnt/c/Users/<you>/Downloads/`), or use wireless debugging, or just copy the APK to the phone.
 
-## Fasting days (v35, on main)
-Voluntary fasts on normal days: `settings.fasting = { on, days, patLog: {date: [weekdays]}, extra: {date: bool} }`, own plan in
-`fastMeals`/`fastLog`, logic in `core.js` (`fastingDay`, `isFasting`, `mealsOn`, `waterPace`). Iftar/fajr times are shared with
-Ramadan mode (`settings.ramadan.iftar/fajr`); Ramadan wins when both apply. UI: Me > Fasting days, and a Today/Tomorrow row
-on the Today list. patLog/fastLog mean edits never rewrite past days. `scripts/tick.mjs` shifts water reminders on fasting days.
+## Fasting today (v35, on main)
+A single row at the top of the Today list: tap it when fasting (`settings.fastDays[date] = true`), tap again to undo. Nothing else
+about the day changes (same meals, same plan, streak intact). `core.js`: `fastingDay`, `isFasting`, `prayerTimes(date)`
+(NOAA solar equations for Cairo: fajr 19.5 deg, Maghrib = sunset + 1 min; checked against published EGAS timetables, within ~2 min,
+never early), used by the countdown row and by `waterPace` (water window iftar -> fajr). Ramadan mode keeps its own manual times and
+wins when both apply. `scripts/tick.mjs` shifts water reminders to the evening on fasting days. Cairo is hard-coded: another city
+needs a location setting.
 
 ## Architecture decisions
 - Capacitor, files bundled in the APK (`native/build-www.mjs` copies app files to `www/` and vendors Firebase into
