@@ -285,9 +285,10 @@ const isOwner = () => X.isOwner && X.isOwner();
 export function trainHTML() {
   loadDB();
   const def = !X.S.trainTab && CA() && C.trainType(X.S.settings, D()) === 'cali' && !(active() && !isCaliW(active())) ? 'cali' : 'wo';
-  const tab = X.S.trainTab === 'stamina' || X.S.trainTab === 'cardio' ? 'cardio' : X.S.trainTab === 'lib' ? 'lib' : X.S.trainTab === 'cali' ? 'cali' : X.S.trainTab ? 'wo' : def;
-  let h = `<div class="seg wide trtabs" role="tablist" aria-label="Train sections">${[['wo', 'Workout'], ['cali', 'Calisthenics'], ['cardio', 'Cardio'], ['lib', 'Exercises']].map(([k, l]) => `<button data-act="traintab" data-v="${k}" aria-pressed="${tab === k}">${l}</button>`).join('')}</div>`;
+  const tab = X.S.trainTab === 'stamina' || X.S.trainTab === 'cardio' ? 'cardio' : X.S.trainTab === 'lib' ? 'lib' : X.S.trainTab === 'cali' ? 'cali' : X.S.trainTab === 'prog' ? 'prog' : X.S.trainTab ? 'wo' : def;
+  let h = `<div class="seg wide trtabs" role="tablist" aria-label="Train sections">${[['wo', 'Workout'], ['cali', 'Calisthenics'], ['cardio', 'Cardio'], ['prog', 'Progress'], ['lib', 'Exercises']].map(([k, l]) => `<button data-act="traintab" data-v="${k}" aria-pressed="${tab === k}">${l}</button>`).join('')}</div>`;
   if (tab === 'cardio') return h + X.staminaHTML();
+  if (tab === 'prog') return h + X.musclesView() + `<section class="card list2">${rankRow()}</section>`;
   if (tab === 'lib') return h + libHTML();
   if (tab === 'cali') return h + (active() ? liveHTML(active()) : caliTabHTML());
   if (!T() || !T().routines) return h + setupHTML();

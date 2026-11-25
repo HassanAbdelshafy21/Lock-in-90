@@ -5,7 +5,7 @@ import * as C from './core.js';
 import { trText, addFoodNames } from './i18n.js';
 import * as TR from './train.js';
 import * as HC from './health.js';
-const APP_VERSION = '40 · Background job: late warning and 30-minute timer';
+const APP_VERSION = '41 · Redesign: logo A6, light and dark, Today · Train · Food · Body · You';
 import { EX, POSE, figSVG, YT, LINES, FOODS, COACH_MEALS, DEFAULT_SUPPS, COACH_ENC, SLOTS, CARDIO_MODES } from './data.js';
 import { BRANDS, BRAND_BY_CODE } from './brands.js';
 addFoodNames(FOODS); addFoodNames(BRANDS);
@@ -21,7 +21,9 @@ const FIREBASE = {
 };
 const USDA_KEY = 'cDpNk6dkgCQwwgfqNQrcP8N7W9JmCtQnPNjFQPNP';
 const WATER_OPTS = [3000, 3500, 4000, 4500, 5000, 5500, 6000, 6500, 7000];
-const VIEWS = ['today', 'train', 'progress', 'setup'];
+const VIEWS = ['today', 'train', 'food', 'body', 'setup', 'journey'];
+// old links (#progress, a reminder's tap) land on the screens that replaced Progress
+const viewOf = v => v === 'progress' ? 'journey' : v === 'me' ? 'setup' : v;
 const REMINDERS = [['morning', '9:00 · Plan for the day'], ['water', 'Every 2 h, 11:00–19:00 · Water pace (only if behind)'], ['burner', '15:30 · Fat burner cutoff (only if cap 1 taken)'], ['stamina', '17:00 · Stamina session (stamina days, if not done)'], ['evening', '20:40 · What’s still missing'], ['final', '23:00 · Last hour warning (only if incomplete)'], ['meals', '45 min after each meal time · Log reminder (off by default)'], ['bedtime', '30 min before bedtime · Wind down (sleep goal)'], ['coachAm', 'Morning · Coach briefing (after your band syncs)'], ['coachPm', 'Evening · Coach review (after training)']];
 
 const FBV = '10.14.1', fbApp = initializeApp(FIREBASE);
@@ -69,6 +71,19 @@ function applyLang() {
   if (ar) trNode(document.body);
 }
 new MutationObserver(ms => { if (LANG() !== 'ar') return; ms.forEach(m => m.addedNodes.forEach(trNode)); }).observe(document.body, { childList: true, subtree: true });
+/* theme: 'auto' follows the phone, 'dark' or 'light' forces one (You > Appearance). Kept in localStorage too, so the
+   first paint after a restart (index.html reads it) already has the right colours. */
+const THEME = () => (S.settings && S.settings.theme) || (() => { try { return localStorage.getItem('lk-theme'); } catch (e) { return null; } })() || 'auto';
+const isDark = () => { const t = THEME(); return t === 'dark' || (t !== 'light' && matchMedia('(prefers-color-scheme: dark)').matches); };
+function applyTheme() {
+  const t = THEME(), root = document.documentElement; S.themeOn = t;
+  if (t === 'dark' || t === 'light') root.dataset.theme = t; else delete root.dataset.theme;
+  try { localStorage.setItem('lk-theme', t); } catch (e) { }
+  const dark = isDark(), m = document.querySelector('meta[name=theme-color]'); if (m) m.content = dark ? '#0B0F14' : '#F4F6F8';
+  // Android: dark status-bar icons on the light theme, light icons on the dark one
+  const wn = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.WorkoutNotif;
+  if (wn && wn.bars) wn.bars({ light: !dark }).catch(() => { });
+}
 const graceDay = () => { const st = S.settings, y = C.addDays(today(), -1); if (dsMode() !== 'midnight' || now().hour >= 3 || !st || !st.startDate) return null; const a = st.attemptStart && st.attemptStart > st.startDate ? st.attemptStart : st.startDate; return y >= a ? y : null; };
 const editDate = () => { const g = graceDay(); return S.editDate && S.editDate === g ? g : today(); };
 const uid = () => S.user && S.user.uid;
@@ -209,8 +224,11 @@ document.addEventListener('focusout', () => setTimeout(() => { if (S.deferred) {
 /* ---------- top-level draw ---------- */
 function draw() {
   if (document.documentElement.lang !== (LANG() === 'ar' ? 'ar' : 'en')) applyLang();
-  document.querySelectorAll('.tabs button').forEach(b => b.setAttribute('aria-current', b.dataset.v === S.view ? 'page' : 'false'));
+  if (S.themeOn !== THEME()) applyTheme();
+  const navV = S.view === 'journey' ? 'today' : S.view;
+  document.querySelectorAll('.tabs button').forEach(b => b.setAttribute('aria-current', b.dataset.v === navV ? 'page' : 'false'));
   $('tabs').hidden = !S.user || !S.settings;
+  $('fab').hidden = !S.user || !S.settings || !['today', 'food', 'body'].includes(S.view);
   const m = $('main');
   if (!S.authReady) { $('top').innerHTML = topIdle(); $('top').parentElement.hidden = false; m.innerHTML = `<div class="card hint">Loading…</div>`; return; }
   if (!S.user) { $('top').innerHTML = topIdle(); $('top').parentElement.hidden = false; m.innerHTML = signinHTML(); splashDone(); return; }
@@ -223,8 +241,9 @@ function draw() {
   $('top').innerHTML = ''; $('top').parentElement.hidden = true;
   boardOn(); boardPublish(R); coachPublish(R);
   setTimeout(() => maybeCelebrate(R), 350);
-  if (S.view === 'progress' && S.ptab === 'body') photosOn();
-  m.innerHTML = S.view === 'train' ? pageHead('Train', R) + trainHTML(R) : S.view === 'progress' ? pageHead('Progress', R) + progressHTML(R) : S.view === 'setup' ? meHTML(R) : todayHTML(R);
+  if (S.view === 'body') photosOn();
+  const V = S.view;
+  m.innerHTML = V === 'train' ? pageHead('Train', R) + trainHTML(R) : V === 'food' ? foodHTML(R) : V === 'body' ? bodyViewHTML(R) : V === 'journey' ? journeyHTML(R) : V === 'setup' ? meHTML(R) : todayHTML(R);
   drawPanel();
   if (S.got.days) splashDone();
 }
@@ -752,30 +771,26 @@ function ramadanHTML(date) {
 
 /* ---------- page shells ---------- */
 const pageHead = (title, R) => `<header class="ph"><h1>${esc(title)}</h1><span class="hero-chips">${syncDot()}${TR.rankChip()}${flameChip(R)}</span></header>`;
-const PTABS = [['week', 'Week'], ['muscles', 'Muscles'], ['body', 'Body'], ['chain', 'Chain'], ['friends', 'Friends']];
-function progressShell(G) {
-  const tab = PTABS.some(p => p[0] === S.ptab) ? S.ptab : 'week';
-  return `<div class="seg wide ptabs" role="tablist" aria-label="Progress sections">${PTABS.map(([k, l]) => `<button role="tab" data-act="ptab" data-v="${k}" aria-pressed="${tab === k}">${k === 'chain' && TRK() ? 'Calendar' : l}</button>`).join('')}</div>` + (G[tab] || '');
-}
 const ME_GROUPS = [
-  ['Plan', [['Mode', '🎯'], ['Day and week', '📅'], ['Meal plan', '🍽️'], ['Weekly training', '🏋️'], ['Supplements', '💊'], ['Stamina track', '🚴'], ['Ramadan mode', '☾']]],
-  ['Health', [['Health band', '⌚']]],
-  ['Habits', [['If-then plans', '⇢'], ['Reminders', '🔔']]],
-  ['Sharing', [['Coach link', '🔗'], ['Strava', '↻']]],
-  ['App', [['Data', '⚙️'], ['Restart', '↺']]]
+  ['Your plan', [['Mode', '🎯'], ['Day and week', '📅'], ['Meal plan', '🍽️'], ['Weekly training', '🏋️'], ['Supplements', '💊'], ['Stamina track', '🚴'], ['Ramadan mode', '☾'], ['If-then plans', '⇢']]],
+  ['Optional extras', [['Health band', '⌚'], ['Strava', '↻'], ['Coach', '✦'], ['Coach link', '🔗']]],
+  ['App', [['Reminders', '🔔'], ['Data', '⚙️'], ['Restart', '↺']]]
 ];
+const ME_LABEL = { 'Coach': 'Coach (Claude)', 'Coach link': 'Share with a coach' };
 function meHTML(R) {
   const full = setupHTML(R), parts = full.split(/(?=<section )/).filter(Boolean);
   const title = s => { const m = s.match(/<h2>(.*?)<\/h2>/); return m ? m[1].replace(/&amp;/g, '&') : ''; };
   const byTitle = Object.fromEntries(parts.map(p => [title(p), p]));
-  if (S.meSec && byTitle[S.meSec]) return `<header class="ph sub2"><button class="back" data-act="mesec" data-v="" aria-label="Back to Me">‹</button><h1>${esc(S.meSec)}</h1></header>` + byTitle[S.meSec];
-  const st = S.settings, w = curWeight();
-  const sum = { 'Health band': bandSum(), 'Meal plan': `${kc(C.sumItems((st.meals || []).flatMap(m => m.items || [])).k)} kcal · ${(st.meals || []).length} meals`, 'Supplements': `${(st.supps || []).filter(s => s.req).length} core`, 'Ramadan mode': st.ramadan && st.ramadan.on ? 'On' : 'Off', 'If-then plans': `${(st.ifthen || []).length} saved`, 'Coach link': st.coach ? 'Sharing' : 'Off', 'Reminders': pushState() === 'on' ? 'App notifications on' : st.ntfyTopic ? 'ntfy' : 'Not set up', 'Stamina track': (st.stamina || {}).on === false ? 'Off' : 'On', 'Weekly training': '' };
-  let h = `<header class="ph"><h1>Me</h1><span class="hero-chips">${syncDot()}${TR.rankChip()}${flameChip(R)}</span></header>
+  if (S.meSec && byTitle[S.meSec]) return `<header class="ph sub2"><button class="back" data-act="mesec" data-v="" aria-label="Back to You">‹</button><h1>${esc(ME_LABEL[S.meSec] || S.meSec)}</h1></header>` + byTitle[S.meSec];
+  const st = S.settings, w = curWeight(), sv = S.meta.strava, th = THEME();
+  const sum = { 'Health band': bandOn() ? bandSum() : 'Optional · not connected', 'Meal plan': `${kc(C.sumItems((st.meals || []).flatMap(m => m.items || [])).k)} kcal · ${(st.meals || []).length} meals`, 'Supplements': `${(st.supps || []).filter(s => s.req).length} core`, 'Ramadan mode': st.ramadan && st.ramadan.on ? 'On' : 'Off', 'If-then plans': `${(st.ifthen || []).length} saved`, 'Coach link': st.coach ? 'Sharing' : 'Off', 'Reminders': pushState() === 'on' ? 'App notifications on' : st.ntfyTopic ? 'ntfy' : 'Not set up', 'Stamina track': (st.stamina || {}).on === false ? 'Off' : 'On', 'Weekly training': '', 'Strava': sv && sv.ok ? 'Connected' : 'Optional · not connected', 'Coach': st.aiCoach ? 'On' : 'Optional · off' };
+  const on = { 'Health band': bandOn(), 'Strava': !!(sv && sv.ok), 'Coach': !!st.aiCoach, 'Coach link': !!st.coach };
+  let h = `<header class="ph"><h1>You</h1><span class="hero-chips">${syncDot()}${TR.rankChip()}${flameChip(R)}</span></header>
   <section class="card me-card"><div class="me-top"><span class="avatar">${esc((boardName() || '?').slice(0, 1).toUpperCase())}</span><span><b>${esc(boardName())}</b><small>${R.tracker ? `Daily tracker · ${R.done} day${R.done === 1 ? '' : 's'} in a row` : `Day ${Math.min(R.dayNum, 90)} of 90 · attempt ${R.attemptNo}`}</small></span></div>
   <div class="me-stats"><span><b class="num">${w ? C.round(w, 1) : '—'}</b><small>kg now</small></span><span><b class="num">${st.goalWeight || '—'}</b><small>kg goal</small></span><span><b class="num">${L(st.waterGoal || 3500)}</b><small>L water</small></span></div>
-  <button class="btn block" data-act="mesec" data-v="Challenge">Edit goals and body</button><div class="card list2 flat">${TR.rankRow()}</div></section>`;
-  ME_GROUPS.forEach(([g, items]) => { const its = items.filter(([k]) => byTitle[k]); if (!its.length) return; h += `<h3 class="grp">${g}</h3><section class="card list2">${its.map(([k, ic]) => `<button class="lrow" data-act="mesec" data-v="${esc(k)}"><span class="lic">${ic}</span><span class="lt"><b>${esc(k)}</b>${sum[k] ? `<small>${esc(sum[k])}</small>` : ''}</span><span class="le">›</span></button>`).join('')}</section>`; });
+  <button class="btn block" data-act="mesec" data-v="Challenge">Edit goals and body</button><div class="card list2 flat">${TR.rankRow()}</div></section>
+  <h3 class="grp">Appearance</h3><div class="seg wide themeseg" role="group" aria-label="Appearance">${[['auto', 'Like phone'], ['dark', 'Dark'], ['light', 'Light']].map(([k, l]) => `<button data-act="theme" data-v="${k}" aria-pressed="${th === k}">${l}</button>`).join('')}</div>`;
+  ME_GROUPS.forEach(([g, items]) => { const its = items.filter(([k]) => byTitle[k]); if (!its.length) return; h += `<h3 class="grp">${g}</h3><section class="card list2">${its.map(([k, ic]) => `<button class="lrow${on[k] ? ' on' : ''}" data-act="mesec" data-v="${esc(k)}"><span class="lic">${ic}</span><span class="lt"><b>${esc(ME_LABEL[k] || k)}</b>${sum[k] ? `<small>${esc(sum[k])}</small>` : ''}</span><span class="le">›</span></button>`).join('')}</section>`; });
   return h + `<p class="hint center">Signed in as ${esc(S.user.email || '')} · <button class="link" data-act="signout">Sign out</button><br><span class="num">App version ${APP_VERSION}</span></p>`;
 }
 
@@ -974,22 +989,35 @@ function stravaHTML(sv) {
 }
 // Coach: status, setup steps, and every briefing so far
 function coachMeHTML() {
-  const jb = S.meta.jobs, cm = S.meta.coach, ext = extA();
+  const jb = S.meta.jobs, cm = S.meta.coach, ext = extA(), on = !!S.settings.aiCoach;
   const days = Object.keys(S.brief).sort().reverse().filter(d => S.brief[d].morning || S.brief[d].evening).slice(0, 14);
-  let h = '<section class="card"><div class="card-h"><h2>Coach</h2>' + (!jb ? pill('todo', 'Checking') : !jb.coachToken ? pill('todo', 'Not set up') : cm && cm.ok === false ? pill('todo', 'Problem') : pill('done', 'On')) + '</div>';
-  if (jb && !jb.coachToken) h += '<p class="hint">Claude writes you a short morning briefing (after your band syncs) and an evening review (after training), using your Claude subscription. To turn it on: 1) on your computer run <b>claude setup-token</b> and copy the token. 2) Add it on GitHub as a repository secret named <b>CLAUDE_CODE_OAUTH_TOKEN</b>. Never paste it anywhere else.</p><a class="btn small" href="' + GH + '/settings/secrets/actions/new"' + ext + '>Add the secret on GitHub</a>';
+  let h = `<section class="card"><div class="card-h"><h2>Coach</h2><div class="seg" role="group" aria-label="Coach"><button data-act="aicoach" data-v="1" aria-pressed="${on}">On</button><button data-act="aicoach" data-v="0" aria-pressed="${!on}">Off</button></div></div>`;
+  if (!on) h += '<p class="hint">Optional, off by default. When on, Claude writes you a short morning briefing and an evening review from your log (and your band, if you connect one), using your own Claude subscription. Advice only: it never changes anything in the app.</p>';
+  else if (!jb) h += '<p class="hint">Checking: the background job reports here after its next run.</p>';
+  else if (!jb.coachToken) h +='<p class="hint">Claude writes you a short morning briefing (after your band syncs) and an evening review (after training), using your Claude subscription. To turn it on: 1) on your computer run <b>claude setup-token</b> and copy the token. 2) Add it on GitHub as a repository secret named <b>CLAUDE_CODE_OAUTH_TOKEN</b>. Never paste it anywhere else.</p><a class="btn small" href="' + GH + '/settings/secrets/actions/new"' + ext + '>Add the secret on GitHub</a>';
   else if (cm && cm.ok === false) h += '<p class="safety">The last ' + esc(cm.kind || '') + ' message didn’t go through (' + esc(cm.err || 'unknown') + '). It tries again on the next run. If it keeps failing, make a new token with claude setup-token and replace the secret.</p>';
-  else if (jb) h += '<p class="hint">Morning briefing once your band has synced (5:00–13:00), evening review 30 minutes after a workout or at 21:30. Switch either off in Reminders above. ' + (cm && cm.at ? 'Last message ' + agoMin(cm.at) + '.' : 'No message yet.') + '</p>' + (S.meta.strava && S.meta.strava.ok ? '' : jobLateHTML());
+  else if (jb) h += '<p class="hint">Morning briefing between 5:00 and 13:00 (after your band syncs, if you use one), evening review 30 minutes after a workout or at 21:30. Switch either off in Reminders above. ' + (cm && cm.at ? 'Last message ' + agoMin(cm.at) + '.' : 'No message yet.') + '</p>' + (S.meta.strava && S.meta.strava.ok ? '' : jobLateHTML());
   if (days.length) h += '<div class="coachlog">' + days.map(d => ['evening', 'morning'].filter(k => S.brief[d][k]).map(k => { const m = S.brief[d][k]; return '<details><summary><b>' + esc(m.head) + '</b><small>' + fmt(d) + ' · ' + (k === 'evening' ? 'Evening review' : 'Morning briefing') + '</small></summary><p>' + esc(m.text) + '</p></details>'; }).join('')).join('') + '</div>';
   return h + '</section>';
 }
 function coachHTML(t) {
-  const b = S.brief[t]; if (!b) return '';
+  const b = S.settings.aiCoach && S.brief[t]; if (!b) return '';
   const k = b.evening ? 'evening' : b.morning ? 'morning' : null; if (!k) return '';
   const m = b[k], at = m.at ? new Date(m.at) : null;
-  return `<section class="card coachc${m.rec ? ' rk-' + m.rec.level : ''}"><div class="card-h"><h2>Coach</h2><span class="sub">${k === 'evening' ? 'Evening review' : 'Morning briefing'}${at ? ' · ' + C.pad(at.getHours()) + ':' + C.pad(at.getMinutes()) : ''}</span></div>
-  <p class="coach-h">${esc(m.head)}</p><p>${esc(m.text)}</p><p class="hint">Advice only, from your band and your log.</p></section>`;
+  return `<button class="card coachc${m.rec ? ' rk-' + m.rec.level : ''}" data-act="mesec" data-v="Coach" data-go="setup"><span class="sub"><i aria-hidden="true"></i>Coach · ${k === 'evening' ? 'Evening review' : 'Morning briefing'}${at ? ' · ' + C.pad(at.getHours()) + ':' + C.pad(at.getMinutes()) : ''}</span>
+  <b class="coach-h">${esc(m.head)}</b><span class="ct">${esc(m.text)}</span><small class="hint">Advice only, from your ${bandOn() ? 'band and your ' : ''}log. Tap for past messages.</small></button>`;
 }
+// the four daily goals as one segmented ring (food, water, training, supplements); a goal that isn't yours stays grey
+function ring4(parts, off) {
+  const cls = ['food', 'water', 'train', 'supp'], C4 = 2 * Math.PI * 40, seg = C4 / 4, len = seg - 6;
+  return `<svg viewBox="0 0 96 96" aria-hidden="true">${parts.map((p, i) => { const o = -(i * seg + 3), v = off[i] ? 0 : Math.min(1, Math.max(0, p.v)); return `<circle cx="48" cy="48" r="40" class="r4t" stroke-dasharray="${len.toFixed(1)} ${(C4 - len).toFixed(1)}" stroke-dashoffset="${o.toFixed(1)}"/>${v > 0 ? `<circle cx="48" cy="48" r="40" class="r4f ${cls[i]}" stroke-dasharray="${(len * v).toFixed(1)} ${(C4 - len * v).toFixed(1)}" stroke-dashoffset="${o.toFixed(1)}"/>` : ''}`; }).join('')}</svg>`;
+}
+const GI = {
+  meals: '<path d="M6 3v6a3 3 0 0 0 6 0V3M9 3v18M17 3c-2 0-3 3-3 7h3v11"/>', water: '<path d="M12 3s6 6.5 6 11a6 6 0 0 1-12 0c0-4.5 6-11 6-11z"/>',
+  train: '<path d="M6 7v10M3 9.5v5M18 7v10M21 9.5v5M6 12h12"/>', supps: '<path d="M10.5 20.5a5 5 0 0 1-7-7l10-10a5 5 0 0 1 7 7zM8.5 8.5l7 7"/>',
+  check: '<path d="M5 12.5l4.5 4.5L19 7.5"/>', plus: '<path d="M12 5v14M5 12h14"/>', play: '<path d="M7 4l13 8-13 8z" fill="currentColor" stroke="none"/>'
+};
+const gIco = (k, w = 2) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${w}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${GI[k]}</svg>`;
 function todayHTML(R) {
   const t = today(), n = now(), grace = graceDay(), date = editDate();
   const st = S.settings, d = S.days[date] || {}, ev = C.evalDay(st, d, date), P = ev.P;
@@ -1014,16 +1042,23 @@ function todayHTML(R) {
     pills.forEach(p => { if (!gl.includes(key[p.k])) p.nogoal = true; });
     if (!P.pm.length) { const k = C.dayTotals(st, d).k, kt = +st.kcalTarget || 0; pills[0] = { ...pills[0], name: 'Food', ok: !(ev.miss.food || []).length, val: `${kc(k)}${kt ? ' / ' + kc(kt) : ''} kcal` }; parts[0] = { v: kt ? Math.min(1, k / kt) : k ? 1 : 0 }; }
   }
-  const center = trk ? `<b class="num">${ev.hit}/${ev.goals.length}</b><span>goals today</span>` : `<b class="num">${dayNo}</b><span>of 90</span>`;
-  const ringLbl = trk ? `${ev.hit} of ${ev.goals.length} goals done today` : `Day ${dayNo} of 90, ${pills.filter(p => p.ok).length} of 4 pillars done`;
-  let h = `<section class="hero${ev.complete ? ' locked' : ''}">
-  <div class="hero-top"><span>${esc(C.DAYNAMES[C.weekday(date)])}, ${fmt(date)}</span><span class="hero-chips">${syncDot()}${TR.rankChip()}${flameChip(R)}</span></div>
+  // header: the date and the day of the challenge (both open Journey), the chain, and You
+  const live = pills.filter(p => !p.nogoal), done = live.filter(p => p.ok).length, togo = live.filter(p => !p.ok);
+  const nameOf = p => p.k === 'meals' ? (trk && !P.pm.length ? 'food' : 'meals') : p.k === 'water' ? 'water' : p.k === 'supps' ? 'supplements' : 'training';
+  const list = togo.map(nameOf), listTxt = list.length > 1 ? list.slice(0, -1).join(', ') + ' and ' + list[list.length - 1] : list[0] || '';
+  const hl = hoursLeft(n);
+  let h = `<header class="dh"><button class="dd" data-act="tab" data-v="journey"><small>${esc(C.DAYNAMES[C.weekday(date)])}, ${fmt(date)}</small><b>${trk ? (date === t ? 'Today' : 'Yesterday') : `Day ${dayNo} <span>of 90</span>`}</b></button>
+  <span class="hc">${syncDot()}${TR.rankChip()}<button class="chipbtn" data-act="tab" data-v="journey" aria-label="Your chain">${flameChip(R)}</button><button class="avbtn" data-act="tab" data-v="setup" aria-label="You">${esc((boardName() || '?').slice(0, 1).toUpperCase())}</button></span></header>
+  ${trk ? '' : `<div class="dbar" role="img" aria-label="Day ${dayNo} of 90"><i style="width:${(dayNo / 90 * 100).toFixed(1)}%"></i></div>`}
+  <section class="card dayc${ev.complete ? ' locked' : ''}" aria-label="Today so far">
   ${(st.usuals || []).length && date === t ? `<div class="qk" role="group" aria-label="Daily, one tap">${st.usuals.slice(0, 3).map((u, i) => { const c = dailyCount(date, u).length; return `<button data-act="dailyadd" data-v="${i}">${usualIcon(u)} ${esc(u.name.split(',')[0].replace(/^Dunkin' /, ''))}${c ? ` <i>✓${c > 1 ? '×' + c : ''}</i>` : ' <i>+</i>'}</button>`; }).join('')}</div>` : ''}
   ${n.late && date === t ? `<span class="until">☾ <span class="num">${C.minTxt(n.clock * 60 + n.minute)}</span> · your day runs until ${esc(dayEndTxt(n))}</span>` : ''}
-  ${grace ? `<div class="hero-seg" role="group" aria-label="Day being edited"><button data-act="editdate" data-v="${grace}" aria-pressed="${date === grace}">Yesterday</button><button data-act="editdate" data-v="${t}" aria-pressed="${date === t}">Today</button></div>` : ''}
-  <div class="hero-row"><div class="rings" role="img" aria-label="${ringLbl}">${ringsSVG(parts, mealsBad)}<div class="rings-c">${center}</div></div>
-  <div class="pills">${pills.map(p => `<button class="pill2 ${p.k}${p.ok ? ' ok' : ''}${p.bad ? ' bad' : ''}${p.nogoal ? ' nogoal' : ''}" data-act="panel" data-v="${p.k}"><i aria-hidden="true"></i><span>${esc(p.name)}</span><em class="num">${p.ok ? '✓ ' : ''}${esc(p.val)}</em></button>`).join('')}</div></div>
-  ${trk ? weekStripHTML(date) : ''}${commitHTML(R, d, date)}</section>`;
+  ${grace ? `<div class="seg wide" role="group" aria-label="Day being edited"><button data-act="editdate" data-v="${grace}" aria-pressed="${date === grace}">Yesterday</button><button data-act="editdate" data-v="${t}" aria-pressed="${date === t}">Today</button></div>` : ''}
+  <button class="top2" data-act="tab" data-v="journey"><span class="ring4">${ring4(parts, pills.map(p => !!p.nogoal))}<span class="c"><b class="num">${done}/${live.length}</b><span>done</span></span></span>
+  <span class="msg">${ev.complete ? `<b>Locked in</b><span>${trk ? 'Every goal done today.' : `Day ${dayNo} counts. Rest well.`}</span>` : `<b>${togo.length} to go</b><span>${esc(listTxt.charAt(0).toUpperCase() + listTxt.slice(1))}</span>${date === t && hl ? `<small>${hl} h left to lock in</small>` : ''}`}</span></button>
+  ${bandOn() && date === t ? bandStripHTML() : ''}
+  ${trk ? weekStripHTML(date) : ''}${commitHTML(R, d, date)}</section>
+  ${goalsHTML(date, d, P, pills)}`;
   // one lifted card: the most useful thing to do right now
   let lift = date === t ? reflectHTML(R) : '';
   if (!lift && !st.planNoted && P.pm.length && P.pm.every(m => !(m.items || []).length)) lift = !C.inRamadan(st, date) && !lastFullPlan(st) && isOwner() ? `<section class="card setupnudge"><h3>Your meal plan is empty</h3><p class="hint">Bring back your coach’s plan (5 meals and your supplements) in one tap.</p><div class="row"><button class="btn primary" data-act="coachrestore">Restore my coach’s plan</button><button class="btn ghost" data-act="planset">Set up a new one</button></div></section>` : !C.inRamadan(st, date) && lastFullPlan(st) ? `<section class="card setupnudge"><h3>Your meal plan is empty</h3><p class="hint">Bring back the plan you saved on ${fmt(lastFullPlan(st).k)} (${lastFullPlan(st).meals.length} meals), or set up a new one.</p><div class="row"><button class="btn primary" data-act="planrestore" data-v="${lastFullPlan(st).k}">Restore my plan</button><button class="btn ghost" data-act="planset">Set up a new one</button></div></section>` : `<section class="card setupnudge"><h3>Add your ${C.inRamadan(st, date) ? 'Ramadan ' : ''}meal plan</h3><p class="hint">Add your coach’s plan or your own in Me → Meal plan. Then one tap logs a meal and your calorie targets appear. No plan? Log what you eat in each meal.</p><div class="row"><button class="btn primary" data-act="planset">Set up my plan</button><button class="btn ghost" data-act="plannoted">I’ll log as I go</button></div></section>`;
@@ -1035,6 +1070,31 @@ function todayHTML(R) {
   const shown = ((lift ? '' : next).match(/data-act="meal" data-id="([^"]+)"/) || [])[1];
   h += todayListHTML(R, date, d, P, line, shown);
   return h;
+}
+// band numbers on Today, only when a band is connected (it's optional)
+function bandStripHTML() {
+  const t = today(), d = S.health[t] || {}, rc = C.recovery(S.health, t, S.settings.sleepGoal || 7.5), [, sl] = latest('sleep');
+  const cell = (label, val, cls = '') => `<button class="${cls}" data-act="tab" data-v="body"><span>${label}</span><b class="num">${val}</b></button>`;
+  return `<div class="bstrip">${cell('Recovery', rc && rc.score != null ? rc.score : '—', rc && rc.level ? 'rk-' + rc.level : '')}${cell('Sleep', sl ? hmTxt(sl.asleepMin) : '—')}${cell('Steps', d.steps != null ? Number(d.steps).toLocaleString('en-US') : '—', d.steps >= stepGoal() ? 'rk-good' : '')}</div>`;
+}
+// the day's goals as rows: tap a row for its screen, or use the button on the right (log, +250 ml, start, took them)
+function goalsHTML(date, d, P, pills) {
+  const st = S.settings, tot = C.dayTotals(st, d), tgt = dayTarget(date, d) || {};
+  const done = (k, title) => `<button class="ga done" data-act="panel" data-v="${k}" aria-label="${esc(title)}: done">${gIco('check', 3)}</button>`;
+  const row = (p, title, right, pct, sub, action) => `<div class="grow2 g-${p.k}${p.ok ? ' ok' : ''}${p.bad ? ' bad' : ''}"><button class="gl" data-act="panel" data-v="${p.k}"><span class="gi">${gIco(p.k)}</span><span class="gt"><span class="gh">${esc(title)}${right ? `<em class="num">${esc(right)}</em>` : ''}</span>${pct != null ? `<span class="gbar"><i style="width:${Math.min(100, Math.max(0, pct * 100)).toFixed(0)}%"></i></span>` : sub ? `<small>${esc(sub)}</small>` : ''}</span></button>${action || ''}</div>`;
+  const out = pills.filter(p => !p.nogoal).map(p => {
+    if (p.k === 'meals') return row(p, p.name, p.bad ? 'Off-plan' : tgt.k ? `${kc(tot.k)} / ${kc(tgt.k)} kcal` : p.val, tgt.k ? tot.k / tgt.k : P.pm.length ? P.clean / P.pm.length : 0, '', `<button class="ga" data-act="quick" aria-label="Log food">${gIco('plus', 2.6)}</button>`);
+    if (p.k === 'water') return row(p, 'Water', `${L(P.w)} / ${L(P.goal)} L`, P.w / P.goal, '', p.ok ? done('water', 'Water') : `<button class="ga" data-act="water" data-n="250">+250</button>`);
+    if (p.k === 'train') {
+      const tl = (P.tt === 'gym' || P.tt === 'cali') && TR.todayLine();
+      const title = tl && tl.name ? tl.name : C.TT[P.tt].label;
+      const sub = P.tt === 'rest' ? 'Rest day' : p.ok ? (d.trainingSource === 'strava' ? 'Done · from Strava' : 'Done') : tl ? (tl.live ? 'In progress' : tl.n ? `${tl.n} exercises` : C.TT[P.tt].sub) : C.TT[P.tt].sub;
+      const act = p.ok ? done('train', title) : P.tt === 'rest' ? '' : tl ? `<button class="ga go" data-act="tab" data-v="train">${gIco('play')}${tl.live ? 'Resume' : 'Start'}</button>` : `<button class="ga go" data-act="train">Mark done</button>`;
+      return row(p, title, '', null, sub, act);
+    }
+    return row(p, 'Supplements', P.req.length ? `${P.sDone} / ${P.req.length}` : '', null, P.req.length ? P.req.map(s => s.name).slice(0, 3).join(', ') : 'None set', p.ok ? done('supps', 'Supplements') : P.req.length ? `<button class="ga" data-act="suppall">Took them</button>` : '');
+  });
+  return `<section class="card goals" aria-label="Lock in today"><div class="goals-h"><h2>${TRK() ? 'Today’s goals' : 'Lock in today'}</h2><span class="num">${pills.filter(p => !p.nogoal && p.ok).length} of ${pills.filter(p => !p.nogoal).length} done</span></div>${out.join('')}</section>`;
 }
 // alerts that used to be banners, as quiet rows
 function todayNotesHTML(R) {
@@ -1055,10 +1115,7 @@ function todayNotesHTML(R) {
 function todayListHTML(R, date, d, P, line, shown) {
   const st = S.settings, t = today(), meals = d.meals || {}, plan = C.plannedMeals(st, d, date), rows = [];
   const row = (act, v, ic, cls, title, sub, end) => `<button class="lrow${cls ? ' ' + cls : ''}" data-act="${act}" data-v="${v}"><span class="lic">${ic}</span><span class="lt"><b>${esc(title)}</b>${sub ? `<small>${esc(sub)}</small>` : ''}</span><span class="le num">${end || ''}</span></button>`;
-  const logged = plan.filter(m => meals[m.id] && meals[m.id].status), open = plan.filter(m => !(meals[m.id] && meals[m.id].status) && m.id !== shown);
-  if (logged.length) { const k = logged.reduce((s, m) => s + C.sumItems(meals[m.id].items || []).k, 0), off = logged.some(m => meals[m.id].status === 'off'); rows.push(row('panel', 'meals', off ? '!' : '✓', off ? 'bad' : 'ok', logged.length === plan.length ? 'All meals logged' : logged.map(m => m.name).join(', '), off ? 'Includes an off-plan meal' : '', `${kc(k)} kcal`)); }
-  open.slice(0, 3).forEach(m => rows.push(row('panel', 'meals', esc(String(m.name).replace(/\D/g, '').slice(0, 2) || '•'), '', m.name, m.time || '', (m.items || []).length ? `${kc(C.sumItems(m.items).k)} kcal` : '')));
-  if ((d.extras || []).length) rows.push(row('panel', 'meals', '+', '', `${d.extras.length} extra${d.extras.length === 1 ? '' : 's'}`, d.extras.map(x => x.name.split(',')[0]).join(', '), `${kc(d.extras.reduce((s, x) => s + C.itemMacros(x).k, 0))} kcal`));
+  // meals now live in the Today goals card and the Food screen
   if (date === t && !C.inRamadan(st, date)) { // a voluntary fast: one tap, everything else about the day stays the same
     const fd = C.fastingDay(st, t), pt = C.prayerTimes(t), mins = now().clock * 60 + now().minute, left = pt.maghrib - mins;
     const title = !fd ? 'Fasting today?' : mins < pt.fajr ? 'Suhoor: fast starts soon' : left > 0 ? `Iftar in ${Math.floor(left / 60)} h ${left % 60} min` : 'Iftar time';
@@ -1255,7 +1312,7 @@ function staminaHTML() {
 }
 function barsHTML(vals, unit, label, labels) {
   const W = 320, H = 120, pb = 18, max = Math.max(1, ...vals), bw = (W - 10) / Math.max(vals.length, 1);
-  return `<div class="chart"><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(label)}">${vals.map((v, i) => { const hh = (H - pb - 14) * v / max; return `<rect x="${5 + i * bw + 3}" y="${H - pb - hh}" width="${bw - 6}" height="${Math.max(hh, v ? 2 : 0)}" rx="3" fill="${i === vals.length - 1 ? 'var(--spark)' : 'var(--accent)'}"/><text x="${5 + i * bw + bw / 2}" y="${H - 5}" text-anchor="middle" font-size="9" fill="var(--muted)" font-family="Alexandria,sans-serif">${labels ? esc(labels[i]) : 'W' + (i + 1)}</text>${v && (vals.length <= 8 || i === vals.length - 1) ? `<text x="${5 + i * bw + bw / 2}" y="${H - pb - hh - 3}" text-anchor="middle" font-size="9" fill="var(--ink-2)" font-family="Alexandria,sans-serif">${v}</text>` : ''}`; }).join('')}</svg><p class="hint">${esc(label)}</p></div>`;
+  return `<div class="chart"><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(label)}">${vals.map((v, i) => { const hh = (H - pb - 14) * v / max; return `<rect x="${5 + i * bw + 3}" y="${H - pb - hh}" width="${bw - 6}" height="${Math.max(hh, v ? 2 : 0)}" rx="3" fill="${i === vals.length - 1 ? 'var(--food)' : 'color-mix(in srgb,var(--food) 45%,transparent)'}"/><text x="${5 + i * bw + bw / 2}" y="${H - 5}" text-anchor="middle" font-size="9" fill="var(--muted)" font-family="Alexandria,sans-serif">${labels ? esc(labels[i]) : 'W' + (i + 1)}</text>${v && (vals.length <= 8 || i === vals.length - 1) ? `<text x="${5 + i * bw + bw / 2}" y="${H - pb - hh - 3}" text-anchor="middle" font-size="9" fill="var(--ink-2)" font-family="Alexandria,sans-serif">${v}</text>` : ''}`; }).join('')}</svg><p class="hint">${esc(label)}</p></div>`;
 }
 
 /* ---------- PROGRESS ---------- */
@@ -1297,7 +1354,9 @@ function calendarHTML(R) {
   <div class="stats"><div class="stat feature"><div class="big num">${full}</div><span>Days on all goals</span></div><div class="stat"><div class="big num">${R.done}</div><span>In a row now</span></div><div class="stat"><div class="big num">${R.best}</div><span>Best run</span></div><div class="stat"><div class="big num">${logged ? Math.round(waterOk / logged * 100) : 0}%</div><span>Water goal hit</span></div></div>
   <p class="hint">Tap a day to see what you ate and did.</p></section>`;
 }
-function progressHTML(R) {
+// the old Progress screen's parts, now shown on Journey (week, chain, friends), Body (weight, check-in), Food (calories)
+// and Train (muscles)
+function progressParts(R) {
   const st = S.settings, t = today(), rv = weekReview();
   const G = { friends: friendsTabsHTML() };
   let h = recapHTML(R) + weeklyCalHTML() + `<section class="card"><div class="card-h"><h2>Last 7 days</h2>${pill(rv.locked === rv.n ? 'done' : 'todo', `${rv.locked} / ${rv.n} locked in`)}</div>
@@ -1327,9 +1386,11 @@ function progressHTML(R) {
   const arr = Object.keys(pts).sort().map(k => ({ date: k, weight: pts[k] }));
   h += `<section class="card"><div class="card-h"><h2>Weight</h2>${arr.length ? pill('todo', `${arr[arr.length - 1].weight} kg`) : ''}</div>${arr.length >= 2 ? winsHTML(arr, st, rv) + weightChart(arr, st.goalWeight) + projHTML(arr, st, R.attemptStart) : '<p class="hint">Log your morning weight in Today, or a weekly check-in below. The trend appears after two weigh-ins.</p>'}</section>`;
   if (arr.length >= 2) h += burnHTML(arr, st);
+  G.weight = h; h = '';
   // nutrition 14 days
   const kd = [], kl = []; for (let i = 13; i >= 0; i--) { const dd = C.addDays(t, -i); kd.push(kc(C.dayTotals(st, S.days[dd] || {}).k)); kl.push(i === 0 ? 'Now' : String(C.parse(dd).getDate())); }
   if (kd.some(v => v)) h += `<section class="card"><div class="card-h"><h2>Calories</h2><span class="hint">${fmt(C.addDays(t, -13))} – today</span></div>${barsHTML(kd, 'kcal', `Calories per day. The orange bar is today.${kd.slice(0, 13).filter(Boolean).length ? ` Average of logged days: ${kc(kd.slice(0, 13).filter(Boolean).reduce((a, b) => a + b, 0) / kd.slice(0, 13).filter(Boolean).length)} kcal.` : ''}`, kl)}</section>`;
+  G.cal = h; h = '';
   // check-in
   const cks = Object.values(S.checkins).sort((a, b) => a.date < b.date ? -1 : 1);
   h += `<section class="card"><div class="card-h"><h2>Weekly check-in</h2><span class="hint">Same time, same light</span></div>
@@ -1347,8 +1408,37 @@ function progressHTML(R) {
   h += bodyNumbersHTML(cks) + measuresHTML(cks);
   const ckDates = [...new Set([...cks.map(c => c.date), ...Object.keys(S.photos)])].sort().reverse();
   if (ckDates.length) h += `<ul class="list ckl">${ckDates.map(dt => { const c = S.checkins[dt] || {}; return `<li><span>${fmt(dt)}</span><span class="num">${[c.weight && c.weight + ' kg', c.waist && 'waist ' + c.waist, c.chest && 'chest ' + c.chest, c.arm && 'arm ' + c.arm, c.hips && 'hips ' + c.hips, c.neck && 'neck ' + c.neck, S.photos[dt] && 'photo'].filter(Boolean).join(' · ') || 'photo'}</span><button class="link danger" data-act="ckdel" data-v="${dt}">${S.confirm === 'ck:' + dt ? 'Tap again to delete' : 'Delete'}</button></li>`; }).join('')}</ul>`;
-  G.body = h + `</section>`;
-  return progressShell(G);
+  G.checkin = h + `</section>`;
+  return G;
+}
+/* ---------- JOURNEY: the 90 days (or the calendar in tracker mode), the week review, friends ---------- */
+function journeyHTML(R) {
+  const G = progressParts(R), tab = ['chain', 'week', 'friends'].includes(S.jtab) ? S.jtab : 'chain';
+  const T = [['chain', R.tracker ? 'Calendar' : 'Your 90 days'], ['week', 'Week'], ['friends', 'Friends']];
+  return `<header class="ph sub2 jh"><button class="back" data-act="tab" data-v="today" aria-label="Back to Today">‹</button><h1>${R.tracker ? 'Your journey' : 'Your 90 days'}</h1></header>
+  <div class="seg wide" role="tablist" aria-label="Journey sections">${T.map(([k, l]) => `<button role="tab" data-act="jtab" data-v="${k}" aria-pressed="${tab === k}">${l}</button>`).join('')}</div>` + (G[tab] || '');
+}
+/* ---------- BODY: band (optional), weight, check-in, photos, today's note ---------- */
+function bodyViewHTML(R) {
+  const G = progressParts(R), date = editDate(), d = S.days[date] || {};
+  const band = bandOn() ? bandHTML() : `<button class="card optcard" data-act="mesec" data-v="Health band" data-go="setup"><b>Have a health band or watch? <span>Optional</span></b><span class="hint">Connect it through Health Connect to add sleep, recovery and steps here. Everything else works without it.</span></button>`;
+  return pageHead('Body', R) + (bandOn() ? band : '') + G.weight + bodyHTML(date, d) + G.checkin + (bandOn() ? '' : band);
+}
+/* ---------- FOOD: meals, water, supplements, fasting, calories over time ---------- */
+function foodHTML(R) {
+  const t = today(), grace = graceDay(), date = editDate(), st = S.settings, d = S.days[date] || {}, P = C.evalDay(st, d, date).P;
+  let h = `<header class="ph"><h1>Food</h1><span class="hero-chips"><button class="btn small" data-act="mesec" data-v="Meal plan" data-go="setup">Meal plan</button></span></header>`;
+  if (grace) h += `<div class="seg wide" role="group" aria-label="Day being edited"><button data-act="editdate" data-v="${grace}" aria-pressed="${date === grace}">Yesterday</button><button data-act="editdate" data-v="${t}" aria-pressed="${date === t}">Today</button></div>`;
+  h += `<div class="tabsP" role="tablist"><button role="tab" data-act="mealtab" data-v="plan" aria-selected="${S.mealTab !== 'daily'}">Meals</button><button role="tab" data-act="mealtab" data-v="daily" aria-selected="${S.mealTab === 'daily'}">☕ Daily</button></div>`;
+  h += S.mealTab === 'daily' ? dailyHTML(date) : mealsHTML(date, d, P);
+  h += waterHTML(P) + suppsHTML(date, d, P);
+  if (date === t && !C.inRamadan(st, date)) {
+    const fd = C.fastingDay(st, t), pt = C.prayerTimes(t), mins = now().clock * 60 + now().minute, left = pt.maghrib - mins;
+    const title = !fd ? 'Fasting today?' : mins < pt.fajr ? 'Suhoor: fast starts soon' : left > 0 ? `Iftar in ${Math.floor(left / 60)} h ${left % 60} min` : 'Iftar time';
+    h += `<button class="fastrow${fd ? ' on' : ''}" data-act="fasttoggle"><span aria-hidden="true">🌙</span><span><b>${esc(title)}</b><small>${fd ? `Iftar ≈ ${C.hmText(pt.maghrib)} (Cairo) · Fajr ${C.hmText(pt.fajr)}. Tap again if you’re not fasting.` : 'Tap if you are. Meals stay the same.'}</small></span></button>`;
+  }
+  if (S.mealTab !== 'daily') h += nutrientsHTML(date, d);
+  return h + weeklyCalHTML() + (progressParts(R).cal || '');
 }
 /* real maintenance: average intake minus the energy in your weight change (≈7,700 kcal per kg), over the last 4 weeks */
 function burnHTML(arr, st) {
@@ -1616,7 +1706,7 @@ function shoppingHTML(st) {
 
 /* ---------- food sheet ---------- */
 let SH = null; // {scope, picked, results, off}
-TR.initTrain({ get S() { return S; }, esc, toast, draw: () => draw(), saveDay: d => saveDay(d), saveSettings: () => saveSettings(), dayDoc: d => dayDoc(d), editDate: () => editDate(), today: () => today(), fmt: d => fmt(d), openTimer: (m, sec, e) => openTimer(m, sec, e), buzz: p => buzz(p), staminaHTML: () => staminaHTML(), beep: n => beep(n), curWeight: d => curWeight(d), isOwner: () => !!(S.user && isOwner()), focusHit: f => focusHit(f), friends: () => friendRows(), setSH: o => { if (SH && SH.iv) clearInterval(SH.iv); SH = o; }, closeSheet: () => closeSheet() });
+TR.initTrain({ get S() { return S; }, esc, toast, draw: () => draw(), saveDay: d => saveDay(d), saveSettings: () => saveSettings(), dayDoc: d => dayDoc(d), editDate: () => editDate(), today: () => today(), fmt: d => fmt(d), openTimer: (m, sec, e) => openTimer(m, sec, e), buzz: p => buzz(p), staminaHTML: () => staminaHTML(), musclesView: () => { const ws = myWS(today()); TR.setMuscleWeek(ws, C.addDays(ws, 6)); return TR.musclesHTML(ws, C.addDays(ws, 6)); }, beep: n => beep(n), curWeight: d => curWeight(d), isOwner: () => !!(S.user && isOwner()), focusHit: f => focusHit(f), friends: () => friendRows(), setSH: o => { if (SH && SH.iv) clearInterval(SH.iv); SH = o; }, closeSheet: () => closeSheet() });
 function openSheet(scope) {
   SH = { scope, picked: null, results: [], off: scope === 'extra', mode: 'search', usda: [], offr: [], stream: null, filt: 'all' };
   $('sheet').hidden = false;
@@ -2217,10 +2307,18 @@ document.addEventListener('click', async ev => {
     }
   }
   if (act === 'lang') { const was = LANG(); try { localStorage.setItem('lk-lang', v); } catch (e) { } if (S.settings) { S.settings.lang = v; saveSettings(); } if (was === 'ar' && v !== 'ar') { setTimeout(() => location.reload(), 500); return; } applyLang(); return draw(); }
-  if (act === 'panel') { S.panel = v; buzz(6); return draw(); }
+  if (act === 'panel') { buzz(6); return goPanel(v); }
   if (act === 'panelclose') { S.panel = null; return draw(); }
-  if (act === 'ptab') { S.ptab = v; S.panel = null; if (S.view !== 'progress') return go('progress'); window.scrollTo(0, 0); return draw(); }
-  if (act === 'mesec') { S.meSec = v || null; window.scrollTo(0, 0); if (v === 'Health band') hcRefresh(); return draw(); }
+  if (act === 'ptab') { // the old Progress tabs now live on other screens
+    S.panel = null;
+    if (v === 'body') return go('body');
+    if (v === 'muscles') { S.trainTab = 'prog'; return go('train'); }
+    S.jtab = v === 'week' || v === 'friends' ? v : 'chain'; if (S.view !== 'journey') return go('journey'); window.scrollTo(0, 0); return draw();
+  }
+  if (act === 'jtab') { S.jtab = v; return draw(); }
+  if (act === 'theme') { S.settings.theme = v; saveSettings(); applyTheme(); return draw(); }
+  if (act === 'aicoach') { S.settings.aiCoach = v === '1'; saveSettings(); toast(v === '1' ? 'Coach on. Messages start with the next background run.' : 'Coach off.'); return draw(); }
+  if (act === 'mesec') { S.meSec = v || null; window.scrollTo(0, 0); if (b.dataset.go && S.view !== b.dataset.go) { S.view = b.dataset.go; history.replaceState(null, '', '#' + S.view); } if (v === 'Health band') hcRefresh(); return draw(); }
   if (act === 'hcconnect') return hcConnect();
   if (act === 'hcsync') return hcSync(3);
   if (act === 'bandopen') return openBand(today());
@@ -2995,7 +3093,7 @@ function boardOn() {
   if (S.boardUnsub) S.boardUnsub();
   S.boardUnsub = null; S.board = {}; S.boardCode = code || null; S.boardLast = null;
   if (!code) return;
-  const u1 = onSnapshot(collection(db, `groups/${code}/members`), qs => { S.board = {}; qs.docs.forEach(x => S.board[x.id] = fsDec(x.data())); if (S.view === 'progress' || S.view === 'today') render(); }, () => { });
+  const u1 = onSnapshot(collection(db, `groups/${code}/members`), qs => { S.board = {}; qs.docs.forEach(x => S.board[x.id] = fsDec(x.data())); if (S.view === 'journey' || S.view === 'today') render(); }, () => { });
   const u2 = onSnapshot(collection(db, `groups/${code}/members/${uid()}/cheers`), qs => {
     const before = new Set(Object.keys(S.cheers || {})); S.cheers = {};
     qs.docs.forEach(x => S.cheers[x.id] = x.data());
@@ -3130,7 +3228,7 @@ function friendsHTML() {
 function photosOn() {
   if (S.photosOn || !S.user) return;
   S.photosOn = true;
-  syncCol('photos', qs => { qs.docs.forEach(x => { const v = x.data(); if (v.deleted || !v.data) delete S.photos[x.id]; else S.photos[x.id] = v; }); if (S.view === 'progress') render(); });
+  syncCol('photos', qs => { qs.docs.forEach(x => { const v = x.data(); if (v.deleted || !v.data) delete S.photos[x.id]; else S.photos[x.id] = v; }); if (S.view === 'body') render(); });
 }
 // buttons on the workout notification (Android)
 let pendingWo = new URLSearchParams(location.search).get('wo');
@@ -3160,11 +3258,20 @@ if (NP("App")) NP("App").addListener("backButton", () => {
   if (!$("cele").hidden) { $("cele").hidden = true; $("cele").innerHTML = ""; return; }
   if (SH) { if (TR.closeGuard(SH.scope)) return; return closeSheet(); }
   if (S.panel) { S.panel = null; return draw(); }
+  if (S.view === "setup" && S.meSec) { S.meSec = null; return draw(); }
   if (S.view !== "today" && S.settings) return go("today");
   NP("App").minimizeApp();
 });
-function go(v) { S.panel = null; S.view = VIEWS.includes(v) ? v : 'today'; if (location.hash !== '#' + S.view) history.replaceState(null, '', '#' + S.view); window.scrollTo(0, 0); draw(); }
-window.addEventListener('hashchange', () => { const v = location.hash.slice(1); if (v === 'water') { S.quickWater = true; return draw(); } if (v === 'sport') { S.quickSport = true; return draw(); } if (VIEWS.includes(v) && v !== S.view) { S.view = v; draw(); } });
+function go(v) { v = viewOf(v); S.panel = null; if (v !== 'setup') S.meSec = null; S.view = VIEWS.includes(v) ? v : 'today'; if (location.hash !== '#' + S.view) history.replaceState(null, '', '#' + S.view); window.scrollTo(0, 0); draw(); }
+// Today's rows used to open bottom panels; each one now opens its own screen, scrolled to the right card
+function goPanel(v) {
+  if (v === 'train') return go('train');
+  if (v === 'body') return go('body');
+  go('food');
+  const id = v === 'water' ? 'sec-water' : v === 'supps' ? 'sec-supps' : 'sec-meals';
+  if (v !== 'meals') requestAnimationFrame(() => { const el = $(id); if (el) el.scrollIntoView({ block: 'start' }); });
+}
+window.addEventListener('hashchange', () => { const v = viewOf(location.hash.slice(1)); if (v === 'water') { S.quickWater = true; return draw(); } if (v === 'sport') { S.quickSport = true; return draw(); } if (VIEWS.includes(v) && v !== S.view) { S.view = v; draw(); } });
 window.addEventListener('online', () => { S.online = true; render(); });
 window.addEventListener('offline', () => { S.online = false; render(); });
 document.addEventListener('visibilitychange', () => {
@@ -3173,7 +3280,9 @@ document.addEventListener('visibilitychange', () => {
   if (S.settings && S.settings.band && S.settings.band.on && HC.supported() && Date.now() - hcLast() > 15 * 60e3) hcSync(3, true);
 });
 setInterval(render, 60000);
-{ const h = location.hash.slice(1); if (VIEWS.includes(h)) S.view = h; if (h === 'water') S.quickWater = true; if (h === 'sport') S.quickSport = true; }
+{ const h = viewOf(location.hash.slice(1)); if (VIEWS.includes(h)) S.view = h; if (h === 'water') S.quickWater = true; if (h === 'sport') S.quickSport = true; }
+// follow the phone's light/dark switch while the theme is "Like phone"
+try { matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => applyTheme()); } catch (e) { }
 draw();
 // updates: check whenever the app is opened; when a new version takes over, reload once so it shows straight away
 // (not inside the Android app: there the files ship in the APK, so a service worker would only serve stale copies)

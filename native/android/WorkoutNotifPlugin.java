@@ -53,6 +53,18 @@ public class WorkoutNotifPlugin extends Plugin {
 
     @PluginMethod public void clear(PluginCall call) { WorkoutService.stop(getContext()); call.resolve(); }
 
+    // status and navigation bar icons: dark on the light theme, light on the dark one (the app draws edge to edge)
+    @PluginMethod public void bars(PluginCall call) {
+        final boolean light = Boolean.TRUE.equals(call.getBoolean("light", false));
+        getActivity().runOnUiThread(() -> {
+            android.view.Window w = getActivity().getWindow();
+            androidx.core.view.WindowInsetsControllerCompat c = androidx.core.view.WindowCompat.getInsetsController(w, w.getDecorView());
+            c.setAppearanceLightStatusBars(light);
+            c.setAppearanceLightNavigationBars(light);
+            call.resolve();
+        });
+    }
+
     /** Reminders (sent by the tick job through Firebase) use the "reminders" channel; this creates it. */
     static void remindersChannel(Context c) {
         if (Build.VERSION.SDK_INT < 26) return;

@@ -116,8 +116,33 @@ Capgo-API stub `hcstub.js`), t39 (Arabic), regressions t16/t20/t22. If rebuildin
   concurrency group). The app warns in Me (Strava card, or Coach card if Strava isn't connected) when `meta/jobs.at`
   is 75+ min old, linking to docs/timer.md.
 
+## Done in v41 (2026-11-25): redesign
+- Approved design: claude.ai artifact "Locked In Redesign" (private canvas). Logo A6 "Big beat" (dumbbell whose bar is a
+  heartbeat, lime-to-cyan spike, white plates, on #0B0F14); `native/make-icons.mjs` draws every icon from it, including
+  `native/res/drawable/ic_stat_notify.xml`.
+- Tokens (styles.css top): brand = logo cyan #22D3EE (`--brand`, text shade `--brand-ink`), goal colours food orange
+  (`--food`), water indigo (`--water`), training cyan, supplements pink (`--supp`). Light and dark: `html[data-theme]`
+  forces one, otherwise `prefers-color-scheme`. `settings.theme` 'auto'|'dark'|'light' (You > Appearance), mirrored in
+  localStorage `lk-theme` (index.html sets data-theme before first paint). `applyTheme()` also sets Android status-bar
+  icon colour via WorkoutNotifPlugin `bars({light})`. New v3 component styles are appended at the end of styles.css.
+- Tabs: Today · Train · Food · Body · You (`VIEWS`), plus the floating Log button `#fab` (Today, Food, Body; opens the
+  quick sheet). Old Progress split: Journey (`#journey`, from Today's "Day N" / chain; tabs chain|week|friends via
+  `S.jtab`), Body (`bodyViewHTML`: band if on, weight, today's note, check-in, photos), Food (`foodHTML`: meals/daily,
+  water, supplements, fasting, nutrients, calories), Train tab "Progress" (`S.trainTab='prog'`, muscles + rank).
+  `progressParts(R)` builds the parts. `viewOf()` maps old `#progress`/`#me` links. `data-act="panel"` now goes to the
+  screen (`goPanel`), the bottom panels are no longer opened.
+- Today: header (date, Day N of 90, chain, You), day bar, day card (`ring4` four-goal ring, "N to go", hours left,
+  band strip only when a band is connected), goal rows with direct actions (`goalsHTML`: log, +250, Start, Took them),
+  Up next, coach card (only when on), notes, list.
+- Optional extras (off by default): band (`settings.band.on`), coach (`settings.aiCoach`; tick's coach() returns early
+  unless true; without a band the morning briefing comes at 07:30 instead of after band data), Strava, coach link.
+  You groups: Your plan / Optional extras / App.
+- Preview harness (not in the repo): scratchpad `harness/` serves the repo with Firebase stubbed by in-memory data
+  (`fs.js`, options ?theme ?band ?coach ?lang=ar ?tracker) and screenshots with headless Edge (`shots.sh`).
+
 ## Next steps
-1. Hassan: install the v38 APK, turn on notifications (Me > Reminders), try a workout with the screen locked, allow
+1. Hassan: install the v41 APK (then switch on Coach in You > Optional extras if wanted).
+   Earlier: install the v38 APK, turn on notifications (Me > Reminders), try a workout with the screen locked, allow
    Strava posting once, add the CLAUDE_CODE_OAUTH_TOKEN secret. Fix whatever the real phone shows.
 2. Later: remote MCP connector (get_today, get_week_summary, log_note); release signing so updates install in place.
 

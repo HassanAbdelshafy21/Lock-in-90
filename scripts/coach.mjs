@@ -107,10 +107,12 @@ export function parseReply(txt) {
 
 /** Is a briefing due now? Morning: once the band has synced last night (05:00–13:00). Evening: 30 min after a workout,
  *  or from 21:30 if anything was trained or logged. Each at most once a day; off in Me > Reminders. */
-export function due({ n, b, rm, day, health, nowMs }) {
+// band: whether the user has a band connected (optional). With one, the morning waits for its night data; without, 07:30.
+export function due({ n, b, rm, day, health, nowMs, band = true }) {
   const mins = n.hour * 60 + n.minute, h = health[n.date];
   const tried = k => (b[k + 'Tries'] || 0) >= MAX_TRIES;
-  if (rm.coachAm !== false && !b.morning && !tried('morning') && mins >= 300 && mins < 780 && h && ((h.sleep && h.sleep.asleepMin) || h.hrv)) return 'morning';
+  const ready = band ? h && ((h.sleep && h.sleep.asleepMin) || h.hrv) : mins >= 450;
+  if (rm.coachAm !== false && !b.morning && !tried('morning') && mins >= 300 && mins < 780 && ready) return 'morning';
   const w = day.wo, woDone = w && w.t1 && !w.imported;
   const did = woDone || day.trainingDone || (day.stamina || []).length;
   if (rm.coachPm !== false && !b.evening && !tried('evening') && ((woDone && nowMs - w.t1 >= 30 * 60e3) || (mins >= 21 * 60 + 30 && did))) return 'evening';
@@ -120,13 +122,14 @@ export function due({ n, b, rm, day, health, nowMs }) {
 /** Called from tick.mjs for each user. */
 export async function coach({ db, admin, uid, settings, TZ, push }) {
   if (!process.env.CLAUDE_CODE_OAUTH_TOKEN) return;
+  if (settings.aiCoach !== true) return; // optional: only for people who switched it on (You > Optional extras > Coach)
   const n = C.nowIn(TZ, settings.dayStart), date = n.date;
   const ref = db.doc(`users/${uid}/briefings/${date}`), b = (await ref.get()).data() || {};
   const rm = settings.reminders || {};
   const from = C.addDays(date, -21);
   const health = {}; (await db.collection(`users/${uid}/health`).where('date', '>=', from).get()).forEach(d => { const v = d.data(); if (!v.deleted) health[d.id] = v; });
   const today = (await db.doc(`users/${uid}/days/${date}`).get()).data() || {};
-  const kind = due({ n, b, rm, day: today, health, nowMs: Date.now() });
+  const kind = due({ n, b, rm, day: today, health, nowMs: Date.now(), band: !!(settings.band && settings.band.on) });
   if (!kind) return;
   const days = {}; (await db.collection(`users/${uid}/days`).where('date', '>=', C.addDays(settings.startDate || from, -1)).get()).forEach(d => { days[d.id] = d.data(); });
   const run = C.computeRun(settings, days, n);

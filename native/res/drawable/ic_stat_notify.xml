@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Notification icon: the Locked In bolt as a white silhouette (Android tints it) -->
-<vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24">
-    <path android:fillColor="#FFFFFFFF" android:pathData="M14.2,1.5L5.5,13.6h5.6l-2.1,8.9l9.5,-13h-5.8l1.5,-8z"/>
+<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="24dp" android:height="24dp" android:viewportWidth="512" android:viewportHeight="512">
+    <path android:fillColor="#FFFFFFFF" android:pathData="M60,160h56v192h-56z M124,196h40v120h-40z M396,160h56v192h-56z M348,196h40v120h-40z"/>
+    <path android:fillColor="#00000000" android:strokeColor="#FFFFFFFF" android:strokeWidth="34" android:strokeLineCap="round" android:strokeLineJoin="round" android:pathData="M160 256 h40 l24-70 30 150 30-210 24 160 16-30 h28"/>
 </vector>
