@@ -75,24 +75,32 @@ Add exercise > Cardio chip lists the 14 library cardio exercises. A cardio exerc
   7-14 day baseline.
 - Sync: first connect reads 30 days; each app open/resume re-reads the last 3 days (max every 15 min); a day is
   rewritten only if content changed. Delete = two-tap, writes tombstones `{deleted:true}`.
-- Known gap in the APK: reminders and the lock-screen rest timer (browser notifications) do not work until native
-  notifications are added.
 
 ## Tests (not in the repo; were run from /home/claude/work/tests, Playwright + node)
 Unit: `TZ=Africa/Cairo node unit/health.test.mjs` (summarize). Browser: t38 (band card/sync/partial/delete with a
 Capgo-API stub `hcstub.js`), t39 (Arabic), regressions t16/t20/t22. If rebuilding tests, fake `window.Capacitor.Plugins.Health`
 (isAvailable, checkAuthorization, requestAuthorization, openHealthConnectSettings, queryAggregated, readSamples, queryWorkouts).
 
-## Next steps, in order (plan approved 2026-11-25)
-1. Safe-area fix (header under the status bar in the APK), Arabic for the Strava card and "How Recovery works",
-   split-night sleep merge, hide never-sent band tiles, SpO2/steps numbers on the band card.
-2. Native workout notification like Lyfta: current exercise/set, "Set done" starts a rest countdown in the
-   notification (+30 s / Skip), vibrates at the end. Local Capacitor plugin (Kotlin foreground service).
-3. Reminders in the APK: native FCM tokens, tick.mjs sends Android notifications to them.
-4. Coach: morning briefing + evening review in tick.mjs via Claude Code headless with the user's subscription token
-   (secret CLAUDE_CODE_OAUTH_TOKEN, from `claude setup-token`; never in the APK or chat). Small model, tools off, only
-   when there is new data. Saved to `users/{uid}/briefings/{date}`, shown on Today, pushed.
-5. Later: remote MCP connector (get_today, get_week_summary, log_note); release signing.
+## Done in v38 (2026-11-25)
+- Workout notification (APK): `native/android/` WorkoutService (foreground service, type specialUse), WorkoutActionReceiver
+  (buttons work while the WebView is paused; taps queue in SharedPreferences when the app is dead), WorkoutNotifPlugin
+  (show/clear/ask/ping + "action" events). patch-android copies them, registers the plugin in MainActivity, adds the
+  manifest entries. train.js `showWo` routes to it when native; `restAfter()` tells it the coming rest so "Set done"
+  starts the countdown instantly; JS later syncs the exact end (`notifAction(id|at)`).
+- Reminders in the APK: `@capacitor-firebase/messaging`, tokens in `settings.push.android`; tick.mjs `fcm()` sends Android
+  notifications (channel "reminders", icon ic_stat_notify). Test button uses the local `ping`.
+- Coach: `scripts/coach.mjs` (called by tick.mjs). Morning 05:00–13:00 once the band synced; evening 30 min after a
+  workout or from 21:30 if anything was logged. Claude Code headless, pinned version, `--model sonnet --tools ""`,
+  empty cwd/HOME, only the token in env. Saved to `users/{uid}/briefings/{date}` {morning|evening: {head,text,at,rec}},
+  Today shows the latest ("Coach" card), pushed like reminders. Switches: Me > Reminders (coachAm/coachPm).
+  Needs the user's GitHub secret CLAUDE_CODE_OAUTH_TOKEN; without it the coach silently does nothing.
+- Split nights (a part ending after 18:00 counts toward the next morning), band card second row (recovery, steps,
+  oxygen), never-sent tiles hidden, Arabic for Strava/coach/recovery explainer, keep-screen-on during workouts.
+
+## Next steps
+1. Hassan: install the v38 APK, turn on notifications (Me > Reminders), try a workout with the screen locked, allow
+   Strava posting once, add the CLAUDE_CODE_OAUTH_TOKEN secret. Fix whatever the real phone shows.
+2. Later: remote MCP connector (get_today, get_week_summary, log_note); release signing so updates install in place.
 
 ## Agent design rules (from the user)
 Agents read daily summaries, never raw samples. Claude API calls never use a key inside the APK. Agents act on trends

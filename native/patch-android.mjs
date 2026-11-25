@@ -45,5 +45,34 @@ if (existsSync(RES)) {
   console.log('Icons and launch screen copied from native/res.');
 }
 
+// The workout notification (native/android/*.java): copied into the app, registered in MainActivity, declared in the manifest.
+const PKG = 'android/app/src/main/java/io/github/hassanabdelshafy21/lockin90';
+if (existsSync(PKG)) {
+  for (const f of ['WorkoutService.java', 'WorkoutActionReceiver.java', 'WorkoutNotifPlugin.java']) await cp(`native/android/${f}`, `${PKG}/${f}`);
+  const MA = `${PKG}/MainActivity.java`;
+  let a = await readFile(MA, 'utf8');
+  if (!a.includes('WorkoutNotifPlugin')) {
+    a = a.replace(/public class MainActivity extends BridgeActivity \{\s*\}/, `public class MainActivity extends BridgeActivity {
+    @Override
+    public void onCreate(android.os.Bundle savedInstanceState) {
+        registerPlugin(WorkoutNotifPlugin.class);
+        super.onCreate(savedInstanceState);
+    }
+}`);
+    await writeFile(MA, a);
+  }
+  let m = await readFile(MAN, 'utf8'); const was = m;
+  const perms = ['android.permission.POST_NOTIFICATIONS', 'android.permission.VIBRATE', 'android.permission.FOREGROUND_SERVICE', 'android.permission.FOREGROUND_SERVICE_SPECIAL_USE'];
+  const add = perms.filter(p => !m.includes(`"${p}"`)).map(p => `    <uses-permission android:name="${p}" />\n`).join('');
+  if (add) m = m.replace(/<\/manifest>/, `${add}</manifest>`);
+  if (!m.includes('.WorkoutService')) m = m.replace(/<\/application>/, `    <service android:name=".WorkoutService" android:exported="false" android:foregroundServiceType="specialUse">
+            <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="Rest timer and current set shown in a notification during a gym workout" />
+        </service>
+        <receiver android:name=".WorkoutActionReceiver" android:exported="false" />
+    </application>`);
+  if (m !== was) await writeFile(MAN, m);
+  console.log('Workout notification wired in.');
+}
+
 if (!existsSync('android/app/google-services.json'))
   console.log('\nStill needed: download google-services.json from Firebase (Project settings > Your apps > Android app)\nand put it in android/app/. It is git-ignored.');

@@ -1077,6 +1077,7 @@ details.why{margin-top:6px}
 .band .rd{margin:8px 0 10px;padding-inline-start:18px;font-size:13px;color:var(--ink-2)}.band .rd li{margin:2px 0}
 .kv3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin:10px 0}
 .kv3 div{background:var(--surface-2);border-radius:12px;padding:8px 10px}.kv3 b{display:block;font-size:17px}.kv3 small{color:var(--muted);font-size:11px}
+.kv3 + .kv3{margin-top:-4px}.kv3 .rk-good{background:var(--good-soft)}.kv3 .rk-good b{color:var(--good)}.kv3 .rk-ok{background:var(--warn-soft)}.kv3 .rk-ok b{color:var(--warn)}.kv3 .rk-low{background:var(--bad-soft)}.kv3 .rk-low b{color:var(--bad)}
 .hctypes{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 10px}
 .hctypes i{display:inline-block;position:static;width:auto;height:auto;font:600 12px var(--f-body);font-style:normal;border-radius:99px;padding:5px 10px;background:var(--surface-2);color:var(--muted);white-space:nowrap}
 .hctypes i.hc-on{background:var(--good-soft);color:var(--good)}.hctypes i.hc-nd{background:var(--warn-soft);color:var(--warn)}
@@ -1118,3 +1119,9 @@ details.why{margin-top:6px}
 .lrow.static .seg{margin-inline-start:auto}.lrow.static .seg button{padding:7px 9px;font-size:12px}
 .lrow.ram.static small{white-space:normal;overflow:visible;text-overflow:clip}
 .lrow.ram small{white-space:normal;overflow:visible;text-overflow:clip}
+
+/* coach card (Today) */
+.coachc .card-h .sub{color:var(--muted);font-size:12px}
+.coachc .coach-h{font-family:var(--f-head, inherit);font-weight:700;font-size:17px;margin:2px 0 4px;color:var(--ink)}
+.coachc p{margin:0 0 6px}.coachc .hint{margin:4px 0 0;font-size:12px}
+.coachc.rk-good{border-inline-start:4px solid var(--good)}.coachc.rk-ok{border-inline-start:4px solid var(--warn)}.coachc.rk-low{border-inline-start:4px solid var(--bad)}

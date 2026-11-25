@@ -148,7 +148,10 @@ export function summarize(raw, opts = {}) {
   const day = date => out[date] || (out[date] = { date, v: 1, tz, sleep: null, hrv: null, rhr: null, hr: null, spo2: null, temp: null, steps: null, kcal: null, dist: null, floors: null, resp: null, vo2: null, bp: null, weight: null, exercise: [], sources: [] });
   const sleeps = uniqBy(raw.sleep || [], x => x.s + '|' + x.src);
   const nights = {};
-  sleeps.filter(x => !isNap(x)).forEach(x => { const d = localDate(x.e); (nights[d] = nights[d] || []).push(x); });
+  // a night belongs to the morning you wake up; a part that ends in the evening (asleep early, woke before midnight,
+  // slept again) belongs to the next morning, so the two parts count as one night
+  const wakeDate = x => { const e = new Date(x.e); return localDate(e.getHours() >= 18 ? x.e + 8 * 3600e3 : x.e); };
+  sleeps.filter(x => !isNap(x)).forEach(x => { const d = wakeDate(x); (nights[d] = nights[d] || []).push(x); });
   Object.entries(nights).forEach(([d, list]) => { day(d).sleep = sleepOf(list); });
   sleeps.filter(isNap).forEach(x => { const d = day(localDate(x.e)); if (!d.sleep) d.sleep = { start: null, end: null, inBedMin: 0, awakeMin: 0, asleepMin: 0, stages: null, naps: [], src: x.src }; d.sleep.naps.push({ start: hm(x.s), min: mins(x.e - x.s) }); });
   (raw.days || []).forEach(a => {

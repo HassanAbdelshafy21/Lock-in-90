@@ -5,7 +5,7 @@ import * as C from './core.js';
 import { trText, addFoodNames } from './i18n.js';
 import * as TR from './train.js';
 import * as HC from './health.js';
-const APP_VERSION = '37 · band screen, Strava posting, Android back button and launch screen';
+const APP_VERSION = '38 · workout notification, coach, reminders in the Android app';
 import { EX, POSE, figSVG, YT, LINES, FOODS, COACH_MEALS, DEFAULT_SUPPS, COACH_ENC, SLOTS, CARDIO_MODES } from './data.js';
 import { BRANDS, BRAND_BY_CODE } from './brands.js';
 addFoodNames(FOODS); addFoodNames(BRANDS);
@@ -22,7 +22,7 @@ const FIREBASE = {
 const USDA_KEY = 'cDpNk6dkgCQwwgfqNQrcP8N7W9JmCtQnPNjFQPNP';
 const WATER_OPTS = [3000, 3500, 4000, 4500, 5000, 5500, 6000, 6500, 7000];
 const VIEWS = ['today', 'train', 'progress', 'setup'];
-const REMINDERS = [['morning', '9:00 · Plan for the day'], ['water', 'Every 2 h, 11:00–19:00 · Water pace (only if behind)'], ['burner', '15:30 · Fat burner cutoff (only if cap 1 taken)'], ['stamina', '17:00 · Stamina session (stamina days, if not done)'], ['evening', '20:40 · What’s still missing'], ['final', '23:00 · Last hour warning (only if incomplete)'], ['meals', '45 min after each meal time · Log reminder (off by default)'], ['bedtime', '30 min before bedtime · Wind down (sleep goal)']];
+const REMINDERS = [['morning', '9:00 · Plan for the day'], ['water', 'Every 2 h, 11:00–19:00 · Water pace (only if behind)'], ['burner', '15:30 · Fat burner cutoff (only if cap 1 taken)'], ['stamina', '17:00 · Stamina session (stamina days, if not done)'], ['evening', '20:40 · What’s still missing'], ['final', '23:00 · Last hour warning (only if incomplete)'], ['meals', '45 min after each meal time · Log reminder (off by default)'], ['bedtime', '30 min before bedtime · Wind down (sleep goal)'], ['coachAm', 'Morning · Coach briefing (after your band syncs)'], ['coachPm', 'Evening · Coach review (after training)']];
 
 const FBV = '10.14.1', fbApp = initializeApp(FIREBASE);
 const auth = getAuth(fbApp);
@@ -35,7 +35,7 @@ catch (e) { db = getFirestore(fbApp); }
 
 /* ---------- state ---------- */
 const S = {
-  user: null, authReady: false, settings: null, days: {}, health: {}, hc: null, checkins: {}, foods: {}, acts: {}, photos: {}, meta: {},
+  user: null, authReady: false, settings: null, days: {}, health: {}, hc: null, checkins: {}, foods: {}, acts: {}, photos: {}, meta: {}, brief: {},
   got: { settings: false, days: false }, pend: { s: false, d: false }, online: navigator.onLine,
   view: 'today', trainTab: null, phase: null, editDate: null, openMeal: null, confirm: null, deferred: false, unsub: [], photosOn: false, cut: 50, board: {}, boardCode: null, boardUnsub: null, boardLast: null
 };
@@ -100,13 +100,26 @@ const saveSettings = () => save('settings/main', () => S.settings);
 /* ---------- app notifications (Firebase Cloud Messaging, free) ---------- */
 const VAPID = 'BGGjjx6TLhuJ1YCGlLJHamFrFtJvMVXL9TkFoMqtu578tH3NupkdLUHZ_P05tUa9KGr995u_RZF5zEDkdjMxKmI';
 const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent), standalone = matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+// Android app: native Firebase messaging; its tokens live in settings.push.android (the tick job sends real Android notifications to them)
+const FM = () => NATIVE && window.Capacitor.Plugins && window.Capacitor.Plugins.FirebaseMessaging;
 function pushState() {
+  if (FM()) { let mine = null; try { mine = localStorage.getItem('lk-push-a'); } catch (e) { } return mine && ((S.settings.push || {}).android || []).includes(mine) ? 'on' : 'off'; }
   if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) return isIOS && !standalone ? 'install' : 'none';
   if (Notification.permission === 'denied') return 'blocked';
   let mine = null; try { mine = localStorage.getItem('lk-push'); } catch (e) { }
   return Notification.permission === 'granted' && mine && ((S.settings.push || {}).tokens || []).includes(mine) ? 'on' : 'off';
 }
 async function pushOn() {
+  if (FM()) {
+    try {
+      const pr = await FM().requestPermissions();
+      if (pr.receive !== 'granted') { toast('Notifications weren’t allowed. Allow them for Lock In 90 in your phone’s settings.'); return draw(); }
+      const { token } = await FM().getToken(); if (!token) throw new Error('no token');
+      const p = S.settings.push = S.settings.push || {}; p.android = [...new Set([...(p.android || []), token])].slice(-3);
+      try { localStorage.setItem('lk-push-a', token); } catch (e) { }
+      saveSettings(); toast('Notifications are on for this phone.'); return draw();
+    } catch (e) { console.warn(e); toast('Couldn’t turn on notifications. Check your internet and try again.'); return; }
+  }
   try {
     const perm = await Notification.requestPermission();
     if (perm !== 'granted') { toast('Notifications weren’t allowed.'); return draw(); }
@@ -120,10 +133,12 @@ async function pushOn() {
   } catch (e) { console.warn(e); toast('Couldn’t turn on notifications. Check your internet and try again.'); }
 }
 function pushOff() {
+  if (FM()) { let m = null; try { m = localStorage.getItem('lk-push-a'); localStorage.removeItem('lk-push-a'); } catch (e) { } const p = S.settings.push || {}; p.android = (p.android || []).filter(t => t !== m); S.settings.push = p; saveSettings(); toast('Notifications off on this phone.'); return draw(); }
   let mine = null; try { mine = localStorage.getItem('lk-push'); localStorage.removeItem('lk-push'); } catch (e) { }
   const p = S.settings.push || {}; p.tokens = (p.tokens || []).filter(t => t !== mine); S.settings.push = p; saveSettings(); toast('Notifications off on this phone.'); draw();
 }
 async function pushTest() {
+  if (NP('WorkoutNotif')) return NP('WorkoutNotif').ping({ title: 'Lock In 90', body: 'This is how reminders will look. Real ones come from the reminder job.' }).catch(() => toast('Notifications are blocked for Lock In 90 in your phone’s settings.'));
   const reg = await navigator.serviceWorker.ready;
   reg.showNotification('Lock In 90', { body: 'This is how reminders will look. Real ones come from the reminder job.', icon: 'icons/icon-192.png', badge: 'icons/favicon.png', tag: 'test' });
 }
@@ -933,6 +948,14 @@ function weekStripHTML(date) {
   const t = today(), ws = myWS(t), st = S.settings;
   return `<div class="wkstrip" role="img" aria-label="This week">${Array.from({ length: 7 }, (_, i) => { const dt = C.addDays(ws, i), e = dt <= t && dt >= st.startDate ? C.evalDay(st, S.days[dt], dt) : null; const full = e && e.complete, cls = full ? 'f' : e && e.hit ? 'h' : e && dt < t ? 'm' : ''; return `<button data-act="dayview" data-v="${dt}" ${dt > t || dt < st.startDate ? 'disabled' : ''} class="${cls}${dt === date ? ' t' : ''}"><u>${full ? '✓' : e ? e.hit : ''}</u><span>${esc(C.DAYNAMES[C.weekday(dt)].slice(0, 2))}</span></button>`; }).join('')}</div>`;
 }
+// the coach's latest message today (written by the tick job with Claude; advice only)
+function coachHTML(t) {
+  const b = S.brief[t]; if (!b) return '';
+  const k = b.evening ? 'evening' : b.morning ? 'morning' : null; if (!k) return '';
+  const m = b[k], at = m.at ? new Date(m.at) : null;
+  return `<section class="card coachc${m.rec ? ' rk-' + m.rec.level : ''}"><div class="card-h"><h2>Coach</h2><span class="sub">${k === 'evening' ? 'Evening review' : 'Morning briefing'}${at ? ' · ' + C.pad(at.getHours()) + ':' + C.pad(at.getMinutes()) : ''}</span></div>
+  <p class="coach-h">${esc(m.head)}</p><p>${esc(m.text)}</p><p class="hint">Advice only, from your band and your log.</p></section>`;
+}
 function todayHTML(R) {
   const t = today(), n = now(), grace = graceDay(), date = editDate();
   const st = S.settings, d = S.days[date] || {}, ev = C.evalDay(st, d, date), P = ev.P;
@@ -973,6 +996,7 @@ function todayHTML(R) {
   const next = upNextHTML(R, d, date, P);
   h += `<div class="lift">${lift || next}</div>`;
   if (lift && next) h += next;
+  if (date === t) h += coachHTML(t);
   h += todayNotesHTML(R);
   const shown = ((lift ? '' : next).match(/data-act="meal" data-id="([^"]+)"/) || [])[1];
   h += todayListHTML(R, date, d, P, line, shown);
@@ -2636,7 +2660,12 @@ function latest(field) { const ds = Object.keys(S.health).sort().reverse(); for 
 function bandKV() {
   const [sd, sl] = latest('sleep'), [, hv] = latest('hrv'), [, rh] = latest('rhr');
   if (!sl && !hv && !rh) return '';
-  return `<div class="kv3"><div><b class="num">${sl ? hmTxt(sl.asleepMin) : '—'}</b><small>${sl ? (sd === today() ? 'Sleep last night' : `Sleep · ${fmt(sd)}`) : 'Sleep'}</small></div><div><b class="num">${hv ? Math.round(hv.rmssd) + ' ms' : '—'}</b><small>HRV</small></div><div><b class="num">${rh ? rh.bpm : '—'}</b><small>Resting HR</small></div></div>`;
+  return `<div class="kv3"><div><b class="num">${sl ? hmTxt(sl.asleepMin) : '—'}</b><small>${sl ? (sd === today() ? 'Sleep last night' : `Sleep · ${fmt(sd)}`) : 'Sleep'}</small></div><div><b class="num">${hv ? Math.round(hv.rmssd) + ' ms' : '—'}</b><small>HRV</small></div><div><b class="num">${rh ? rh.bpm : '—'}</b><small>Resting HR</small></div></div>${bandKV2()}`;
+}
+function bandKV2() { // recovery, steps and oxygen for today
+  const t = today(), d = S.health[t] || {}, rc = C.recovery(S.health, t, (S.settings && S.settings.sleepGoal) || 7.5), [, ox] = latest('spo2');
+  const lv = rc && rc.score != null ? { good: 'Ready to train', ok: 'Take it steady', low: 'Go easy today' }[rc.level] : '';
+  return `<div class="kv3"><div class="${rc && rc.level ? 'rk-' + rc.level : ''}"><b class="num">${rc && rc.score != null ? rc.score : '—'}</b><small>${lv ? `Recovery · ${lv}` : 'Recovery'}</small></div><div><b class="num">${d.steps != null ? d.steps.toLocaleString('en-US') : '—'}</b><small>Steps today</small></div><div><b class="num">${ox ? ox.avg + '%' : '—'}</b><small>Oxygen</small></div></div>`;
 }
 function bandSum() {
   if (HC.supported()) return bandOn() ? (hcLast() ? `Synced ${agoTxt(hcLast())}` : 'Connected') : 'Not connected';
@@ -2654,7 +2683,7 @@ function bandHTML() {
   if (hc && hc.available !== 'yes') return head('Needs Health Connect', 's-todo') + `<p class="hint">${hc.available === 'update' ? 'Health Connect needs an update.' : 'Health Connect isn’t installed.'} It’s free from Google and is how your band shares data with this app.</p><button class="btn primary block" data-act="hcget">Get Health Connect</button></section>`;
   const granted = (hc && hc.granted) || [];
   if (!bandOn() || (hc && !granted.length)) return head('Not connected', 's-todo') + `<p class="hint">Bring in sleep, recovery and steps from your band through Health Connect. The app only reads; it never changes your health data.</p>
-    <ul class="rd"><li>Sleep and sleep stages</li><li>Heart rate variability and resting heart rate</li><li>Heart rate, oxygen, skin temperature</li><li>Steps, calories and workouts (also from Lyfta)</li></ul>
+    <ul class="rd"><li>Sleep and sleep stages</li><li>Heart rate variability and resting heart rate</li><li>Heart rate, oxygen, skin temperature</li><li>Steps, calories and workouts</li></ul>
     <button class="btn primary block" data-act="hcconnect">Connect Health Connect</button>${priv('You can choose which of these to allow.')}</section>`;
   const recent = Object.keys(S.health).sort().slice(-3).map(d => S.health[d]);
   const chip = ([k, l]) => { const f = FIELD[k] || k, ok = granted.includes(k), has = k === 'exercise' || recent.some(d => d[f] != null && !(Array.isArray(d[f]) && !d[f].length)); return `<i class="${!ok ? 'hc-off' : has ? 'hc-on' : 'hc-nd'}">${l}${ok && !has ? ' · no data yet' : !ok ? ' · off' : ''}</i>`; };
@@ -2736,7 +2765,8 @@ function drawBand() {
     g.push(d.kcal && d.kcal.active != null ? bTile('Active calories', d.kcal.active, 'kcal', [d.kcal.total != null ? `${d.kcal.total.toLocaleString('en-US')} total` : '']) : d.kcal && d.kcal.total != null ? bTile('Total calories', d.kcal.total.toLocaleString('en-US'), 'kcal', []) : bTile('Active calories', '—', '', [none('activeKcal')]));
     g.push(d.spo2 ? bTile('Oxygen', d.spo2.avg, '%', [`lowest ${d.spo2.min}%${d.spo2.window === 'sleep' ? ' during sleep' : ''}`]) : bTile('Oxygen', '—', '', [none('spo2')]));
     g.push(d.hr ? bTile('Heart rate', d.hr.avg, 'bpm', [d.hr.min != null ? `${d.hr.min}–${d.hr.max} bpm today` : 'average today']) : bTile('Heart rate', '—', '', [none('hr')]));
-    g.push(d.temp ? bTile('Skin temp', d.temp.avgC.toFixed(1), '°C', [bandDelta(d.temp.avgC, avg(x => x.temp && x.temp.avgC), ' °C', null, 1) || 'compare with your own normal']) : bTile('Skin temp', '—', '', [none('temp')]));
+    if (d.temp) g.push(bTile('Skin temp', d.temp.avgC.toFixed(1), '°C', [bandDelta(d.temp.avgC, avg(x => x.temp && x.temp.avgC), ' °C', null, 1) || 'compare with your own normal']));
+    else if (dates.some(x => S.health[x].temp)) g.push(bTile('Skin temp', '—', '', [none('temp')])); // a band that never sends it gets no empty tile
     if (d.resp) g.push(bTile('Breathing rate', d.resp.avg, '/min', [d.resp.window === 'sleep' ? 'during sleep' : 'over the day']));
     if (d.vo2) g.push(bTile('VO2 max', d.vo2.v, 'ml/kg/min', []));
     if (d.bp) g.push(bTile('Blood pressure', `${d.bp.sys}/${d.bp.dia}`, 'mmHg', [d.bp.n > 1 ? `average of ${d.bp.n}` : '']));
@@ -2772,7 +2802,7 @@ function drawBand() {
   }).join('');
   body += `<details class="bsrc"${Object.keys(S.health).length ? '' : ' open'}><summary>What your band sends</summary><p class="hint">Last 7 days, by data type, and which app saved it.</p><ul class="srcl">${rows}</ul>
     <p class="hint">Your band app’s own scores, like body battery, body load, stress or a sleep score, stay in that app: Health Connect has no place for them.</p></details>
-    <details class="bsrc"><summary>How Recovery works</summary><p class="hint">Lock In 90’s own score, worked out on your phone with no AI. It compares today with your previous 14 days: HRV (45%), resting heart rate (25%) and sleep against your ${goalH} h goal (30%). An ordinary day for you lands around 60 on HRV and resting heart rate, so the score tracks changes in <em>you</em>, not charts for other people. It needs 4 earlier days to start. 67+ ready to train, 34–66 take it steady, under 34 go easy. A night under 80% of your sleep goal keeps the day at take it steady at most.</p></details>`;
+    <details class="bsrc"><summary>How Recovery works</summary><p class="hint">Lock In 90’s own score, worked out on your phone with no AI. It compares today with your previous 14 days: HRV (45%), resting heart rate (25%) and sleep against your ${goalH} h goal (30%). An ordinary day for you lands around 60 on HRV and resting heart rate, so the score tracks changes in you, not charts for other people. It needs 4 earlier days to start. 67+ ready to train, 34–66 take it steady, under 34 go easy. A night under 80% of your sleep goal keeps the day at take it steady at most.</p></details>`;
   if (HC.supported()) body += `<div class="row"><button class="btn small" data-act="hcsync"${S.hcBusy ? ' disabled' : ''}>${S.hcBusy ? 'Syncing…' : 'Sync now'}</button><button class="btn small ghost" data-act="hcperms">Permissions</button></div>`;
   $('sheet').innerHTML = `<div class="sheet full bandsh" role="dialog" aria-modal="true" aria-label="Health band"><div class="grab" aria-hidden="true"></div><div class="spread"><h2>Health band</h2><button class="x" data-act="closesheet" aria-label="Close">×</button></div>
     <div class="row dnav"><button class="btn small" data-act="bandnav" data-v="${prev}" ${prev < first ? 'disabled' : ''}>‹ Previous</button><span class="state s-todo">${dayLbl}</span><button class="btn small" data-act="bandnav" data-v="${next}" ${next > t ? 'disabled' : ''}>Next ›</button></div>
@@ -2866,6 +2896,7 @@ function subscribe() {
     S.pend.d = qs.metadata.hasPendingWrites; S.got.days = true; render();
   }, true);
   syncCol('health', qs => { qs.docs.forEach(x => { const v = fsDec(x.data()); if (v.deleted) delete S.health[x.id]; else S.health[x.id] = v; }); if (S.view === 'setup') render(); if (SH && SH.scope === 'band') drawBand(); });
+  syncCol('briefings', qs => { qs.docs.forEach(x => S.brief[x.id] = x.data()); if (S.view === 'today') render(); });
   syncCol('stravaOut', qs => { qs.docs.forEach(x => STVO[x.id] = x.data()); if (S.view === 'setup') render(); });
   syncCol('checkins', qs => { qs.docs.forEach(x => { const v = x.data(); if (v.deleted) delete S.checkins[x.id]; else S.checkins[x.id] = v; }); render(); });
   syncCol('foods', qs => { qs.docs.forEach(x => { const v = fsDec(x.data()); if (v.deleted) delete S.foods[x.id]; else S.foods[x.id] = v; }); });
@@ -3079,6 +3110,8 @@ const NP = n => NATIVE && window.Capacitor.Plugins && window.Capacitor.Plugins[n
 let splashUp = !!NP("SplashScreen");
 function splashDone() { if (!splashUp) return; splashUp = false; NP("SplashScreen").hide({ fadeOutDuration: 200 }).catch(() => { }); }
 if (splashUp) setTimeout(splashDone, 8000); // never stuck behind it (slow network, sign-in trouble)
+// buttons on the native workout notification (taps made while the app was closed arrive when it starts)
+if (NP('WorkoutNotif')) NP('WorkoutNotif').addListener('action', e => { const a = `${e.id}|${e.at || ''}`; if (S.settings && S.got.days) TR.notifAction(a); else pendingWo = a; });
 // Android back: close the top layer first, then go to Today; on Today the app goes to the background (it does not quit)
 if (NP("App")) NP("App").addListener("backButton", () => {
   if (CAM) return camClose();

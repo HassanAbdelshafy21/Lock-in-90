@@ -5,6 +5,7 @@
   "android": { "allowMixedContent": false },
   "plugins": {
     "FirebaseAuthentication": { "skipNativeAuth": true, "providers": ["google.com"] },
+    "FirebaseMessaging": { "presentationOptions": ["sound", "alert"] },
     "SplashScreen": { "launchAutoHide": false, "backgroundColor": "#283A58", "showSpinner": false, "launchFadeOutDuration": 200 }
   }
 }

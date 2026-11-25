@@ -413,7 +413,8 @@ function homeHTML() {
   ${cov.length ? `<div class="covchips">${cov.map(c => `<i class="${c.low ? 'lo' : ''}">${gL(c)} ${C.round(c.sets, 1)}</i>`).join('')}</div><p class="hint" style="font-size:11.5px;margin:2px 2px 0">Weekly sets per muscle. Amber means under 8.</p>` : ''}
   ${t.split !== 'lyfta' && t.routines.length ? `<details class="covd"${X.S.trCovOpen ? ' open' : ''}><summary>Every muscle covered?</summary>${coverageHTML(t)}</details>` : ''}
   <div class="setup-r"><span>Default rest<small class="sub" style="display:block">Auto: 2 min for big lifts, 75 s for small ones</small></span><button class="btn small" data-act="tr-restpick" data-v="*">⏱ ${t.restDefault != null ? mmss(t.restDefault) : 'Auto'}</button></div>
-  ${'Notification' in window && Notification.maxActions > 0 ? `<div class="setup-r"><span>Lock-screen controls<small class="sub" style="display:block">Tick sets and run the rest from the notification</small></span><div class="seg"><button data-act="tr-notif" data-v="1" aria-pressed="${t.notif !== false}">On</button><button data-act="tr-notif" data-v="0" aria-pressed="${t.notif === false}">Off</button></div></div>` : ''}</section>`;
+  ${notifNative() || ('Notification' in window && Notification.maxActions > 0) ? `<div class="setup-r"><span>Lock-screen controls<small class="sub" style="display:block">Tick sets and run the rest from the notification</small></span><div class="seg"><button data-act="tr-notif" data-v="1" aria-pressed="${t.notif !== false}">On</button><button data-act="tr-notif" data-v="0" aria-pressed="${t.notif === false}">Off</button></div></div>` : ''}
+  ${'wakeLock' in navigator ? `<div class="setup-r"><span>Keep the screen on<small class="sub" style="display:block">While a workout is running</small></span><div class="seg"><button data-act="tr-awake" data-v="1" aria-pressed="${t.awake !== false}">On</button><button data-act="tr-awake" data-v="0" aria-pressed="${t.awake === false}">Off</button></div></div>` : ''}</section>`;
   const cd = t.cardio || { on: false };
   h += `<section class="card"><div class="card-h"><h2>Cardio after lifting</h2><div class="seg"><button data-act="tr-cdon" data-v="1" aria-pressed="${!!cd.on}">On</button><button data-act="tr-cdon" data-v="0" aria-pressed="${!cd.on}">Off</button></div></div>
   ${cd.on ? `<p class="hint">Offered when you finish a workout. Doing it after weights keeps your lifting strong, and the minutes count toward the WHO 150 a week.</p><div class="form"><label>Machine<select class="in" data-trc="mode">${CARDIO.map(([k, l]) => `<option value="${k}" ${cd.mode === k ? 'selected' : ''}>${l}</option>`).join('')}</select></label><label>Minutes<select class="in" data-trc="min">${[10, 15, 20, 25, 30, 40].map(m => `<option ${cd.min === m ? 'selected' : ''}>${m}</option>`).join('')}</select></label><label class="full">Type<select class="in" data-trc="kind">${Object.entries(CARDIO_KIND).map(([k, l]) => `<option value="${k}" ${cd.kind === k ? 'selected' : ''}>${l}</option>`).join('')}</select></label></div>` : `<p class="hint">Turn on to get a short cardio block after each workout.</p>`}</section>`;
@@ -525,9 +526,17 @@ function restDone(silent) {
   else notifyWorking();
   X.draw();
 }
+// screen stays on while a workout runs (setting, on by default); Android drops the lock when the app is hidden, so re-ask
+let WL = null, wlBusy = false;
+function keepAwake(on) {
+  if (!('wakeLock' in navigator)) return;
+  if (on && !WL && !wlBusy && !document.hidden) { wlBusy = true; navigator.wakeLock.request('screen').then(l => { WL = l; l.addEventListener('release', () => { if (WL === l) WL = null; }); }).catch(() => { }).finally(() => { wlBusy = false; }); }
+  else if (!on && WL) { const l = WL; WL = null; l.release().catch(() => { }); }
+}
 setInterval(() => {
   if (!X || !X.S.settings) return;
   const el = $('wo-clock'), w = T() && active(); if (el && w) el.textContent = clock(w);
+  keepAwake(!!w && T().awake !== false);
   if (!RS) return;
   if (RS.hold) { const s = Math.floor((Date.now() - RS.start) / 1000), b = $('rest-big'); if (b) b.textContent = s + ' s'; if (s === RS.total && !RS.hit) { RS.hit = true; X.beep(2); } return; }
   const left = restLeft(), big = $('rest-big'), f = $('rest-fill'), ct = $('rchip-t'), ring = $('rchip-ring');
@@ -536,19 +545,29 @@ setInterval(() => {
 }, 250);
 
 /* ---------- lock-screen notification (Android; iPhone web apps can't show buttons) ---------- */
-const canNotif = () => 'Notification' in window && Notification.permission === 'granted' && Notification.maxActions > 0 && T() && T().notif !== false && 'serviceWorker' in navigator;
-async function showWo(title, body, actions, loud) {
+// Android app: a native notification (native/android/WorkoutService.java) with a live rest countdown and buttons that
+// work while the app is paused. Website: the service worker's notification, as before.
+const WN = () => (window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform() && window.Capacitor.Plugins && window.Capacitor.Plugins.WorkoutNotif) || null;
+export const notifNative = () => !!WN();
+let wnAsked = false;
+const canNotif = () => T() && T().notif !== false && (WN() ? true : 'Notification' in window && Notification.permission === 'granted' && Notification.maxActions > 0 && 'serviceWorker' in navigator);
+async function showWo(title, body, actions, loud, native) {
   if (!canNotif()) return;
+  if (WN()) { if (!wnAsked) { wnAsked = true; try { await WN().ask(); } catch (e) { } } WN().show({ title, body, ...native }).catch(() => { }); return; }
   try { const reg = await navigator.serviceWorker.ready; await reg.showNotification(title, { body, tag: 'wo', renotify: !!loud, silent: !loud, requireInteraction: true, icon: 'icons/icon-192.png', badge: 'icons/favicon.png', actions, data: { wo: true, url: './#train' }, ...(loud ? { vibrate: [250, 120, 250] } : {}) }); } catch (e) { }
 }
 function woHead() { const w = active(); return w ? `Lock In 90 · ${w.name} · ${Math.max(1, Math.round((Date.now() - w.t0) / 60000))} min` : 'Lock In 90'; }
-function notifyWorking() { const nx = nextUp(); if (!nx) return; showWo(nx.txt.split(' · ').slice(0, 2).join(' · '), `${woHead()}${nx.txt.split(' · ')[2] ? ' · ' + nx.txt.split(' · ')[2] : ''}`, [{ action: 'done', title: '✓ Set done' }, { action: 'open', title: 'Open' }]); }
-function notifyRest() { const nx = nextUp(), at = new Date(RS.end); showWo(`Rest until ${String(at.getHours()).padStart(2, '0')}:${String(at.getMinutes()).padStart(2, '0')}:${String(at.getSeconds()).padStart(2, '0')}`, `${nx ? 'Next: ' + nx.txt : woHead()}`, [{ action: 'add15', title: '+15 s' }, { action: 'skip', title: 'Skip rest' }]); }
-function notifyOver() { const nx = nextUp(); if (!nx) return; showWo(`Rest over. Go: set ${nx.j + 1}`, nx.txt, [{ action: 'done', title: '✓ Set done' }, { action: 'add15', title: '+15 s' }], true); }
-async function notifyClear() { try { const reg = await navigator.serviceWorker.ready; (await reg.getNotifications({ tag: 'wo' })).forEach(n => n.close()); } catch (e) { } }
-export function notifAction(a) {
+function restAfter(nx) { const w = active(), G = group(w, nx.i), s = nx.e.sets[nx.j]; if ((G.length > 1 && nx.i !== G[G.length - 1]) || (s && s.t === 'd')) return 0; const last = w.ex[G[G.length - 1]]; return restFor(last.id, last) || 0; }
+function notifyWorking() { const nx = nextUp(); if (!nx) return; showWo(nx.txt.split(' · ').slice(0, 2).join(' · '), `${woHead()}${nx.txt.split(' · ')[2] ? ' · ' + nx.txt.split(' · ')[2] : ''}`, [{ action: 'done', title: '✓ Set done' }, { action: 'open', title: 'Open' }], false, { mode: 'work', restSec: restAfter(nx) }); }
+function notifyRest() { const nx = nextUp(), at = new Date(RS.end); showWo(`Rest until ${String(at.getHours()).padStart(2, '0')}:${String(at.getMinutes()).padStart(2, '0')}:${String(at.getSeconds()).padStart(2, '0')}`, `${nx ? 'Next: ' + nx.txt : woHead()}`, [{ action: 'add15', title: '+15 s' }, { action: 'skip', title: 'Skip rest' }], false, { mode: 'rest', title: nx ? 'Rest · next: ' + nx.txt.split(' · ').slice(0, 2).join(' · ') : 'Rest', body: nx ? nx.txt : woHead(), endAt: RS.end }); }
+function notifyOver() { const nx = nextUp(); if (!nx) return; showWo(`Rest over. Go: set ${nx.j + 1}`, nx.txt, [{ action: 'done', title: '✓ Set done' }, { action: 'add15', title: '+15 s' }], true, { mode: 'over', restSec: restAfter(nx) }); }
+async function notifyClear() { if (WN()) return WN().clear().catch(() => { }); try { const reg = await navigator.serviceWorker.ready; (await reg.getNotifications({ tag: 'wo' })).forEach(n => n.close()); } catch (e) { } }
+export function notifAction(a0, at0) {
+  const [a, ts] = String(a0).split('|'), at = +(at0 || ts) || 0; // Android buttons say when they were tapped
   if (!active()) return notifyClear();
-  if (a === 'done') { const nx = nextUp(); if (nx) tickSet(nx.i, nx.j, true); return; }
+  if (a === 'done') { const nx = nextUp(); if (nx) { tickSet(nx.i, nx.j, true); if (RS && !RS.hold && at && at < Date.now()) { RS.end = at + RS.total * 1000; saveRS(); notifyRest(); X.draw(); } } return; }
+  if (a === 'add30' && RS) { RS.end += 30000; RS.total += 30; saveRS(); notifyRest(); return X.draw(); }
+  if (a === 'add30' && !RS) { const w = active(); return startRest(w.cur || 0, 30); }
   if (a === 'add15' && RS) { RS.end += 15000; RS.total += 15; saveRS(); notifyRest(); return X.draw(); }
   if (a === 'add15' && !RS) { const w = active(); return startRest(w.cur || 0, 15); }
   if (a === 'skip') return restDone(true);
@@ -1032,7 +1051,7 @@ function tickSet(i, j, fromNotif) {
   s.done = !s.done;
   const prevSet = e.sets.slice(0, j).reverse().find(x => x.done && !isW(x));
   if (s.done) { const tg = tgt(w, i, j); if (s.r == null || s.r === '') s.r = tg.r ?? (p ? p.r : prevSet && prevSet.r ? prevSet.r : e.lo); if ((s.kg == null || s.kg === '') && tg.kg != null) s.kg = tg.kg; }
-  X.saveDay(D()); X.buzz(12);
+  X.saveDay(D()); X.buzz(25);
   const b0 = best(e.id, D()); if (s.done && beats(s, b0)) X.toast(`New record on ${exName(e)}: ${setTxt(s)}`);
   if (!s.done) { X.draw(); return; }
   // supersets: go to the partner first, rest after the last one in the group
@@ -1225,7 +1244,8 @@ export async function act(a, v, b) {
       d.stamina.push({ mode: m[1], min: +min, kind: t.cardio.kind === 'int' ? 'intervals' : 'easy', src: 'finisher', t: Date.now() }); X.saveDay(D()); X.closeSheet(); X.toast(`${min} min of cardio logged.`); return X.draw();
     }
     case 'tr-cdon': t.cardio = { ...(t.cardio || cardioDefault(t.goal)), on: v === '1' }; X.saveSettings(); return X.draw();
-    case 'tr-notif': t.notif = v === '1'; X.saveSettings(); if (t.notif && 'Notification' in window && Notification.permission === 'default') { try { await Notification.requestPermission(); } catch (e) { } } return X.draw();
+    case 'tr-awake': t.awake = v === '1'; X.saveSettings(); return X.draw();
+    case 'tr-notif': t.notif = v === '1'; X.saveSettings(); if (WN()) { if (t.notif) { try { await WN().ask(); } catch (e) { } if (active()) RS ? notifyRest() : notifyWorking(); } else notifyClear(); return X.draw(); } if (t.notif && 'Notification' in window && Notification.permission === 'default') { try { await Notification.requestPermission(); } catch (e) { } } return X.draw();
     case 'tr-edit': await loadDB(); return openEdit(v);
     case 'tr-new': await loadDB(); return openEdit('new');
     case 'tr-eup': { const r = S.trEdit, i = +v; if (i > 0) [r.ex[i - 1], r.ex[i]] = [r.ex[i], r.ex[i - 1]]; return drawEdit(); }
