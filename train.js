@@ -424,6 +424,17 @@ function homeHTML() {
 function focusOf(r) { const c = {}; r.ex.forEach(e => { const m = ex(e.id).pm[0]; if (m) c[m] = (c[m] || 0) + (+e.sets || 0); }); return Object.entries(c).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([m]) => musL(m)).join(', ') || '—'; }
 function woStats(w) { let sets = 0, vol = 0; (w.ex || []).filter(e => !e.cd).forEach(e => (e.sets || []).forEach(s => { if (s.done && !isW(s)) { sets++; vol += (s.kg || 0) * (s.r || 0); } })); const min = w.t1 && w.t0 ? Math.max(1, Math.round((w.t1 - w.t0) / 60000)) : 0; return { sets, vol: Math.round(vol), min }; }
 function woSummary(w) { const s = woStats(w), cdm = (w.ex || []).filter(e => e.cd && e.sets[0] && e.sets[0].done).reduce((a, e) => a + e.cd.min, 0); return [s.min && `${s.min} min`, s.sets || !cdm ? (s.sets === 1 ? "1 set" : `${s.sets} sets`) : '', s.vol && `${C.round(s.vol / 1000, 1)} t lifted`, cdm && `${cdm} min cardio`].filter(Boolean).join(' · '); }
+// the Strava description of a finished workout: one line per exercise with its sets, then the totals
+export function stravaDesc(w) {
+  const lines = (w.ex || []).map(e => {
+    const nm = e.nm || ex(e.id).name;
+    if (e.cd) return e.sets[0] && e.sets[0].done ? `${nm}: ${e.cd.min} min` : "";
+    const ss = (e.sets || []).filter(x => x.done || x.kg || x.r); if (!ss.length) return "";
+    const tm = isTimed(e.id);
+    return `${nm}: ${ss.map(x => (isW(x) ? "warm-up " : "") + (tm ? `${x.r || 0} s` : x.kg ? `${C.round(x.kg, 2)} kg × ${x.r || 0}` : `${x.r || 0} reps`)).join(", ")}`;
+  }).filter(Boolean);
+  return [...lines, "", woSummary(w), "Logged with Lock In 90"].join('\n');
+}
 function unlogCd(e) { const d = X.dayDoc(D()), k = (d.stamina || []).map(s => s.ex).lastIndexOf(e.id); if (k >= 0) d.stamina.splice(k, 1); }
 const cardioDone = d => (d.stamina || []).some(s => s.src === 'finisher');
 
@@ -1211,7 +1222,7 @@ export async function act(a, v, b) {
     }
     case 'tr-cdlog': {
       const [min, mode] = v.split(':'), d = X.dayDoc(D()), m = CARDIO.find(c => c[0] === mode) || CARDIO[0];
-      d.stamina.push({ mode: m[1], min: +min, kind: t.cardio.kind === 'int' ? 'intervals' : 'easy', src: 'finisher' }); X.saveDay(D()); X.closeSheet(); X.toast(`${min} min of cardio logged.`); return X.draw();
+      d.stamina.push({ mode: m[1], min: +min, kind: t.cardio.kind === 'int' ? 'intervals' : 'easy', src: 'finisher', t: Date.now() }); X.saveDay(D()); X.closeSheet(); X.toast(`${min} min of cardio logged.`); return X.draw();
     }
     case 'tr-cdon': t.cardio = { ...(t.cardio || cardioDefault(t.goal)), on: v === '1' }; X.saveSettings(); return X.draw();
     case 'tr-notif': t.notif = v === '1'; X.saveSettings(); if (t.notif && 'Notification' in window && Notification.permission === 'default') { try { await Notification.requestPermission(); } catch (e) { } } return X.draw();

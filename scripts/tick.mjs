@@ -61,9 +61,13 @@ async function stravaSync(uid, settings) {
   const r = await fetch(`https://www.strava.com/api/v3/athlete/activities?after=${after}&per_page=60`, { headers: { Authorization: `Bearer ${token}` } });
   if (!r.ok) { console.log('strava list failed', r.status); await db.doc(`users/${uid}/meta/strava`).set({ ok: false, lastSync: new Date().toISOString(), error: r.status }, { merge: true }); return; }
   const acts = await r.json();
+  // what Lock In 90 posted itself never comes back in as a Strava activity (it would count twice)
+  const out = await db.collection(`users/${uid}/stravaOut`).get();
+  const own = new Set(out.docs.map(d => d.data().posted && String(d.data().posted.id)).filter(Boolean));
   const batch = db.batch();
   const gymDates = new Set();
   for (const a of acts) {
+    if (own.has(String(a.id))) { batch.delete(db.doc(`users/${uid}/activities/${a.id}`)); continue; }
     const date = String(a.start_date_local).slice(0, 10);
     const type = a.sport_type || a.type;
     batch.set(db.doc(`users/${uid}/activities/${a.id}`), { id: a.id, date, name: a.name || type, type, min: Math.round((a.moving_time || a.elapsed_time || 0) / 60), dist: a.distance || 0, hr: a.average_heartrate || null, start: a.start_date_local });
@@ -76,8 +80,45 @@ async function stravaSync(uid, settings) {
     if (!snap.exists || !snap.data().trainingDone) await ref.set({ date, trainingDone: true, trainingSource: 'strava', u: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
   }
   const count = (await db.collection(`users/${uid}/activities`).count().get()).data().count;
-  await db.doc(`users/${uid}/meta/strava`).set({ ok: true, lastSync: new Date().toISOString(), count }, { merge: true });
+  await db.doc(`users/${uid}/meta/strava`).set({ ok: true, lastSync: new Date().toISOString(), count, cid: process.env.STRAVA_CLIENT_ID }, { merge: true });
   console.log('strava synced', acts.length, 'gym days ticked', [...gymDates]);
+  if (settings.strava && settings.strava.post) await stravaPost(uid, token, acts, out.docs, own);
+}
+// Posts what the phone queued in users/{uid}/stravaOut (Lock In 90 workouts and cardio, built by the app).
+// Skips anything Strava already has at the same time (a watch or another app posted it). Edits after posting
+// update the title and description; Strava's API can't delete or change times, so those stay as first posted.
+async function stravaPost(uid, token, acts, docs, own) {
+  const minDate = C.addDays(C.nowIn(TZ).date, -3), meta = db.doc(`users/${uid}/meta/strava`);
+  const span = a => { const s = Date.parse(a.start_date); return [s, s + (a.elapsed_time || a.moving_time || 0) * 1000]; };
+  for (const d of docs) {
+    const o = d.data();
+    if (o.gone || !o.start || !o.t0 || o.date < minDate || o.skip) continue;
+    if (o.posted && o.posted.h === o.h) continue;
+    if ((o.tries || 0) >= 5) continue;
+    const H = { Authorization: `Bearer ${token}` };
+    const body = new URLSearchParams({ name: o.name, description: o.desc || '' });
+    let r;
+    if (o.posted) r = await fetch(`https://www.strava.com/api/v3/activities/${o.posted.id}`, { method: 'PUT', headers: H, body });
+    else {
+      const a0 = o.t0, a1 = o.t0 + o.sec * 1000;
+      const clash = acts.find(a => { if (own.has(String(a.id))) return false; const [b0, b1] = span(a); const ov = Math.min(a1, b1) - Math.max(a0, b0); return ov > 0.5 * Math.min(a1 - a0, Math.max(b1 - b0, 60e3)); });
+      if (clash) { await d.ref.set({ skip: 'overlap', other: { id: clash.id, name: clash.name || '' }, u: admin.firestore.FieldValue.serverTimestamp() }, { merge: true }); console.log('strava skip (already there)', o.name); continue; }
+      body.set('sport_type', o.sport); body.set('start_date_local', o.start); body.set('elapsed_time', String(o.sec)); body.set('trainer', o.trainer ? '1' : '0');
+      if (o.dist) body.set('distance', String(o.dist));
+      r = await fetch('https://www.strava.com/api/v3/activities', { method: 'POST', headers: H, body });
+    }
+    const j = await r.json().catch(() => ({}));
+    if (r.ok) {
+      await d.ref.set({ posted: { id: j.id || (o.posted && o.posted.id), h: o.h, at: new Date().toISOString() }, err: admin.firestore.FieldValue.delete(), u: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
+      await meta.set({ needWrite: false }, { merge: true });
+      console.log(o.posted ? 'strava updated' : 'strava posted', o.name);
+    } else if (r.status === 401 || r.status === 403) {
+      // the connection was made without permission to post: the app asks to reconnect once
+      await meta.set({ needWrite: true }, { merge: true }); console.log('strava post refused', r.status, JSON.stringify(j.errors || j.message)); return;
+    } else {
+      await d.ref.set({ err: r.status, tries: (o.tries || 0) + 1, u: admin.firestore.FieldValue.serverTimestamp() }, { merge: true }); console.log('strava post failed', r.status, j.message);
+    }
+  }
 }
 
 /* ---------- reminders ---------- */

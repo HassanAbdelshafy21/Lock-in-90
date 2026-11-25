@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Lock In 90 · Privacy</title>
+<meta name="theme-color" content="#283A58">
+<style>
+  :root { color-scheme: light dark; --ink:#14213D; --muted:#5B6B86; --line:#E3E8F0; --bg:#F4F6FA; --card:#fff; --accent:#283A58; }
+  @media (prefers-color-scheme: dark) { :root { --ink:#E9EEF7; --muted:#9FB0D0; --line:#2A3550; --bg:#0E1424; --card:#161F33; --accent:#9FB0D0; } }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 640px; margin: 0 auto; padding: calc(env(safe-area-inset-top) + 20px) 18px 40px; }
+  h1 { font-size: 24px; margin: 0 0 4px; }
+  h2 { font-size: 16px; margin: 22px 0 6px; }
+  p, li { color: var(--ink); }
+  .sub { color: var(--muted); margin: 0 0 16px; font-size: 13px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 14px 16px; margin: 12px 0; }
+  ul { margin: 6px 0; padding-inline-start: 20px; }
+  li { margin: 3px 0; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  td { padding: 7px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+  td:first-child { font-weight: 600; width: 42%; padding-inline-end: 10px; }
+  tr:last-child td { border-bottom: 0; }
+  a { color: var(--accent); }
+</style>
+</head>
+<body>
+<main>
+  <h1>Privacy</h1>
+  <p class="sub">Lock In 90 · updated 17 November 2026</p>
+
+  <div class="card">
+    <b>In short:</b> Lock In 90 reads health data from Health Connect only to show it next to your meals and training. It never writes to Health Connect, never sells or shares your data, and shows no ads.
+  </div>
+
+  <h2>What the app reads from Health Connect</h2>
+  <p>Only the types you allow on the Health Connect screen. You can allow some and not others.</p>
+  <div class="card">
+    <table>
+      <tr><td>Sleep</td><td>Bedtime, wake time and sleep stages, to show how you slept.</td></tr>
+      <tr><td>Heart rate variability, resting heart rate</td><td>To estimate how recovered you are each morning.</td></tr>
+      <tr><td>Heart rate</td><td>Daily average, lowest and highest.</td></tr>
+      <tr><td>Oxygen saturation, body temperature</td><td>Nightly averages, shown as trends.</td></tr>
+      <tr><td>Steps, active and total calories</td><td>Daily totals, next to what you ate.</td></tr>
+      <tr><td>Exercise</td><td>Type, start and end of workouts recorded by your band or other apps, such as a gym log.</td></tr>
+    </table>
+  </div>
+  <p>Health Connect lets an app read up to 30 days from before you first gave permission, and everything after.</p>
+
+  <h2>Where it goes</h2>
+  <ul>
+    <li>The app turns the readings into one short summary per day (for example: slept 7 h 10 min, resting heart rate 58).</li>
+    <li>That summary is saved in your own Lock In 90 account in Google Firebase, so it syncs between your devices. Only you, signed in, can read it.</li>
+    <li>Health data is <b>not</b> included in the friends board or in a coach link.</li>
+    <li>Lock In 90 does not currently send health data to any AI service. If that changes, it will be something you switch on yourself, and this page will say so first.</li>
+  </ul>
+
+  <h2>Your control</h2>
+  <ul>
+    <li><b>Stop reading:</b> Android Settings › Health Connect › App permissions › Lock In 90, then turn off any type, or all of them.</li>
+    <li><b>Delete:</b> in the app, Me › Health band › Disconnect and delete removes every daily health summary from your account.</li>
+    <li><b>Download:</b> Me › Data › Export backup saves everything in your account to a file.</li>
+  </ul>
+
+  <h2>Questions</h2>
+  <p>Open an issue on the project's <a href="https://github.com/HassanAbdelshafy21/Lock-in-90/issues">GitHub page</a>.</p>
+</main>
+</body>
+</html>

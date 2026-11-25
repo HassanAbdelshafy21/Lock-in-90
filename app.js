@@ -1,10 +1,11 @@
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js';
-import { getAuth, GoogleAuthProvider, signInWithPopup, getRedirectResult, onAuthStateChanged, signOut, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js';
+import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithCredential, getRedirectResult, onAuthStateChanged, signOut, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js';
 import { initializeFirestore, getFirestore, persistentLocalCache, persistentMultipleTabManager, doc, collection, onSnapshot, setDoc, getDoc, deleteDoc, writeBatch, query, where, getDocsFromCache, serverTimestamp, Timestamp } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
 import * as C from './core.js';
 import { trText, addFoodNames } from './i18n.js';
 import * as TR from './train.js';
-const APP_VERSION = '36 · cardio as an exercise: treadmill, bike, elliptical…';
+import * as HC from './health.js';
+const APP_VERSION = '37 · band screen, Strava posting, Android back button and launch screen';
 import { EX, POSE, figSVG, YT, LINES, FOODS, COACH_MEALS, DEFAULT_SUPPS, COACH_ENC, SLOTS, CARDIO_MODES } from './data.js';
 import { BRANDS, BRAND_BY_CODE } from './brands.js';
 addFoodNames(FOODS); addFoodNames(BRANDS);
@@ -25,13 +26,16 @@ const REMINDERS = [['morning', '9:00 · Plan for the day'], ['water', 'Every 2 h
 
 const FBV = '10.14.1', fbApp = initializeApp(FIREBASE);
 const auth = getAuth(fbApp);
+// Running inside the Android app (Capacitor) rather than a browser
+const NATIVE = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+const NATIVE_AUTH = () => NATIVE && window.Capacitor.Plugins && window.Capacitor.Plugins.FirebaseAuthentication;
 let db;
 try { db = initializeFirestore(fbApp, { ignoreUndefinedProperties: true, localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }) }); }
 catch (e) { db = getFirestore(fbApp); }
 
 /* ---------- state ---------- */
 const S = {
-  user: null, authReady: false, settings: null, days: {}, checkins: {}, foods: {}, acts: {}, photos: {}, meta: {},
+  user: null, authReady: false, settings: null, days: {}, health: {}, hc: null, checkins: {}, foods: {}, acts: {}, photos: {}, meta: {},
   got: { settings: false, days: false }, pend: { s: false, d: false }, online: navigator.onLine,
   view: 'today', trainTab: null, phase: null, editDate: null, openMeal: null, confirm: null, deferred: false, unsub: [], photosOn: false, cut: 50, board: {}, boardCode: null, boardUnsub: null, boardLast: null
 };
@@ -84,14 +88,14 @@ function save(path, get, delay = 400) {
   }, delay);
 }
 const busy = path => !!timers[path];
-const SYNCED = ['days/', 'checkins/', 'foods/', 'photos/'];
+const SYNCED = ['days/', 'checkins/', 'foods/', 'photos/', 'health/'];
 const stamp = (path, data) => SYNCED.some(p => path.startsWith(p)) ? { ...data, u: serverTimestamp() } : data;
 function dayDoc(date) {
   const d = S.days[date] || (S.days[date] = { date });
   d.meals = d.meals || {}; d.skip = d.skip || {}; d.extras = d.extras || []; d.supps = d.supps || {}; d.cali = d.cali || {}; d.stamina = d.stamina || []; d.water = d.water || 0;
   return d;
 }
-const saveDay = date => save('days/' + date, () => dayDoc(date));
+const saveDay = date => { save('days/' + date, () => dayDoc(date)); stvQueue(date); };
 const saveSettings = () => save('settings/main', () => S.settings);
 /* ---------- app notifications (Firebase Cloud Messaging, free) ---------- */
 const VAPID = 'BGGjjx6TLhuJ1YCGlLJHamFrFtJvMVXL9TkFoMqtu578tH3NupkdLUHZ_P05tUa9KGr995u_RZF5zEDkdjMxKmI';
@@ -194,9 +198,9 @@ function draw() {
   $('tabs').hidden = !S.user || !S.settings;
   const m = $('main');
   if (!S.authReady) { $('top').innerHTML = topIdle(); $('top').parentElement.hidden = false; m.innerHTML = `<div class="card hint">Loading…</div>`; return; }
-  if (!S.user) { $('top').innerHTML = topIdle(); $('top').parentElement.hidden = false; m.innerHTML = signinHTML(); return; }
+  if (!S.user) { $('top').innerHTML = topIdle(); $('top').parentElement.hidden = false; m.innerHTML = signinHTML(); splashDone(); return; }
   if (!S.got.settings) { $('top').innerHTML = topIdle(); $('top').parentElement.hidden = false; m.innerHTML = `<div class="card hint">Loading your challenge…</div>`; return; }
-  if (!S.settings) { $('top').innerHTML = topIdle(); $('top').parentElement.hidden = false; m.innerHTML = welcomeHTML(); return; }
+  if (!S.settings) { $('top').innerHTML = topIdle(); $('top').parentElement.hidden = false; m.innerHTML = welcomeHTML(); splashDone(); return; }
   if (S.quickWater && S.got.days) { S.quickWater = false; const dd = dayDoc(today()); dd.water = (dd.water || 0) + 250; saveDay(today()); S.view = 'today'; history.replaceState(null, '', '#today'); toast(`+250 ml · ${L(C.waterTotal(dd))} L today`); }
   privacyMigrate();
   if (S.quickSport && S.got.days) { S.quickSport = false; S.view = 'today'; history.replaceState(null, '', '#today'); setTimeout(openSport, 50); }
@@ -207,6 +211,7 @@ function draw() {
   if (S.view === 'progress' && S.ptab === 'body') photosOn();
   m.innerHTML = S.view === 'train' ? pageHead('Train', R) + trainHTML(R) : S.view === 'progress' ? pageHead('Progress', R) + progressHTML(R) : S.view === 'setup' ? meHTML(R) : todayHTML(R);
   drawPanel();
+  if (S.got.days) splashDone();
 }
 const topIdle = () => `<div class="top-row"><div class="brand"><img src="icons/logo.svg" alt=""><div><div class="daylabel">90-day challenge</div><div class="daynum">LOCK IN</div></div></div></div>`;
 function syncDot() { const s = !S.online ? 'off' : (S.pend.s || S.pend.d || Object.keys(timers).length) ? 'pend' : 'ok'; return `<span class="syncdot ${s}" title="${s === 'off' ? 'Offline · saved on phone' : s === 'pend' ? 'Syncing' : 'Synced'}" aria-label="${s === 'off' ? 'Offline, saved on phone' : s === 'pend' ? 'Syncing' : 'Synced'}"></span>`; }
@@ -739,6 +744,7 @@ function progressShell(G) {
 }
 const ME_GROUPS = [
   ['Plan', [['Mode', '🎯'], ['Day and week', '📅'], ['Meal plan', '🍽️'], ['Weekly training', '🏋️'], ['Supplements', '💊'], ['Stamina track', '🚴'], ['Ramadan mode', '☾']]],
+  ['Health', [['Health band', '⌚']]],
   ['Habits', [['If-then plans', '⇢'], ['Reminders', '🔔']]],
   ['Sharing', [['Coach link', '🔗'], ['Strava', '↻']]],
   ['App', [['Data', '⚙️'], ['Restart', '↺']]]
@@ -749,7 +755,7 @@ function meHTML(R) {
   const byTitle = Object.fromEntries(parts.map(p => [title(p), p]));
   if (S.meSec && byTitle[S.meSec]) return `<header class="ph sub2"><button class="back" data-act="mesec" data-v="" aria-label="Back to Me">‹</button><h1>${esc(S.meSec)}</h1></header>` + byTitle[S.meSec];
   const st = S.settings, w = curWeight();
-  const sum = { 'Meal plan': `${kc(C.sumItems((st.meals || []).flatMap(m => m.items || [])).k)} kcal · ${(st.meals || []).length} meals`, 'Supplements': `${(st.supps || []).filter(s => s.req).length} core`, 'Ramadan mode': st.ramadan && st.ramadan.on ? 'On' : 'Off', 'If-then plans': `${(st.ifthen || []).length} saved`, 'Coach link': st.coach ? 'Sharing' : 'Off', 'Reminders': pushState() === 'on' ? 'App notifications on' : st.ntfyTopic ? 'ntfy' : 'Not set up', 'Stamina track': (st.stamina || {}).on === false ? 'Off' : 'On', 'Weekly training': '' };
+  const sum = { 'Health band': bandSum(), 'Meal plan': `${kc(C.sumItems((st.meals || []).flatMap(m => m.items || [])).k)} kcal · ${(st.meals || []).length} meals`, 'Supplements': `${(st.supps || []).filter(s => s.req).length} core`, 'Ramadan mode': st.ramadan && st.ramadan.on ? 'On' : 'Off', 'If-then plans': `${(st.ifthen || []).length} saved`, 'Coach link': st.coach ? 'Sharing' : 'Off', 'Reminders': pushState() === 'on' ? 'App notifications on' : st.ntfyTopic ? 'ntfy' : 'Not set up', 'Stamina track': (st.stamina || {}).on === false ? 'Off' : 'On', 'Weekly training': '' };
   let h = `<header class="ph"><h1>Me</h1><span class="hero-chips">${syncDot()}${TR.rankChip()}${flameChip(R)}</span></header>
   <section class="card me-card"><div class="me-top"><span class="avatar">${esc((boardName() || '?').slice(0, 1).toUpperCase())}</span><span><b>${esc(boardName())}</b><small>${R.tracker ? `Daily tracker · ${R.done} day${R.done === 1 ? '' : 's'} in a row` : `Day ${Math.min(R.dayNum, 90)} of 90 · attempt ${R.attemptNo}`}</small></span></div>
   <div class="me-stats"><span><b class="num">${w ? C.round(w, 1) : '—'}</b><small>kg now</small></span><span><b class="num">${st.goalWeight || '—'}</b><small>kg goal</small></span><span><b class="num">${L(st.waterGoal || 3500)}</b><small>L water</small></span></div>
@@ -1524,8 +1530,9 @@ function setupHTML(R) {
   <div class="sup-r"><span class="sub">Your ntfy topic</span><div class="row"><input class="in grow" id="s-topic" data-topic="1" value="${esc(st.ntfyTopic || '')}" placeholder="e.g. lockin90-a1b2c3d4e5f6" autocomplete="off" spellcheck="false"><button class="btn small" data-act="gentopic">New</button></div><p class="hint">Subscribe to this exact name in the ntfy app. Treat it like a password. Leave it empty and no reminders are sent.</p></div></details>
   ${REMINDERS.map(([k, label]) => { const on = k === 'meals' ? rm[k] === true : rm[k] !== false; return `<div class="setup-r"><span>${esc(label)}</span><div class="seg"><button data-act="remind" data-v="${k}:1" aria-pressed="${on}">On</button><button data-act="remind" data-v="${k}:0" aria-pressed="${!on}">Off</button></div></div>`; }).join('')}</section>`;
   if (sv) h += `<section class="card"><div class="card-h"><h2>Strava</h2>${sv && sv.ok ? pill('done', 'Connected') : pill('todo', 'Not connected')}</div>
-  <p class="hint">${sv && sv.lastSync ? `Last sync ${new Date(sv.lastSync).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}. ${sv.count ? sv.count + ' activities synced.' : ''}` : 'Connects once the Strava step in the setup guide is done. Checks every 30 minutes.'}</p></section>`;
+  <p class="hint">${sv && sv.lastSync ? `Last sync ${new Date(sv.lastSync).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}. ${sv.count ? sv.count + ' activities synced.' : ''}` : 'Connects once the Strava step in the setup guide is done. Checks every 30 minutes.'}</p>${stvCard(sv)}</section>`;
   // account and data
+  h += bandHTML();
   h += `<section class="card"><div class="card-h"><h2>Data</h2></div>
   <div class="row"><button class="btn" data-act="export">Export backup</button><label class="btn" for="imp-file2">Import backup</label><input id="imp-file2" type="file" accept="application/json,.json" hidden></div>
   <div class="setup-r"><span>Language</span><div class="seg" role="group" aria-label="Language"><button data-act="lang" data-v="en" aria-pressed="${LANG() !== 'ar'}">English</button><button data-act="lang" data-v="ar" aria-pressed="${LANG() === 'ar'}">العربية</button></div></div>
@@ -2140,7 +2147,7 @@ document.addEventListener('click', async ev => {
     case 'signin': return signin();
     case 'signup': return emailAuth(true);
     case 'resetpw': { const em = ($('si-email') && $('si-email').value || '').trim(); if (!em) return toast('Type your email above first.'); try { await sendPasswordResetEmail(auth, em); toast('Reset link sent. Check your email.'); } catch (e) { toast(AUTH_MSG[e && e.code] || 'Couldn’t send the reset email.'); } return; }
-    case 'signout': S.unsub.forEach(u => u()); S.unsub = []; S.photosOn = false; S.photos = {}; if (S.boardUnsub) S.boardUnsub(); S.boardUnsub = null; S.boardCode = null; S.board = {}; S.boardLast = null; await signOut(auth); return;
+    case 'signout': S.unsub.forEach(u => u()); S.unsub = []; S.photosOn = false; S.photos = {}; if (S.boardUnsub) S.boardUnsub(); S.boardUnsub = null; S.boardCode = null; S.board = {}; S.boardLast = null; await signOut(auth); if (NATIVE_AUTH()) NATIVE_AUTH().signOut().catch(() => { }); return;
     case 'tab': return go(v);
     case 'jump': { if (v.startsWith('sec-') && S.view === 'today') { S.panel = v.slice(4); return draw(); } const el = $(v); if (el) el.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' }); return; }
     case 'wmode': { const keep = ['w-start', 'w-water', 'w-weight', 'w-goal'].map(id => [id, $(id) && $(id).value]); S.wMode = v; draw(); keep.forEach(([id, val]) => { if ($(id) && val != null) $(id).value = val; }); return; }
@@ -2156,7 +2163,15 @@ document.addEventListener('click', async ev => {
   if (act === 'panel') { S.panel = v; buzz(6); return draw(); }
   if (act === 'panelclose') { S.panel = null; return draw(); }
   if (act === 'ptab') { S.ptab = v; S.panel = null; if (S.view !== 'progress') return go('progress'); window.scrollTo(0, 0); return draw(); }
-  if (act === 'mesec') { S.meSec = v || null; window.scrollTo(0, 0); return draw(); }
+  if (act === 'mesec') { S.meSec = v || null; window.scrollTo(0, 0); if (v === 'Health band') hcRefresh(); return draw(); }
+  if (act === 'hcconnect') return hcConnect();
+  if (act === 'hcsync') return hcSync(3);
+  if (act === 'bandopen') return openBand(today());
+  if (act === 'bandnav' && SH && SH.scope === 'band') { SH.date = v; return drawBand(); }
+  if (act === 'bandtrend' && SH && SH.scope === 'band') { SH.trend = v; return drawBand(); }
+  if (act === 'hcperms' || act === 'hcget') return HC.openSettings().catch(() => toast('Couldn’t open Health Connect.'));
+  if (act === 'hcprivacy') { SH = { scope: 'hcpriv' }; $('sheet').hidden = false; $('sheet').innerHTML = `<div class="sheet" role="dialog" aria-modal="true" aria-label="Privacy"><div class="grab" aria-hidden="true"></div><div class="spread"><h2>Privacy</h2><button class="x" data-act="closesheet" aria-label="Close">×</button></div><iframe class="privfr" src="privacy.html" title="Privacy"></iframe></div>`; return; }
+  if (act === 'hcdel') return hcDelete(b);
   if (act === 'closesheet') { if (SH && TR.closeGuard(SH.scope)) return; return closeSheet(); }
   if (act === 'ftab') { S.ftab = v; return draw(); }
   if (act === 'fstr') { S.fstr = v; return draw(); }
@@ -2434,7 +2449,7 @@ document.addEventListener('click', async ev => {
       const min = parseInt($('st-min').value, 10); if (!min) return toast('Enter the minutes.');
       const kind = $('st-kind').value, dist = parseFloat($('st-dist').value) || null;
       if (kind === 'test' && !dist) return toast('Enter the distance you covered in the 12 minutes.');
-      d().stamina.push({ mode: $('st-mode').value, kind, min, dist, hr: parseInt($('st-hr').value, 10) || null }); saveDay(D); toast('Session saved.'); break;
+      d().stamina.push({ mode: $('st-mode').value, kind, min, dist, hr: parseInt($('st-hr').value, 10) || null, t: Date.now() }); saveDay(D); toast('Session saved.'); break;
     }
     case 'stamdel': { const [dt, i] = v.split(':'); const dd = dayDoc(dt); dd.stamina.splice(+i, 1); saveDay(dt); break; }
     case 'checkin': return saveCheckin();
@@ -2459,6 +2474,7 @@ document.addEventListener('click', async ev => {
     case 'mealup': case 'mealdown': { const ms = planMeals(), i = ms.findIndex(x => x.id === v), j = act === 'mealup' ? i - 1 : i + 1; if (j >= 0 && j < ms.length) { [ms[i], ms[j]] = [ms[j], ms[i]]; savePlan(); } break; }
     case 'mealdel': if (S.confirm === 'meal:' + v) { setPlanMeals(planMeals().filter(x => x.id !== v)); S.confirm = null; savePlan(); } else { S.confirm = 'meal:' + v; b.textContent = 'Tap again to delete'; return; } break;
     case 'mealadd': { const ms = planMeals(); ms.push({ id: 'm' + Date.now().toString(36), name: `Meal ${ms.length + 1}`, time: '', items: [] }); savePlan(); break; }
+    case 'stvpost': { const on = v === '1'; S.settings.strava = { ...(S.settings.strava || {}), post: on, ...(on ? { since: today() } : {}) }; saveSettings(); if (on) { stvQueue(today()); toast('Today’s workouts go to Strava at the next sync.'); } break; }
     case 'stamon': S.settings.stamina = { ...(S.settings.stamina || { days: [] }), on: v === '1' }; saveSettings(); break;
     case 'stamday': { const st = S.settings.stamina = S.settings.stamina || { on: true, days: [] }; const i = +v; st.days = st.days.includes(i) ? st.days.filter(x => x !== i) : [...st.days, i]; saveSettings(); break; }
     case 'sreq': { const s = S.settings.supps.find(x => x.id === b.dataset.id); s.req = !s.req; saveSettings(); break; }
@@ -2563,8 +2579,207 @@ async function saveCheckin() {
   }
   toast('Check-in saved.'); draw();
 }
+/* ---------- health band: Health Connect (Android app) -> users/{uid}/health/{date}, one writer: this phone ---------- */
+const hcLast = () => { try { return +localStorage.getItem(`lk-hc-last:${uid()}`) || 0; } catch (e) { return 0; } };
+const stableStr = o => JSON.stringify(o, (k, v) => v && typeof v === 'object' && !Array.isArray(v) ? Object.fromEntries(Object.keys(v).sort().filter(x => x !== 'u' && x !== 'syncedAt').map(x => [x, v[x]])) : v);
+const agoTxt = ms => { const m = Math.round((Date.now() - ms) / 60000); return m < 1 ? 'just now' : m < 60 ? `${m} min ago` : m < 1440 ? `${Math.round(m / 60)} h ago` : `${Math.round(m / 1440)} days ago`; };
+const hmTxt = m => `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, '0')}`;
+const bandOn = () => !!(S.settings && S.settings.band && S.settings.band.on);
+async function hcRefresh() {
+  if (!HC.supported()) return;
+  try { S.hc = { ...(await HC.status()), at: Date.now() }; } catch (e) { S.hc = { available: 'no', granted: [], err: true }; }
+  render();
+}
+async function hcConnect() {
+  try {
+    const r = await HC.connect(); S.hc = { ...r, at: Date.now() };
+    if (!r.granted.length) { render(); return toast('Nothing was allowed. You can connect again anytime.'); }
+    const was = S.settings.band || {};
+    S.settings.band = { ...was, on: true, since: was.on && was.since ? was.since : today(), more: 1 }; saveSettings(); render();
+    return hcSync(30); // first time: everything Health Connect allows (about the last 30 days)
+  } catch (e) { console.warn('hc connect', e); toast('Couldn’t open Health Connect.'); }
+}
+async function hcSync(nDays, quiet) {
+  if (!HC.supported() || S.hcBusy || !S.user) return;
+  S.hcBusy = true; if (!quiet) render();
+  try {
+    const end = today(), raw = await HC.read(C.addDays(end, -(nDays - 1)), end), docs = HC.summarize(raw);
+    S.hc = { available: 'yes', granted: raw.granted || [], at: Date.now() };
+    let n = 0;
+    for (const [date, d] of Object.entries(docs)) {
+      if (S.health[date] && stableStr(S.health[date]) === stableStr(d)) continue; // unchanged: no write
+      S.health[date] = d; n++;
+      setDoc(doc(db, up('health/' + date)), { ...fsEnc(clone(d)), syncedAt: Date.now(), u: serverTimestamp() }).catch(e => console.warn('health save', e));
+    }
+    try { localStorage.setItem(`lk-hc-last:${uid()}`, String(Date.now())); } catch (e) { }
+    if (!quiet) toast(n ? `Synced ${n} ${n === 1 ? 'day' : 'days'} from Health Connect.` : 'Already up to date.');
+  } catch (e) {
+    console.warn('hc sync', e);
+    if (!quiet) toast(/PERMISSION/.test((e && (e.code || e.message)) || '') ? 'A Health Connect permission was removed. Connect again.' : 'Couldn’t read Health Connect.');
+  }
+  S.hcBusy = false; render();
+  if (SH && SH.scope === 'band') drawBand();
+}
+async function hcDelete(b) {
+  if (S.hcDel !== 1) { S.hcDel = 1; if (b) b.textContent = 'Tap again to delete all band data'; setTimeout(() => { S.hcDel = 0; }, 4000); return; }
+  S.hcDel = 0;
+  // a tombstone with no health data in it, so other devices drop their copy too
+  for (const date of Object.keys(S.health)) setDoc(doc(db, up('health/' + date)), { deleted: true, u: serverTimestamp() }).catch(e => console.warn('health delete', e));
+  S.health = {}; S.settings.band = null; saveSettings();
+  try { localStorage.removeItem(`lk-hc-last:${uid()}`); } catch (e) { }
+  toast(HC.supported() ? 'Band data deleted. Health Connect still allows access: tap Permissions to turn it off.' : 'Band data deleted.');
+  render();
+}
+const BAND_TYPES = [['sleep', 'Sleep'], ['hrv', 'HRV'], ['rhr', 'Resting HR'], ['hr', 'Heart rate'], ['spo2', 'Oxygen'], ['temp', 'Temperature'], ['steps', 'Steps'], ['activeKcal', 'Calories'], ['exercise', 'Workouts']];
+const FIELD = { activeKcal: 'kcal' };
+function latest(field) { const ds = Object.keys(S.health).sort().reverse(); for (const d of ds) { const v = S.health[d][field]; if (v != null && !(field === 'sleep' && !v.asleepMin)) return [d, v]; } return [null, null]; }
+function bandKV() {
+  const [sd, sl] = latest('sleep'), [, hv] = latest('hrv'), [, rh] = latest('rhr');
+  if (!sl && !hv && !rh) return '';
+  return `<div class="kv3"><div><b class="num">${sl ? hmTxt(sl.asleepMin) : '—'}</b><small>${sl ? (sd === today() ? 'Sleep last night' : `Sleep · ${fmt(sd)}`) : 'Sleep'}</small></div><div><b class="num">${hv ? Math.round(hv.rmssd) + ' ms' : '—'}</b><small>HRV</small></div><div><b class="num">${rh ? rh.bpm : '—'}</b><small>Resting HR</small></div></div>`;
+}
+function bandSum() {
+  if (HC.supported()) return bandOn() ? (hcLast() ? `Synced ${agoTxt(hcLast())}` : 'Connected') : 'Not connected';
+  return Object.keys(S.health).length ? 'Synced from your phone' : 'Android app';
+}
+function bandHTML() {
+  const head = (state, cls) => `<section class="card band"><div class="card-h"><h2>Health band</h2><span class="state ${cls}">${state}</span></div>`;
+  const priv = extra => `<p class="hint band-l">${extra} <button class="linkb" data-act="hcprivacy">Privacy</button></p>`;
+  if (!HC.supported()) {
+    const has = Object.keys(S.health).length;
+    return head('Android app', 's-todo') + `<p class="hint">Band data comes through Android Health Connect, so it works in the Lock In 90 Android app, not in the browser. Data already synced from your phone shows here too.</p>${has ? bandKV() + `<button class="btn small primary" data-act="bandopen">See all band data</button><button class="linkb danger" data-act="hcdel">Delete band data</button>` : ''}${priv('Band data is never shown on the friends board or coach link.')}</section>`;
+  }
+  const hc = S.hc;
+  if (!hc) { if (!S.hcAsked) { S.hcAsked = true; setTimeout(hcRefresh, 0); } }
+  if (hc && hc.available !== 'yes') return head('Needs Health Connect', 's-todo') + `<p class="hint">${hc.available === 'update' ? 'Health Connect needs an update.' : 'Health Connect isn’t installed.'} It’s free from Google and is how your band shares data with this app.</p><button class="btn primary block" data-act="hcget">Get Health Connect</button></section>`;
+  const granted = (hc && hc.granted) || [];
+  if (!bandOn() || (hc && !granted.length)) return head('Not connected', 's-todo') + `<p class="hint">Bring in sleep, recovery and steps from your band through Health Connect. The app only reads; it never changes your health data.</p>
+    <ul class="rd"><li>Sleep and sleep stages</li><li>Heart rate variability and resting heart rate</li><li>Heart rate, oxygen, skin temperature</li><li>Steps, calories and workouts (also from Lyfta)</li></ul>
+    <button class="btn primary block" data-act="hcconnect">Connect Health Connect</button>${priv('You can choose which of these to allow.')}</section>`;
+  const recent = Object.keys(S.health).sort().slice(-3).map(d => S.health[d]);
+  const chip = ([k, l]) => { const f = FIELD[k] || k, ok = granted.includes(k), has = k === 'exercise' || recent.some(d => d[f] != null && !(Array.isArray(d[f]) && !d[f].length)); return `<i class="${!ok ? 'hc-off' : has ? 'hc-on' : 'hc-nd'}">${l}${ok && !has ? ' · no data yet' : !ok ? ' · off' : ''}</i>`; };
+  const more = !(S.settings.band && S.settings.band.more) && HC.TYPES.some(t => !granted.includes(t));
+  return head('Connected', 's-done') + `<p class="hint">${S.hcBusy ? 'Syncing…' : hcLast() ? `Synced ${agoTxt(hcLast())}` : 'Not synced yet'} · reads the last 3 days each time you open the app.</p>
+    ${more ? `<div class="banner b-info"><strong>More from your band</strong><p>Lock In 90 can now also read distance, floors, breathing rate, VO2 max, blood pressure and weight, if your band app saves them. <button class="link" data-act="hcconnect">Allow in Health Connect</button></p></div>` : ''}
+    ${bandKV()}<button class="btn primary block" data-act="bandopen">See all band data</button><div class="hctypes">${BAND_TYPES.map(chip).join('')}</div>
+    <div class="row"><button class="btn small" data-act="hcsync"${S.hcBusy ? ' disabled' : ''}>Sync now</button><button class="btn small ghost" data-act="hcperms">Permissions</button></div>
+    <button class="linkb danger" data-act="hcdel">Disconnect and delete band data</button>${priv('Band data is never shown on the friends board or coach link.')}</section>`;
+}
+/* ---------- Band screen: everything the band sends, one day at a time (a sheet, like the Day sheet) ---------- */
+// [type, label, has data that day?, which app wrote it, Health Connect permission if it differs from type]
+const BAND_ALL = [
+  ['sleep', 'Sleep', d => !!(d.sleep && (d.sleep.asleepMin || (d.sleep.naps || []).length)), d => d.sleep && d.sleep.src],
+  ['stages', 'Sleep stages', d => !!(d.sleep && d.sleep.stages), d => d.sleep && d.sleep.src, 'sleep'],
+  ['hrv', 'HRV', d => !!d.hrv, d => d.hrv && d.hrv.src],
+  ['rhr', 'Resting heart rate', d => !!d.rhr, d => d.rhr && d.rhr.src],
+  ['hr', 'Heart rate', d => !!d.hr],
+  ['spo2', 'Oxygen (SpO2)', d => !!d.spo2, d => d.spo2 && d.spo2.src],
+  ['temp', 'Skin temperature', d => !!d.temp, d => d.temp && d.temp.src],
+  ['steps', 'Steps', d => d.steps != null],
+  ['distance', 'Distance', d => d.dist != null],
+  ['floors', 'Floors climbed', d => d.floors != null],
+  ['activeKcal', 'Active calories', d => !!(d.kcal && d.kcal.active != null)],
+  ['totalKcal', 'Total calories', d => !!(d.kcal && d.kcal.total != null)],
+  ['exercise', 'Workouts', d => !!(d.exercise && d.exercise.length), d => (d.exercise || []).map(x => x.src)],
+  ['resp', 'Breathing rate', d => !!d.resp, d => d.resp && d.resp.src],
+  ['vo2', 'VO2 max', d => !!d.vo2, d => d.vo2 && d.vo2.src],
+  ['bp', 'Blood pressure', d => !!d.bp, d => d.bp && d.bp.src],
+  ['weight', 'Weight', d => !!d.weight, d => d.weight && d.weight.src]
+];
+const minsTxt = m => m >= 60 ? hmTxt(m) : `${m} min`;
+const typeLabel = t => { const s = String(t || 'workout').replace(/_/g, ' '); return s.charAt(0).toUpperCase() + s.slice(1); };
+const clockOf = ms => { const x = new Date(ms); return `${C.pad(x.getHours())}:${C.pad(x.getMinutes())}`; };
+function openBand(date) { SH = { scope: 'band', date: date || today(), trend: 'rec' }; $('sheet').hidden = false; drawBand(); }
+function bandDelta(v, b, unit, goodUp, dp = 0) { // "▲ 6 ms vs your 7-day avg", green when it's the good direction
+  if (v == null || !b || b.n < 3) return '';
+  const dl = C.round(v - b.mean, dp);
+  if (!dl) return `<span class="dl">Same as your 7-day avg</span>`;
+  const up = dl > 0, cls = goodUp == null ? '' : up === goodUp ? 'up' : 'dn';
+  return `<span class="dl ${cls}">${up ? '▲' : '▼'} ${Math.abs(dl).toLocaleString('en-US', { maximumFractionDigits: dp })}${unit} vs your 7-day avg</span>`;
+}
+const bTile = (label, val, unit, subs, cls = '') => `<div class="tile ${cls}"><small>${label}</small><b class="num">${val}${unit ? ` <em>${unit}</em>` : ''}</b>${subs.filter(Boolean).map(s => s.startsWith('<') ? s : `<span>${s}</span>`).join('')}</div>`;
+function drawBand() {
+  if (!SH || SH.scope !== 'band') return;
+  const t = today(), date = SH.date, d = S.health[date] || null, goalH = (S.settings && S.settings.sleepGoal) || 7.5;
+  const gr = HC.supported() ? ((S.hc && S.hc.granted) || []) : null;
+  const none = k => gr && !gr.includes(k) ? 'Not allowed in Health Connect' : 'No data from your band';
+  const avg = get => C.baseline(S.health, date, get, 7);
+  const dates = Object.keys(S.health).sort(), first = dates[0] || t, prev = C.addDays(date, -1), next = C.addDays(date, 1);
+  const dayLbl = date === t ? 'Today' : date === C.addDays(t, -1) ? 'Yesterday' : C.parse(date).toLocaleDateString(LANG() === 'ar' ? 'ar-EG-u-nu-latn' : 'en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
+  let body = '';
+  if (!d) body = `<p class="hint">Nothing from your band on this day.${date === t ? ' Open your band’s app so it syncs, then tap Sync now.' : ''}</p>`;
+  else {
+    // recovery
+    const rc = C.recovery(S.health, date, goalH);
+    if (!rc || rc.score == null) body += bTile('Recovery', '—', '', [rc && rc.baseDays < rc.need ? `Building your baseline · ${rc.baseDays} of ${rc.need} days` : 'Needs last night’s sleep plus HRV or resting heart rate'], 'wide brec');
+    else {
+      const why = [], p = rc.parts;
+      if (p.hrv) why.push(p.hrv.z >= 0.5 ? 'HRV above your usual' : p.hrv.z <= -0.5 ? 'HRV below your usual' : 'HRV normal for you');
+      if (p.rhr) why.push(p.rhr.z >= 0.5 ? 'resting HR higher than usual' : p.rhr.z <= -0.5 ? 'resting HR lower than usual' : 'resting HR normal');
+      if (p.sleep) why.push(p.sleep.min >= p.sleep.goalMin - 10 ? 'enough sleep' : `sleep ${hmTxt(p.sleep.goalMin - p.sleep.min)} short of your goal`);
+      const lbl = { good: 'Ready to train', ok: 'Take it steady', low: 'Go easy today' }[rc.level];
+      body += `<div class="tile wide brec r-${rc.level}"><small>Recovery</small><div class="rec-row"><b class="num">${rc.score}</b><span class="rec-l">${lbl}</span></div><div class="rbar" aria-hidden="true"><i style="width:${rc.score}%"></i></div><span>${why.map((w, i) => i ? w : w.charAt(0).toUpperCase() + w.slice(1)).join(' · ')}</span></div>`;
+    }
+    // sleep
+    const sl = d.sleep;
+    if (sl && (sl.asleepMin || (sl.naps || []).length)) {
+      const st = sl.stages, seg = st ? [['deep', 'Deep', st.deepMin], ['light', 'Light', st.lightMin], ['rem', 'REM', st.remMin], ['awake', 'Awake', sl.awakeMin || 0]] : null, tot = seg ? seg.reduce((a, s) => a + s[2], 0) || 1 : 1;
+      body += `<div class="tile wide"><small>Sleep</small><b class="num">${sl.asleepMin ? hmTxt(sl.asleepMin) : '—'}</b>${sl.start ? `<span class="num">${sl.start.slice(11)} → ${sl.end.slice(11)}</span>` : ''}${sl.asleepMin ? `<span>Goal ${goalH} h</span>` : ''}
+        ${seg ? `<div class="stg" aria-hidden="true">${seg.map(([k, , m]) => m ? `<i class="s-${k}" style="width:${(100 * m / tot).toFixed(1)}%"></i>` : '').join('')}</div><div class="stgl">${seg.map(([k, l, m]) => `<span><i class="s-${k}"></i>${l} <b class="num">${minsTxt(m)}</b></span>`).join('')}</div>` : sl.asleepMin ? '<span class="dl">No sleep stages from your band this night</span>' : ''}
+        ${(sl.naps || []).map(n => `<span>Nap <b class="num">${n.start}</b> · <b class="num">${minsTxt(n.min)}</b></span>`).join('')}</div>`;
+    } else body += bTile('Sleep', '—', '', [none('sleep')], 'wide');
+    // the grid
+    const g = [];
+    g.push(d.hrv ? bTile('HRV', Math.round(d.hrv.rmssd), 'ms', [d.hrv.window === 'sleep' ? 'during sleep' : 'over the day', bandDelta(d.hrv.rmssd, avg(x => x.hrv && x.hrv.rmssd), ' ms', true)]) : bTile('HRV', '—', '', [none('hrv')]));
+    g.push(d.rhr ? bTile('Resting HR', d.rhr.bpm, 'bpm', [bandDelta(d.rhr.bpm, avg(x => x.rhr && x.rhr.bpm), '', false)]) : bTile('Resting HR', '—', '', [none('rhr')]));
+    g.push(d.steps != null ? bTile('Steps', d.steps.toLocaleString('en-US'), '', [[d.dist != null ? `${C.round(d.dist / 1000, 1)} km` : '', d.floors != null ? `${d.floors} floors` : ''].filter(Boolean).join(' · '), bandDelta(d.steps, avg(x => x.steps), '', true)]) : bTile('Steps', '—', '', [none('steps')]));
+    g.push(d.kcal && d.kcal.active != null ? bTile('Active calories', d.kcal.active, 'kcal', [d.kcal.total != null ? `${d.kcal.total.toLocaleString('en-US')} total` : '']) : d.kcal && d.kcal.total != null ? bTile('Total calories', d.kcal.total.toLocaleString('en-US'), 'kcal', []) : bTile('Active calories', '—', '', [none('activeKcal')]));
+    g.push(d.spo2 ? bTile('Oxygen', d.spo2.avg, '%', [`lowest ${d.spo2.min}%${d.spo2.window === 'sleep' ? ' during sleep' : ''}`]) : bTile('Oxygen', '—', '', [none('spo2')]));
+    g.push(d.hr ? bTile('Heart rate', d.hr.avg, 'bpm', [d.hr.min != null ? `${d.hr.min}–${d.hr.max} bpm today` : 'average today']) : bTile('Heart rate', '—', '', [none('hr')]));
+    g.push(d.temp ? bTile('Skin temp', d.temp.avgC.toFixed(1), '°C', [bandDelta(d.temp.avgC, avg(x => x.temp && x.temp.avgC), ' °C', null, 1) || 'compare with your own normal']) : bTile('Skin temp', '—', '', [none('temp')]));
+    if (d.resp) g.push(bTile('Breathing rate', d.resp.avg, '/min', [d.resp.window === 'sleep' ? 'during sleep' : 'over the day']));
+    if (d.vo2) g.push(bTile('VO2 max', d.vo2.v, 'ml/kg/min', []));
+    if (d.bp) g.push(bTile('Blood pressure', `${d.bp.sys}/${d.bp.dia}`, 'mmHg', [d.bp.n > 1 ? `average of ${d.bp.n}` : '']));
+    if (d.weight) g.push(bTile('Weight', d.weight.kg, 'kg', ['from your band app']));
+    body += `<div class="tiles">${g.join('')}</div>`;
+  }
+  // workouts: what the band/other apps saved, plus what you logged in Lock In 90
+  const dd = S.days[date] || {}, wk = [];
+  ((d && d.exercise) || []).forEach(x => wk.push([x.start, x.title || typeLabel(x.type), x.min, HC.appName(x.src)]));
+  if (dd.wo && dd.wo.t1 && dd.wo.t0) wk.push([clockOf(dd.wo.t0), dd.wo.name, Math.max(1, Math.round((dd.wo.t1 - dd.wo.t0) / 60000)), 'Lock In 90']);
+  (dd.stamina || []).filter(s => s.src !== 'strava' && s.src !== 'finisher').forEach(s => wk.push(['', typeLabel(s.mode), s.min, 'Lock In 90']));
+  if (wk.length) body += `<span class="sub">Workouts</span><ul class="list bwk">${wk.sort((a, b) => (a[0] || '99') < (b[0] || '99') ? -1 : 1).map(([at, n, m, src]) => `<li><span>${at ? `<b class="num">${at}</b> ` : ''}${esc(n)}</span><span><span class="num">${minsTxt(m)}</span>${src ? ` · <em>${esc(src)}</em>` : ''}</span></li>`).join('')}</ul>`;
+  // 7-day trend ending on the chosen day
+  const TRD = {
+    rec: ['Recovery', dt => { const r = C.recovery(S.health, dt, goalH); return r && r.score; }, v => v],
+    hrv: ['HRV', dt => S.health[dt] && S.health[dt].hrv && S.health[dt].hrv.rmssd, v => Math.round(v)],
+    rhr: ['Resting HR', dt => S.health[dt] && S.health[dt].rhr && S.health[dt].rhr.bpm, v => v],
+    sleep: ['Sleep', dt => S.health[dt] && S.health[dt].sleep && S.health[dt].sleep.asleepMin, v => C.round(v / 60, 1) + 'h'],
+    steps: ['Steps', dt => S.health[dt] && S.health[dt].steps, v => v >= 1000 ? C.round(v / 1000, 1) + 'k' : v]
+  };
+  const [, get, show] = TRD[SH.trend] || TRD.rec, days7 = Array.from({ length: 7 }, (_, i) => C.addDays(date, i - 6)), vals = days7.map(dt => { const v = get(dt); return v == null || !isFinite(v) ? null : v; });
+  const W = 320, H = 132, pb = 22, top = 16, bw = W / 7, mx = Math.max(...vals.filter(v => v != null), 1), mn = SH.trend === 'rec' ? 0 : Math.min(...vals.filter(v => v != null), mx) * 0.8;
+  const bars = days7.map((dt, i) => { const v = vals[i], hh = v == null ? 0 : Math.max(3, (H - pb - top) * (v - mn) / (mx - mn || 1)); const lab = C.parse(dt).toLocaleDateString(LANG() === 'ar' ? 'ar-EG' : 'en-GB', { weekday: 'narrow' });
+    return `${v == null ? `<text x="${i * bw + bw / 2}" y="${H - pb - 4}" text-anchor="middle" font-size="10" fill="var(--muted)">–</text>` : `<rect x="${i * bw + 7}" y="${H - pb - hh}" width="${bw - 14}" height="${hh}" rx="4" fill="${dt === date ? 'var(--spark)' : 'var(--accent)'}"/><text x="${i * bw + bw / 2}" y="${H - pb - hh - 4}" text-anchor="middle" font-size="10" fill="var(--ink-2)">${show(v)}</text>`}<text x="${i * bw + bw / 2}" y="${H - 6}" text-anchor="middle" font-size="10" fill="${dt === date ? 'var(--ink)' : 'var(--muted)'}">${lab}</text>`; }).join('');
+  body += `<span class="sub">Last 7 days</span><div class="seg wide btrend" role="group" aria-label="Trend">${Object.entries(TRD).map(([k, [l]]) => `<button data-act="bandtrend" data-v="${k}" aria-pressed="${(SH.trend || 'rec') === k}">${l}</button>`).join('')}</div>
+    <svg class="bchart" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc((TRD[SH.trend] || TRD.rec)[0])}, last 7 days">${bars}</svg>`;
+  // what the band actually sends (last 7 days up to today)
+  const last7 = Array.from({ length: 7 }, (_, i) => S.health[C.addDays(t, -i)]).filter(Boolean);
+  const rows = BAND_ALL.map(([k, l, has, src, gk]) => {
+    const withData = last7.filter(has), n = withData.length, ok = !gr || gr.includes(gk || k);
+    const apps = src ? [...new Set(withData.flatMap(x => [].concat(src(x) || [])).filter(Boolean).map(HC.appName))] : [];
+    return `<li class="${!ok ? 'off' : n ? 'ok' : 'no'}"><b>${l}</b><span>${apps.length ? `<em>${esc(apps.join(', '))}</em> · ` : ''}<span>${!ok ? 'Not allowed' : n ? `${n} of 7 days` : 'Nothing in Health Connect'}</span></span></li>`;
+  }).join('');
+  body += `<details class="bsrc"${Object.keys(S.health).length ? '' : ' open'}><summary>What your band sends</summary><p class="hint">Last 7 days, by data type, and which app saved it.</p><ul class="srcl">${rows}</ul>
+    <p class="hint">Your band app’s own scores, like body battery, body load, stress or a sleep score, stay in that app: Health Connect has no place for them.</p></details>
+    <details class="bsrc"><summary>How Recovery works</summary><p class="hint">Lock In 90’s own score, worked out on your phone with no AI. It compares today with your previous 14 days: HRV (45%), resting heart rate (25%) and sleep against your ${goalH} h goal (30%). An ordinary day for you lands around 60 on HRV and resting heart rate, so the score tracks changes in <em>you</em>, not charts for other people. It needs 4 earlier days to start. 67+ ready to train, 34–66 take it steady, under 34 go easy. A night under 80% of your sleep goal keeps the day at take it steady at most.</p></details>`;
+  if (HC.supported()) body += `<div class="row"><button class="btn small" data-act="hcsync"${S.hcBusy ? ' disabled' : ''}>${S.hcBusy ? 'Syncing…' : 'Sync now'}</button><button class="btn small ghost" data-act="hcperms">Permissions</button></div>`;
+  $('sheet').innerHTML = `<div class="sheet full bandsh" role="dialog" aria-modal="true" aria-label="Health band"><div class="grab" aria-hidden="true"></div><div class="spread"><h2>Health band</h2><button class="x" data-act="closesheet" aria-label="Close">×</button></div>
+    <div class="row dnav"><button class="btn small" data-act="bandnav" data-v="${prev}" ${prev < first ? 'disabled' : ''}>‹ Previous</button><span class="state s-todo">${dayLbl}</span><button class="btn small" data-act="bandnav" data-v="${next}" ${next > t ? 'disabled' : ''}>Next ›</button></div>
+    ${body}</div>`;
+}
 function exportBackup() {
-  const data = { app: 'lock-in-90', version: 2, exported: new Date().toISOString(), settings: S.settings, days: S.days, checkins: S.checkins, foods: S.foods, photos: S.photos };
+  const data = { app: 'lock-in-90', version: 2, exported: new Date().toISOString(), settings: S.settings, days: S.days, health: S.health, checkins: S.checkins, foods: S.foods, photos: S.photos };
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob([JSON.stringify(data)], { type: 'application/json' }));
   a.download = `lock-in-90-backup-${today()}.json`; document.body.appendChild(a); a.click(); a.remove();
@@ -2575,7 +2790,7 @@ async function importBackup(file) {
   try {
     const j = JSON.parse(await file.text());
     if (j.app !== 'lock-in-90' || !j.settings) return toast('That file isn’t a Lock In 90 backup.');
-    const writes = [['settings/main', j.settings], ...Object.entries(j.days || {}).map(([k, v]) => ['days/' + k, v]), ...Object.entries(j.checkins || {}).map(([k, v]) => ['checkins/' + k, v]), ...Object.entries(j.foods || {}).map(([k, v]) => ['foods/' + k, v]), ...Object.entries(j.photos || {}).map(([k, v]) => ['photos/' + k, v])];
+    const writes = [['settings/main', j.settings], ...Object.entries(j.days || {}).map(([k, v]) => ['days/' + k, v]), ...Object.entries(j.checkins || {}).map(([k, v]) => ['checkins/' + k, v]), ...Object.entries(j.health || {}).map(([k, v]) => ['health/' + k, v]), ...Object.entries(j.foods || {}).map(([k, v]) => ['foods/' + k, v]), ...Object.entries(j.photos || {}).map(([k, v]) => ['photos/' + k, v])];
     for (let i = 0; i < writes.length; i += 400) { const b = writeBatch(db); writes.slice(i, i + 400).forEach(([p, v]) => b.set(doc(db, up(p)), stamp(p, clone(v)))); b.commit().catch(() => toast('Part of the import didn’t save.')); }
     S.settings = clone(j.settings); Object.assign(S.days, clone(j.days || {})); Object.assign(S.checkins, clone(j.checkins || {}));
     toast(`Imported ${Object.keys(j.days || {}).length} days.`); draw();
@@ -2584,6 +2799,20 @@ async function importBackup(file) {
 
 /* ---------- auth + data ---------- */
 async function signin() {
+  // Google blocks its sign-in page inside app WebViews, so the Android app signs in natively and hands the token to Firebase JS.
+  if (NATIVE_AUTH()) {
+    try {
+      const r = await NATIVE_AUTH().signInWithGoogle();
+      const tok = r && r.credential && r.credential.idToken;
+      if (!tok) return toast('Google sign-in didn’t finish. Try again or use email.');
+      await signInWithCredential(auth, GoogleAuthProvider.credential(tok));
+    } catch (e) {
+      const m = String((e && (e.message || e.code)) || '');
+      if (/cancel/i.test(m)) return;
+      console.warn('native sign-in', e); toast('Google sign-in failed. Try email sign-in below.');
+    }
+    return;
+  }
   try { await signInWithPopup(auth, new GoogleAuthProvider()); }
   catch (e) {
     const c = e && e.code;
@@ -2629,16 +2858,64 @@ function subscribe() {
     if (!busy('settings/main')) S.settings = snap.exists() ? fsDec(snap.data()) : null;
     S.pend.s = snap.metadata.hasPendingWrites;
     if (!snap.metadata.fromCache || snap.exists()) S.got.settings = true;
+    if (!S.hcBoot && S.settings && S.settings.band && S.settings.band.on && HC.supported()) { S.hcBoot = true; setTimeout(() => hcSync(hcLast() ? 3 : 30, true), 1500); }
     render();
   }, () => { S.got.settings = true; render(); }));
   syncCol('days', qs => {
     qs.docs.forEach(x => { if (!busy('days/' + x.id)) S.days[x.id] = fsDec(x.data()); });
     S.pend.d = qs.metadata.hasPendingWrites; S.got.days = true; render();
   }, true);
+  syncCol('health', qs => { qs.docs.forEach(x => { const v = fsDec(x.data()); if (v.deleted) delete S.health[x.id]; else S.health[x.id] = v; }); if (S.view === 'setup') render(); if (SH && SH.scope === 'band') drawBand(); });
+  syncCol('stravaOut', qs => { qs.docs.forEach(x => STVO[x.id] = x.data()); if (S.view === 'setup') render(); });
   syncCol('checkins', qs => { qs.docs.forEach(x => { const v = x.data(); if (v.deleted) delete S.checkins[x.id]; else S.checkins[x.id] = v; }); render(); });
   syncCol('foods', qs => { qs.docs.forEach(x => { const v = fsDec(x.data()); if (v.deleted) delete S.foods[x.id]; else S.foods[x.id] = v; }); });
   S.unsub.push(onSnapshot(collection(db, up('activities')), qs => { qs.docs.forEach(x => S.acts[x.id] = x.data()); render(); }));
   S.unsub.push(onSnapshot(collection(db, up('meta')), qs => { qs.docs.forEach(x => S.meta[x.id] = x.data()); render(); }));
+}
+/* ---------- Strava: posting what's logged here ----------
+   The phone builds each post (it knows the exercise names, sets and times) and puts it in users/{uid}/stravaOut/{key}.
+   The tick job (GitHub Actions, every 30 min) posts it with the Strava secret, which never leaves GitHub, and skips
+   anything Strava already has at that time. Edits change the title and description; Strava's API can't delete. */
+const STVO = {};
+const STV_SPORT = { 'Incline treadmill': ['Walk', true], 'Bike': ['Ride', true], 'Rower': ['Rowing', true], 'Elliptical': ['Elliptical', true], 'Stair climber': ['StairStepper', true], 'Outdoor walk': ['Walk', false] };
+const stvOn = () => !!(S.settings && S.settings.strava && S.settings.strava.post);
+const localIso = ms => { const x = new Date(ms), p = n => String(n).padStart(2, '0'); return `${x.getFullYear()}-${p(x.getMonth() + 1)}-${p(x.getDate())}T${p(x.getHours())}:${p(x.getMinutes())}:${p(x.getSeconds())}`; };
+const hashStr = t => { let h = 5381; for (let i = 0; i < t.length; i++) h = ((h * 33) ^ t.charCodeAt(i)) >>> 0; return h.toString(36); };
+function stvItems(date) {
+  const d = S.days[date], out = []; if (!d) return out;
+  const w = d.wo;
+  if (w && w.t0 && w.t1 && !w.imported) out.push({ key: `${date}-wo`, name: w.name || 'Workout', sport: w.rid === 'cali' ? 'Workout' : 'WeightTraining', trainer: true, t0: w.t0, sec: Math.max(60, Math.round((w.t1 - w.t0) / 1000)), desc: TR.stravaDesc(w) });
+  (d.stamina || []).forEach(x => {
+    if (!x.t || x.ex || !x.min || x.src === 'strava') return; // cardio inside a workout is already in its description
+    const [sport, trainer] = STV_SPORT[x.mode] || ['Workout', true];
+    const t0 = localIso(x.t).slice(0, 10) === date ? x.t - x.min * 60e3 : new Date(`${date}T18:00:00`).getTime(); // logged for an earlier day: 6 pm that day
+    const kind = x.kind === 'intervals' ? ' · intervals' : x.kind === 'test' ? ' · 12-minute test' : '';
+    out.push({ key: `${date}-c${x.t}`, name: x.mode + kind, sport, trainer, t0, sec: x.min * 60, ...(x.dist ? { dist: Math.round(x.dist > 100 ? x.dist : x.dist * 1000) } : {}), desc: [`${x.min} min${x.hr ? ` · average heart rate ${x.hr}` : ''}`, 'Logged with Lock In 90'].join('\n') });
+  });
+  return out.map(it => ({ ...it, date, start: localIso(it.t0), h: hashStr(JSON.stringify(it)) }));
+}
+const stvT = {};
+function stvQueue(date) {
+  if (!stvOn() || !S.user) return;
+  clearTimeout(stvT[date]);
+  stvT[date] = setTimeout(async () => {
+    if (date < (S.settings.strava.since || '') || date < C.addDays(today(), -3)) return; // never back-fills older days
+    if (S.days[date] && S.days[date].wo && !(await TR.loadDB())) return; // exercise names first, or the description would change (and re-post) later
+    const items = stvItems(date), keys = new Set(items.map(i => i.key)), put = (k, v) => setDoc(doc(db, up('stravaOut/' + k)), { ...v, u: serverTimestamp() }, { merge: true }).catch(() => { });
+    items.forEach(it => { const o = STVO[it.key]; if (o && o.h === it.h && !o.gone) return; STVO[it.key] = { ...(o || {}), ...it, gone: false }; put(it.key, { ...it, gone: false }); });
+    Object.keys(STVO).filter(k => STVO[k].date === date && !keys.has(k) && !STVO[k].gone).forEach(k => { STVO[k].gone = true; put(k, { gone: true }); });
+  }, 3000);
+}
+function stvCard(sv) {
+  const sp = (S.settings && S.settings.strava) || {}, ext = NATIVE ? '' : ' target="_blank" rel="noopener"';
+  const need = sp.post && (sv.needWrite || !String(sv.scope || '').includes('activity:write'));
+  const url = sv.cid && `https://www.strava.com/oauth/authorize?client_id=${encodeURIComponent(sv.cid)}&response_type=code&redirect_uri=http://localhost&approval_prompt=force&scope=read,activity:read_all,activity:write`;
+  const posts = Object.values(STVO).filter(o => o.date >= C.addDays(today(), -6) && !(o.gone && !o.posted)).sort((a, b) => b.t0 - a.t0).slice(0, 6);
+  const st = o => o.posted ? (o.gone ? `Deleted here · <a href="https://www.strava.com/activities/${o.posted.id}"${ext}>delete it on Strava</a>` : `<a href="https://www.strava.com/activities/${o.posted.id}"${ext}>On Strava</a>`) : o.skip ? 'Already on Strava' : o.err ? 'Didn’t go through, trying again' : 'Waiting (up to 30 min)';
+  return `<div class="setup-r"><span>Post my workouts and cardio to Strava</span><div class="seg"><button data-act="stvpost" data-v="1" aria-pressed="${!!sp.post}">On</button><button data-act="stvpost" data-v="0" aria-pressed="${!sp.post}">Off</button></div></div>
+  <p class="hint">Gym workouts (with every set) and cardio you log here appear on Strava within about 30 minutes. If Strava already has an activity at the same time, it’s skipped, so nothing doubles up.</p>
+  ${need ? `<div class="banner b-warn"><strong>Allow posting once</strong><p>Strava was connected for reading only. 1) ${url ? `<a href="${url}"${ext}>Open Strava</a>` : 'Open Strava (the link appears after the next sync)'} and tap Authorize. 2) The next page won’t load: copy its whole address (it starts with localhost). 3) On GitHub, run the <b>strava-connect</b> workflow and paste it.</p></div>` : ''}
+  ${posts.length ? `<ul class="list">${posts.map(o => `<li><span>${esc(o.name)} · ${fmt(o.date)}</span><span>${st(o)}</span></li>`).join('')}</ul>` : ''}`;
 }
 /* friends board: a group is a short code; each member publishes a small summary (name, day, streak, today) to groups/{code}/members/{uid} */
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -2797,16 +3074,36 @@ onAuthStateChanged(auth, u => {
   if (u) subscribe(); else { S.settings = null; S.days = {}; S.got = { settings: false, days: false }; }
   draw();
 });
+// Android: the padlock launch screen stays until the first real screen is drawn, so the "Loading…" state never shows
+const NP = n => NATIVE && window.Capacitor.Plugins && window.Capacitor.Plugins[n];
+let splashUp = !!NP("SplashScreen");
+function splashDone() { if (!splashUp) return; splashUp = false; NP("SplashScreen").hide({ fadeOutDuration: 200 }).catch(() => { }); }
+if (splashUp) setTimeout(splashDone, 8000); // never stuck behind it (slow network, sign-in trouble)
+// Android back: close the top layer first, then go to Today; on Today the app goes to the background (it does not quit)
+if (NP("App")) NP("App").addListener("backButton", () => {
+  if (CAM) return camClose();
+  if (TM) return closeTimer();
+  if (!$("cele").hidden) { $("cele").hidden = true; $("cele").innerHTML = ""; return; }
+  if (SH) { if (TR.closeGuard(SH.scope)) return; return closeSheet(); }
+  if (S.panel) { S.panel = null; return draw(); }
+  if (S.view !== "today" && S.settings) return go("today");
+  NP("App").minimizeApp();
+});
 function go(v) { S.panel = null; S.view = VIEWS.includes(v) ? v : 'today'; if (location.hash !== '#' + S.view) history.replaceState(null, '', '#' + S.view); window.scrollTo(0, 0); draw(); }
 window.addEventListener('hashchange', () => { const v = location.hash.slice(1); if (v === 'water') { S.quickWater = true; return draw(); } if (v === 'sport') { S.quickSport = true; return draw(); } if (VIEWS.includes(v) && v !== S.view) { S.view = v; draw(); } });
 window.addEventListener('online', () => { S.online = true; render(); });
 window.addEventListener('offline', () => { S.online = false; render(); });
-document.addEventListener('visibilitychange', () => { if (!document.hidden) render(); });
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) return; render();
+  // coming back to the app: pick up what the band uploaded meanwhile (at most every 15 min)
+  if (S.settings && S.settings.band && S.settings.band.on && HC.supported() && Date.now() - hcLast() > 15 * 60e3) hcSync(3, true);
+});
 setInterval(render, 60000);
 { const h = location.hash.slice(1); if (VIEWS.includes(h)) S.view = h; if (h === 'water') S.quickWater = true; if (h === 'sport') S.quickSport = true; }
 draw();
 // updates: check whenever the app is opened; when a new version takes over, reload once so it shows straight away
-if ('serviceWorker' in navigator) {
+// (not inside the Android app: there the files ship in the APK, so a service worker would only serve stale copies)
+if ('serviceWorker' in navigator && !NATIVE) {
   const hadCtl = !!navigator.serviceWorker.controller;
   let reloaded = false;
   navigator.serviceWorker.addEventListener('controllerchange', () => { if (hadCtl && !reloaded) { reloaded = true; location.reload(); } });

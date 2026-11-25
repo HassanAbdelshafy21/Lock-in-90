@@ -413,3 +413,36 @@ export function staminaWeek(week) {
     how: 'Longer easy work and harder intervals. Walk-jog intervals on the treadmill are fine now if your knees feel good.' };
 }
 export const isTestWeek = week => week % 4 === 0;
+
+/* ---------- band recovery: plain code, no AI. Shared by the app (Band screen) and the coach job ----------
+   health = { [date]: users/{uid}/health/{date} docs }. Compares the day with the person's own previous 14 days:
+   HRV (45%), resting heart rate (25%), sleep against the sleep goal (30%). An ordinary day scores about 60 on HRV
+   and resting HR; one standard deviation better or worse moves that part by 20 points. Needs a baseline of at
+   least 4 earlier days, and at least two of the three parts on the day itself. Not stored anywhere. */
+export const RECOVERY_MIN_DAYS = 4;
+export function baseline(health, date, get, n = 14) {
+  const v = [];
+  for (let i = 1; i <= n; i++) { const d = health[addDays(date, -i)]; const x = d ? get(d) : null; if (x != null && isFinite(x)) v.push(x); }
+  if (!v.length) return { n: 0, mean: null, sd: null };
+  const mean = v.reduce((a, b) => a + b, 0) / v.length;
+  return { n: v.length, mean, sd: Math.sqrt(v.reduce((a, b) => a + (b - mean) ** 2, 0) / v.length) };
+}
+export function recovery(health, date, sleepGoalH = 7.5) {
+  const d = health && health[date];
+  if (!d) return null;
+  const clamp = x => Math.max(0, Math.min(100, Math.round(x)));
+  const hv = d.hrv ? d.hrv.rmssd : null, rh = d.rhr ? d.rhr.bpm : null, sl = d.sleep && d.sleep.asleepMin ? d.sleep.asleepMin : null;
+  const bh = baseline(health, date, x => x.hrv && x.hrv.rmssd), br = baseline(health, date, x => x.rhr && x.rhr.bpm);
+  const out = { date, score: null, level: null, parts: {}, baseDays: Math.max(bh.n, br.n), need: RECOVERY_MIN_DAYS };
+  const parts = [];
+  if (hv != null && bh.n >= RECOVERY_MIN_DAYS) { const z = (hv - bh.mean) / Math.max(bh.sd, bh.mean * 0.08); out.parts.hrv = { v: hv, avg: round(bh.mean, 1), z: round(z, 2), score: clamp(60 + 20 * z) }; parts.push([out.parts.hrv.score, 0.45]); }
+  if (rh != null && br.n >= RECOVERY_MIN_DAYS) { const z = (rh - br.mean) / Math.max(br.sd, 2); out.parts.rhr = { v: rh, avg: round(br.mean, 1), z: round(z, 2), score: clamp(60 - 20 * z) }; parts.push([out.parts.rhr.score, 0.25]); }
+  if (sl != null) { out.parts.sleep = { min: sl, goalMin: Math.round(sleepGoalH * 60), score: clamp(100 * sl / (sleepGoalH * 60)) }; parts.push([out.parts.sleep.score, 0.30]); }
+  if (parts.length < 2) return out;
+  const w = parts.reduce((a, p) => a + p[1], 0);
+  out.score = clamp(parts.reduce((a, p) => a + p[0] * p[1], 0) / w);
+  // a short night caps the day at "take it steady", however good HRV looks
+  if (out.parts.sleep && out.parts.sleep.score < 80 && out.score > 66) { out.score = 66; out.capped = 'sleep'; }
+  out.level = out.score >= 67 ? 'good' : out.score >= 34 ? 'ok' : 'low';
+  return out;
+}
