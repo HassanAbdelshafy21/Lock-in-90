@@ -7,9 +7,16 @@ Working preferences: show designs and get approval before building; suggestions 
 explain decisions in detail.
 
 ## Where things stand
-- `main` = v35 (v34 plans/workout editing + one-tap fasting). `android-health` has main merged in as of v35; the reverse merge waits for the verified APK.
-- `android-health` (head after the Capgo switch) = main + Capacitor shell + Health Connect bridge + Health band card in Me.
-- The Android side has NEVER been compiled or run on a device. First real build is the next step (see below).
+- v37: APK verified on Hassan's phone (sign-in, Health Connect, Kieslect data). `android-health` merged into `main`;
+  keep working on `main` (health/native code is gated by `NATIVE` / `HC.supported()`, the website is unaffected).
+- Band screen (Me > Health band > See all band data): recovery score (`core.js` `recovery`), sleep stages, tiles vs 7-day
+  average, workouts, 7-day chart, "What your band sends". Kieslect sends sleep+stages, HRV, RHR, HR, SpO2, steps, kcal;
+  no skin temperature. Its own scores (body battery, stress…) never reach Health Connect.
+- Strava posting (v37): the phone writes ready-made posts to `users/{uid}/stravaOut/{key}`; `tick.mjs` `stravaPost` posts
+  them (needs `activity:write`, reconnect via strava-connect; the app shows the link), skips time overlaps, never
+  re-imports its own posts. Lyfta is no longer used: Lock In 90 is the only workout logger.
+- APK: Android back closes layers then goes to Today then minimises (`@capacitor/app`); padlock launch screen held
+  until the first real draw (`@capacitor/splash-screen`); icons generated into `native/res/` and copied by patch-android.
 
 ## Build the APK (Windows)
 ```
@@ -21,7 +28,12 @@ Firebase console: add Android app, package `io.github.hassanabdelshafy21.lockin9
 Later updates: `git pull && npm run android`. On the phone: Me > Health band > Connect.
 
 ## Working in WSL (Hassan's setup)
-- Keep the repo in the WSL filesystem (`~/Lock-in-90`), not `/mnt/c`: faster npm/gradle and no line-ending trouble.
+- Keep the repo in the WSL filesystem (`~/Lockin90/Lock-in-90`), not `/mnt/c`: faster npm/gradle and no line-ending trouble.
+- Toolchain installed without sudo: Node in `~/.local/node`, JDK 21 in `~/.local/jdk21`, SDK in `~/Android/Sdk`;
+  `~/.lockin-env.sh` (sourced by .profile/.bashrc) puts them first on PATH (Windows npm leaks in via /mnt/c otherwise).
+  `yes | sdkmanager --licenses` exits 141 (SIGPIPE) but works.
+- Build: `node native/build-www.mjs && npx cap sync android && node native/patch-android.mjs && cd android && ./gradlew assembleDebug`.
+  No adb on Windows: copy the APK to the phone and tap it (installs over the old one, keeps data).
 - `npm run android` ends with `cap open android` (opens Android Studio), which does nothing useful in WSL. Use instead:
   `node native/build-www.mjs && npx cap sync android && cd android && ./gradlew assembleDebug`
   APK: `android/app/build/outputs/apk/debug/app-debug.apk`.
@@ -71,17 +83,16 @@ Unit: `TZ=Africa/Cairo node unit/health.test.mjs` (summarize). Browser: t38 (ban
 Capgo-API stub `hcstub.js`), t39 (Arabic), regressions t16/t20/t22. If rebuilding tests, fake `window.Capacitor.Plugins.Health`
 (isAvailable, checkAuthorization, requestAuthorization, openHealthConnectSettings, queryAggregated, readSamples, queryWorkouts).
 
-## Next steps, in order
-1. Build the APK, connect the band, report which chips show data. Unconfirmed: Kstyle writing HRV/sleep stages,
-   Lyfta writing workouts to Health Connect. Fix any Gradle/Kotlin-free build errors (no custom native code remains).
-2. Optional: show SpO2 and steps as numbers on the band card; native notifications for the APK.
-3. Merge `android-health` into `main` once the APK is verified (website must keep working: health code is gated by `supported()`).
-4. Morning briefing agent (step 3 of the plan), runs in GitHub Actions (free; Firebase Cloud Functions need Blaze).
-   Plain-code recovery score from 14-day baseline of HRV, resting HR, sleep; Claude writes the briefing; saved to
-   `users/{uid}/briefings/{date}`; shown on Today. Anthropic API key goes in GitHub secrets by the user, never in the
-   APK or in chat. Needs from the user: briefing time.
-5. Remote MCP server (Cloud Run): get_today, get_week_summary, log_note, with auth, added as a Claude custom connector.
-   Notes go to `users/{uid}/notes/{id}`.
+## Next steps, in order (plan approved 2026-11-25)
+1. Safe-area fix (header under the status bar in the APK), Arabic for the Strava card and "How Recovery works",
+   split-night sleep merge, hide never-sent band tiles, SpO2/steps numbers on the band card.
+2. Native workout notification like Lyfta: current exercise/set, "Set done" starts a rest countdown in the
+   notification (+30 s / Skip), vibrates at the end. Local Capacitor plugin (Kotlin foreground service).
+3. Reminders in the APK: native FCM tokens, tick.mjs sends Android notifications to them.
+4. Coach: morning briefing + evening review in tick.mjs via Claude Code headless with the user's subscription token
+   (secret CLAUDE_CODE_OAUTH_TOKEN, from `claude setup-token`; never in the APK or chat). Small model, tools off, only
+   when there is new data. Saved to `users/{uid}/briefings/{date}`, shown on Today, pushed.
+5. Later: remote MCP connector (get_today, get_week_summary, log_note); release signing.
 
 ## Agent design rules (from the user)
 Agents read daily summaries, never raw samples. Claude API calls never use a key inside the APK. Agents act on trends

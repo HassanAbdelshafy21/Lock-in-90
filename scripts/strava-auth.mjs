@@ -5,7 +5,8 @@ admin.initializeApp({ credential: admin.credential.cert(JSON.parse(process.env.F
 const db = admin.firestore();
 
 let code = (process.env.STRAVA_CODE || '').trim();
-const m = code.match(/[?&]code=([^&]+)/);
+const m = code.match(/[?&]code=([^&]+)/), sc = code.match(/[?&]scope=([^&]+)/);
+const scope = sc ? decodeURIComponent(sc[1]) : '';
 if (m) code = m[1];
 if (!code) { console.error('No code given.'); process.exit(1); }
 
@@ -20,6 +21,6 @@ const users = await db.collection('users').listDocuments();
 if (!users.length) { console.error('No app user found. Sign in to the app once and finish the welcome screen first.'); process.exit(1); }
 for (const u of users) {
   await db.doc(`private/strava_${u.id}`).set({ refresh_token: j.refresh_token, access_token: j.access_token, expires_at: j.expires_at, athlete: { id: j.athlete && j.athlete.id, name: j.athlete && j.athlete.firstname } });
-  await db.doc(`users/${u.id}/meta/strava`).set({ ok: true, connected: new Date().toISOString() }, { merge: true });
+  await db.doc(`users/${u.id}/meta/strava`).set({ ok: true, connected: new Date().toISOString(), ...(scope ? { scope, needWrite: !scope.includes('activity:write') } : {}) }, { merge: true });
 }
 console.log('Strava connected for', j.athlete && j.athlete.firstname, '- activities sync on the next run of the tick job.');

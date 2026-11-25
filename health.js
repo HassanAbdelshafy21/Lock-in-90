@@ -8,9 +8,17 @@ const plugin = () => { const C = window.Capacitor; return C && ((C.Plugins && C.
 export const supported = () => !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform() && plugin());
 
 /** All the types the app asks for, in the order they're shown. */
-export const TYPES = ['sleep', 'hrv', 'rhr', 'hr', 'spo2', 'temp', 'steps', 'activeKcal', 'totalKcal', 'exercise'];
-// our name -> the plugin's HealthDataType
-const CAP = { sleep: 'sleep', hrv: 'heartRateVariability', rhr: 'restingHeartRate', hr: 'heartRate', spo2: 'oxygenSaturation', temp: 'bodyTemperature', steps: 'steps', activeKcal: 'calories', totalKcal: 'totalCalories', exercise: 'workouts' };
+export const TYPES = ['sleep', 'hrv', 'rhr', 'hr', 'spo2', 'temp', 'steps', 'activeKcal', 'totalKcal', 'exercise', 'distance', 'floors', 'resp', 'vo2', 'bp', 'weight'];
+// our name -> the plugin's HealthDataType (the plugin's own manifest already declares all of these read permissions)
+const CAP = { sleep: 'sleep', hrv: 'heartRateVariability', rhr: 'restingHeartRate', hr: 'heartRate', spo2: 'oxygenSaturation', temp: 'bodyTemperature', steps: 'steps', activeKcal: 'calories', totalKcal: 'totalCalories', exercise: 'workouts', distance: 'distance', floors: 'flightsClimbed', resp: 'respiratoryRate', vo2: 'vo2Max', bp: 'bloodPressure', weight: 'weight' };
+/** Friendly name for the app that wrote a record (Health Connect gives package names). */
+export function appName(src) {
+  if (!src) return null;
+  const s = String(src);
+  const known = [[/kieslect|kstyle/i, 'Kieslect'], [/lyfta/i, 'Lyfta'], [/apps\.fitness|google\.android\.apps\.fit/i, 'Google Fit'], [/shealth|samsung/i, 'Samsung Health'], [/strava/i, 'Strava'], [/xiaomi|mi\.health|mifit|zepp/i, 'Zepp / Mi Fitness'], [/huawei/i, 'Huawei Health'], [/healthdata/i, 'Health Connect']];
+  for (const [re, n] of known) if (re.test(s)) return n;
+  return /\./.test(s) ? s.split('.').slice(-1)[0] : s;
+}
 const OURS = Object.fromEntries(Object.entries(CAP).map(([k, v]) => [v, k]));
 
 async function granted() {
@@ -53,7 +61,7 @@ const safe = async (fn, fallback) => { try { return await fn(); } catch (e) { re
  */
 export async function read(start, end) {
   const P = plugin(), g = await granted(), has = t => g.includes(t);
-  const out = { zone: Intl.DateTimeFormat().resolvedOptions().timeZone, granted: g, days: [], sleep: [], hrv: [], rhr: [], spo2: [], temp: [], exercise: [] };
+  const out = { zone: Intl.DateTimeFormat().resolvedOptions().timeZone, granted: g, days: [], sleep: [], hrv: [], rhr: [], spo2: [], temp: [], exercise: [], resp: [], vo2: [], bp: [], weight: [] };
   const per = {}; // date -> daily totals
   const dayRow = d => per[d] || (per[d] = { date: d });
   const localDay = x => { const d = new Date(ms(x)); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
@@ -67,6 +75,8 @@ export async function read(start, end) {
     if (has('activeKcal')) await agg('calories', 'sum', a, b, 'activeKcal');
     if (has('totalKcal')) await agg('totalCalories', 'sum', a, b, 'totalKcal');
     if (has('hr')) { await agg('heartRate', 'average', a, b, 'hrAvg'); await agg('heartRate', 'min', a, b, 'hrMin'); await agg('heartRate', 'max', a, b, 'hrMax'); }
+    if (has('distance')) await agg('distance', 'sum', a, b, 'dist');
+    if (has('floors')) await agg('flightsClimbed', 'sum', a, b, 'floors');
   }
   out.days = Object.values(per).sort((x, y) => x.date < y.date ? -1 : 1);
   const samples = async (type, a, b) => (await safe(() => P.readSamples({ dataType: type, startDate: midnight(a), endDate: midnight(addDays(b, 1)), limit: 5000, ascending: true }), { samples: [] })).samples || [];
@@ -78,6 +88,10 @@ export async function read(start, end) {
     if (has('rhr')) for (const x of await samples('restingHeartRate', a, b)) out.rhr.push({ t: ms(x.startDate), bpm: x.value, src: src(x) });
     if (has('spo2')) for (const x of await samples('oxygenSaturation', a, b)) out.spo2.push({ t: ms(x.startDate), pct: x.value <= 1 ? x.value * 100 : x.value, src: src(x) });
     if (has('temp')) for (const x of await samples('bodyTemperature', a, b)) out.temp.push({ t: ms(x.startDate), c: x.unit === 'fahrenheit' ? (x.value - 32) * 5 / 9 : x.value, loc: null, src: src(x) });
+    if (has('resp')) for (const x of await samples('respiratoryRate', a, b)) out.resp.push({ t: ms(x.startDate), v: x.value, src: src(x) });
+    if (has('vo2')) for (const x of await samples('vo2Max', a, b)) out.vo2.push({ t: ms(x.startDate), v: x.value, src: src(x) });
+    if (has('bp')) for (const x of await samples('bloodPressure', a, b)) if (x.systolic && x.diastolic) out.bp.push({ t: ms(x.startDate), sys: x.systolic, dia: x.diastolic, src: src(x) });
+    if (has('weight')) for (const x of await samples('weight', a, b)) out.weight.push({ t: ms(x.startDate), kg: x.unit === 'gram' ? x.value / 1000 : x.value, src: src(x) });
   }
   if (has('exercise')) {
     let anchor;
@@ -131,21 +145,23 @@ function windowed(list, date, sl) {
 /** raw = health.read() output; returns { [date]: doc } for every date that has any data */
 export function summarize(raw, opts = {}) {
   const out = {}, granted = raw.granted || [], tz = opts.tz || raw.zone || (Intl.DateTimeFormat().resolvedOptions().timeZone);
-  const day = date => out[date] || (out[date] = { date, v: 1, tz, sleep: null, hrv: null, rhr: null, hr: null, spo2: null, temp: null, steps: null, kcal: null, exercise: [], sources: [] });
+  const day = date => out[date] || (out[date] = { date, v: 1, tz, sleep: null, hrv: null, rhr: null, hr: null, spo2: null, temp: null, steps: null, kcal: null, dist: null, floors: null, resp: null, vo2: null, bp: null, weight: null, exercise: [], sources: [] });
   const sleeps = uniqBy(raw.sleep || [], x => x.s + '|' + x.src);
   const nights = {};
   sleeps.filter(x => !isNap(x)).forEach(x => { const d = localDate(x.e); (nights[d] = nights[d] || []).push(x); });
   Object.entries(nights).forEach(([d, list]) => { day(d).sleep = sleepOf(list); });
   sleeps.filter(isNap).forEach(x => { const d = day(localDate(x.e)); if (!d.sleep) d.sleep = { start: null, end: null, inBedMin: 0, awakeMin: 0, asleepMin: 0, stages: null, naps: [], src: x.src }; d.sleep.naps.push({ start: hm(x.s), min: mins(x.e - x.s) }); });
   (raw.days || []).forEach(a => {
-    if (a.steps == null && a.activeKcal == null && a.totalKcal == null && a.hrAvg == null) return;
+    if (a.steps == null && a.activeKcal == null && a.totalKcal == null && a.hrAvg == null && a.dist == null && a.floors == null) return;
     const d = day(a.date);
     if (a.steps != null) d.steps = Math.round(a.steps);
+    if (a.dist != null && a.dist > 0) d.dist = Math.round(a.dist);   // metres
+    if (a.floors != null && a.floors > 0) d.floors = Math.round(a.floors);
     if (a.activeKcal != null || a.totalKcal != null) d.kcal = { active: a.activeKcal != null ? Math.round(a.activeKcal) : null, total: a.totalKcal != null ? Math.round(a.totalKcal) : null };
     if (a.hrAvg != null) d.hr = { avg: Math.round(a.hrAvg), min: a.hrMin != null ? Math.round(a.hrMin) : null, max: a.hrMax != null ? Math.round(a.hrMax) : null };
     d.sources.push(...(a.origins || []));
   });
-  const dates = new Set([...Object.keys(out), ...[raw.hrv, raw.rhr, raw.spo2, raw.temp].flatMap(l => (l || []).map(x => localDate(x.t))), ...(raw.exercise || []).map(x => localDate(x.s))]);
+  const dates = new Set([...Object.keys(out), ...[raw.hrv, raw.rhr, raw.spo2, raw.temp, raw.resp, raw.vo2, raw.bp, raw.weight].flatMap(l => (l || []).map(x => localDate(x.t))), ...(raw.exercise || []).map(x => localDate(x.s))]);
   dates.forEach(date => {
     const d = day(date), sl = d.sleep && d.sleep._s ? d.sleep : null;
     const hv = windowed(uniqBy(raw.hrv || [], x => x.t), date, sl);
@@ -153,12 +169,19 @@ export function summarize(raw, opts = {}) {
     const rh = (raw.rhr || []).filter(x => localDate(x.t) === date).sort((a, b) => a.t - b.t);
     if (rh.length) d.rhr = { bpm: Math.round(rh[rh.length - 1].bpm), src: rh[rh.length - 1].src };
     const ox = windowed(uniqBy(raw.spo2 || [], x => x.t), date, sl);
-    if (ox.pts.length) d.spo2 = { avg: r1(mean(ox.pts.map(x => x.pct))), min: r1(Math.min(...ox.pts.map(x => x.pct))), n: ox.pts.length, window: ox.window };
+    if (ox.pts.length) d.spo2 = { avg: r1(mean(ox.pts.map(x => x.pct))), min: r1(Math.min(...ox.pts.map(x => x.pct))), n: ox.pts.length, window: ox.window, src: top(ox.pts.map(x => x.src)) };
     const tp = windowed(uniqBy(raw.temp || [], x => x.t), date, sl);
-    if (tp.pts.length) d.temp = { avgC: r2(mean(tp.pts.map(x => x.c))), loc: LOC[top(tp.pts.map(x => x.loc))] || 'unknown', n: tp.pts.length, window: tp.window };
+    if (tp.pts.length) d.temp = { avgC: r2(mean(tp.pts.map(x => x.c))), loc: LOC[top(tp.pts.map(x => x.loc))] || 'unknown', n: tp.pts.length, window: tp.window, src: top(tp.pts.map(x => x.src)) };
+    const rr = windowed(uniqBy(raw.resp || [], x => x.t), date, sl);
+    if (rr.pts.length) d.resp = { avg: r1(mean(rr.pts.map(x => x.v))), n: rr.pts.length, window: rr.window, src: top(rr.pts.map(x => x.src)) };
+    const lastOf = list => { const a = uniqBy(list || [], x => x.t).filter(x => localDate(x.t) === date).sort((p, q) => p.t - q.t); return a.length ? a[a.length - 1] : null; };
+    const vo = lastOf(raw.vo2); if (vo) d.vo2 = { v: r1(vo.v), src: vo.src };
+    const bps = uniqBy(raw.bp || [], x => x.t).filter(x => localDate(x.t) === date);
+    if (bps.length) d.bp = { sys: Math.round(mean(bps.map(x => x.sys))), dia: Math.round(mean(bps.map(x => x.dia))), n: bps.length, src: top(bps.map(x => x.src)) };
+    const wt = lastOf(raw.weight); if (wt) d.weight = { kg: r1(wt.kg), src: wt.src };
     d.exercise = uniqBy(raw.exercise || [], x => x.s + '|' + x.src).filter(x => localDate(x.s) === date).sort((a, b) => a.s - b.s)
       .map(x => ({ start: hm(x.s), min: mins(x.e - x.s), type: typeof x.type === 'string' ? x.type : (EX_TYPES[x.type] || 'other_workout'), ...(x.title ? { title: String(x.title).slice(0, 60) } : {}), src: x.src }));
-    [d.sleep, d.hrv, d.rhr, ...d.exercise].forEach(x => x && x.src && d.sources.push(x.src));
+    [d.sleep, d.hrv, d.rhr, d.spo2, d.temp, d.resp, d.vo2, d.bp, d.weight, ...d.exercise].forEach(x => x && x.src && d.sources.push(x.src));
   });
   Object.values(out).forEach(d => {
     if (d.sleep) { delete d.sleep._s; delete d.sleep._e; }

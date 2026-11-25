@@ -1,6 +1,6 @@
 // One-time edits to the android/ project that `npx cap add android` generates. Safe to run again.
 // Run from the repo root: node native/patch-android.mjs
-import { readFile, writeFile } from 'node:fs/promises';
+import { readFile, writeFile, cp } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 
 const VARS = 'android/variables.gradle';
@@ -26,6 +26,23 @@ if (existsSync(MAN)) {
   if (!m.includes('com.google.android.apps.healthdata')) m = m.replace(/<\/manifest>/, `    <queries>\n        <package android:name="com.google.android.apps.healthdata" />\n    </queries>\n</manifest>`);
   if (m !== was) { await writeFile(MAN, m); console.log('AndroidManifest.xml: Health Connect read permissions added.'); }
   else console.log('AndroidManifest.xml already patched.');
+}
+
+// App icon and launch screen: the Lock In 90 padlock on navy instead of Capacitor's placeholder logo.
+// native/res holds the generated PNGs (from icons/maskable-512.png); copied over the defaults every run.
+const RES = 'android/app/src/main/res';
+if (existsSync(RES)) {
+  await cp('native/res', RES, { recursive: true });
+  const ST = `${RES}/values/styles.xml`;
+  let s = await readFile(ST, 'utf8'); const was = s;
+  // Android 12+ draws its own launch screen (icon on a colour) and ignores @drawable/splash
+  if (!s.includes('windowSplashScreenBackground'))
+    s = s.replace(/(<style name="AppTheme\.NoActionBarLaunch"[^>]*>)/, `$1
+        <item name="windowSplashScreenBackground">@color/ic_launcher_background</item>
+        <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher_foreground</item>
+        <item name="postSplashScreenTheme">@style/AppTheme.NoActionBar</item>`);
+  if (s !== was) await writeFile(ST, s);
+  console.log('Icons and launch screen copied from native/res.');
 }
 
 if (!existsSync('android/app/google-services.json'))

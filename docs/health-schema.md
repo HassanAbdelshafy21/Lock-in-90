@@ -20,6 +20,13 @@ One doc per local date. The app's own day (`users/{uid}/days/{date}`) stays sepa
   temp: { avgC: 34.6, loc: "unknown", n, window },   // skin temperature (the plugin gives no sensor location, so loc is "unknown"): compare with your own baseline, not 37 °C
   steps: 8412,
   kcal: { active: 412, total: 2380 },
+  dist: 6120,                               // metres (Health Connect daily total), null if none
+  floors: 7,
+  resp: { avg: 15, n, window, src },        // breathing rate per minute, sleep window first
+  vo2:  { v: 41.2, src },                   // the day's last VO2 max record
+  bp:   { sys: 124, dia: 79, n, src },      // the day's average
+  weight: { kg: 101, src },                 // only what another app saved in Health Connect; the app's own weight log stays in days/
+  // spo2 and temp also carry src. Fields added after v1 are additive: older docs simply lack them.
   exercise: [{ start: "18:05", min: 62, type: "strength_training", title: "Legs", src: "com.lyfta…" }],
   sources: ["com.kieslect.kstyle", "com.lyfta…"],
   missing: ["temp"]                         // allowed in Health Connect but no data that day (band not worn?)
@@ -29,5 +36,8 @@ One doc per local date. The app's own day (`users/{uid}/days/{date}`) stays sepa
 - Synced when the app opens or comes back to the front (at most every 15 min): the last 3 days are re-read, because the band uploads late. The first connection reads about 30 days (Health Connect's limit before permission was given).
 - A doc is rewritten only when its content changed.
 - Deleting band data writes `{ deleted: true }` tombstones (no health data) so every device drops its copy.
-- Not stored here: anything that needs several days, such as a recovery score. That is computed from a 7–14 day baseline by the briefing.
+- Not stored here: anything that needs several days, such as the recovery score. `core.js` `recovery(health, date, sleepGoalH)` computes it on the fly
+  (HRV 45%, resting HR 25%, sleep vs goal 30%, against the previous 14 days; needs 4 earlier days; a night under 80% of the goal caps it at 66).
+  The Band screen and the coach use the same function.
+- Band apps' own scores (body battery, body load, stress, sleep score) never reach Health Connect, so they can't be here.
 - Never copied into the friends board (`groups/…`) or the coach link (`shares/…`).
