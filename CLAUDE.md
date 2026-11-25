@@ -109,6 +109,13 @@ Capgo-API stub `hcstub.js`), t39 (Arabic), regressions t16/t20/t22. If rebuildin
 - Today: "Turn on notifications" card in the APK until on or dismissed (settings.nag.push). Step goal (band.stepGoal).
 - privacy.html now describes the coach (summaries sent to Claude).
 
+## Done in v40 (2026-11-25)
+- GitHub's scheduler runs tick.yml 6-12 h apart instead of every 30 min. Fix: an outside timer (cron-job.org) calls
+  workflow_dispatch every 30 min with a fine-grained token (Actions read/write on this repo only); steps in `docs/timer.md`.
+  The schedule stays as a backup; double runs are safe (reminder sent-log, stravaOut status, briefing exists check,
+  concurrency group). The app warns in Me (Strava card, or Coach card if Strava isn't connected) when `meta/jobs.at`
+  is 75+ min old, linking to docs/timer.md.
+
 ## Next steps
 1. Hassan: install the v38 APK, turn on notifications (Me > Reminders), try a workout with the screen locked, allow
    Strava posting once, add the CLAUDE_CODE_OAUTH_TOKEN secret. Fix whatever the real phone shows.

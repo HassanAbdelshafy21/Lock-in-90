@@ -5,7 +5,7 @@ import * as C from './core.js';
 import { trText, addFoodNames } from './i18n.js';
 import * as TR from './train.js';
 import * as HC from './health.js';
-const APP_VERSION = '39 · Locked In: new name and logo, loading screen, Strava and coach status';
+const APP_VERSION = '40 · Background job: late warning and 30-minute timer';
 import { EX, POSE, figSVG, YT, LINES, FOODS, COACH_MEALS, DEFAULT_SUPPS, COACH_ENC, SLOTS, CARDIO_MODES } from './data.js';
 import { BRANDS, BRAND_BY_CODE } from './brands.js';
 addFoodNames(FOODS); addFoodNames(BRANDS);
@@ -957,6 +957,11 @@ function pushNudgeHTML() {
 const GH = 'https://github.com/HassanAbdelshafy21/Lock-in-90';
 const agoMin = iso => { const m = Math.round((Date.now() - Date.parse(iso)) / 60000); return m < 1 ? 'just now' : m < 60 ? m + ' min ago' : m < 1440 ? Math.round(m / 60) + ' h ago' : Math.round(m / 1440) + ' d ago'; };
 const extA = () => NATIVE ? '' : ' target="_blank" rel="noopener"';
+// GitHub's own schedule often runs the job hours late; warn when it hasn't run for 75+ minutes
+function jobLateHTML() {
+  const jb = S.meta.jobs; if (!jb || !jb.at || Date.now() - Date.parse(jb.at) < 75 * 60000) return '';
+  return '<p class="safety">The background job last ran ' + agoMin(jb.at) + '. Strava posts, reminders and the coach wait for it. GitHub starts it late on its own; the 30-minute timer fixes that.</p><a class="btn small" href="' + GH + '/blob/main/docs/timer.md"' + extA() + '>Set up the timer</a>';
+}
 // Strava, always visible: what works now and the one next step
 function stravaHTML(sv) {
   const jb = S.meta.jobs, ok = sv && sv.ok, ext = extA();
@@ -965,7 +970,7 @@ function stravaHTML(sv) {
   if (!jb.stravaKeys) return head(pill('todo', 'Not set up')) + '<p class="hint">Step 1 of 2: Strava keys. On strava.com/settings/api create an app (any name; Authorization Callback Domain: <b>localhost</b>). Then on GitHub add two repository secrets, <b>STRAVA_CLIENT_ID</b> and <b>STRAVA_CLIENT_SECRET</b>, with its Client ID and Client Secret.</p><div class="row"><a class="btn small" href="https://www.strava.com/settings/api"' + ext + '>Strava API settings</a><a class="btn small ghost" href="' + GH + '/settings/secrets/actions/new"' + ext + '>Add a secret</a></div></section>';
   const cid = (sv && sv.cid) || jb.stravaCid, url = 'https://www.strava.com/oauth/authorize?client_id=' + encodeURIComponent(cid) + '&response_type=code&redirect_uri=http://localhost&approval_prompt=force&scope=read,activity:read_all,activity:write';
   if (!ok) return head(pill('todo', sv && sv.error === 'reconnect' ? 'Reconnect' : 'Not connected')) + '<p class="hint">' + (sv && sv.error === 'reconnect' ? 'Strava stopped accepting the connection. Connect again:' : 'Step 2 of 2: connect your account.') + ' 1) Tap <b>Connect Strava</b> and Authorize. 2) The next page won’t load: copy its whole address (starts with localhost). 3) Tap <b>Paste it on GitHub</b>, choose Run workflow, paste, run. Within 30 minutes this card says Connected.</p><div class="row"><a class="btn small primary" href="' + url + '"' + ext + '>Connect Strava</a><a class="btn small" href="' + GH + '/actions/workflows/strava-auth.yml"' + ext + '>Paste it on GitHub</a></div></section>';
-  return head(pill('done', 'Connected')) + '<p class="hint">' + (sv.lastSync ? 'Checked ' + agoMin(sv.lastSync) + '. ' : '') + (sv.count ? sv.count + ' activities from Strava. ' : '') + 'Checks every 30 minutes.</p>' + stvCard({ ...sv, cid }) + '</section>';
+  return head(pill('done', 'Connected')) + '<p class="hint">' + (sv.lastSync ? 'Checked ' + agoMin(sv.lastSync) + '. ' : '') + (sv.count ? sv.count + ' activities from Strava. ' : '') + (jb.at ? 'Background job ran ' + agoMin(jb.at) + '.' : '') + '</p>' + jobLateHTML() + stvCard({ ...sv, cid }) + '</section>';
 }
 // Coach: status, setup steps, and every briefing so far
 function coachMeHTML() {
@@ -974,7 +979,7 @@ function coachMeHTML() {
   let h = '<section class="card"><div class="card-h"><h2>Coach</h2>' + (!jb ? pill('todo', 'Checking') : !jb.coachToken ? pill('todo', 'Not set up') : cm && cm.ok === false ? pill('todo', 'Problem') : pill('done', 'On')) + '</div>';
   if (jb && !jb.coachToken) h += '<p class="hint">Claude writes you a short morning briefing (after your band syncs) and an evening review (after training), using your Claude subscription. To turn it on: 1) on your computer run <b>claude setup-token</b> and copy the token. 2) Add it on GitHub as a repository secret named <b>CLAUDE_CODE_OAUTH_TOKEN</b>. Never paste it anywhere else.</p><a class="btn small" href="' + GH + '/settings/secrets/actions/new"' + ext + '>Add the secret on GitHub</a>';
   else if (cm && cm.ok === false) h += '<p class="safety">The last ' + esc(cm.kind || '') + ' message didn’t go through (' + esc(cm.err || 'unknown') + '). It tries again on the next run. If it keeps failing, make a new token with claude setup-token and replace the secret.</p>';
-  else if (jb) h += '<p class="hint">Morning briefing once your band has synced (5:00–13:00), evening review 30 minutes after a workout or at 21:30. Switch either off in Reminders above. ' + (cm && cm.at ? 'Last message ' + agoMin(cm.at) + '.' : 'No message yet.') + '</p>';
+  else if (jb) h += '<p class="hint">Morning briefing once your band has synced (5:00–13:00), evening review 30 minutes after a workout or at 21:30. Switch either off in Reminders above. ' + (cm && cm.at ? 'Last message ' + agoMin(cm.at) + '.' : 'No message yet.') + '</p>' + (S.meta.strava && S.meta.strava.ok ? '' : jobLateHTML());
   if (days.length) h += '<div class="coachlog">' + days.map(d => ['evening', 'morning'].filter(k => S.brief[d][k]).map(k => { const m = S.brief[d][k]; return '<details><summary><b>' + esc(m.head) + '</b><small>' + fmt(d) + ' · ' + (k === 'evening' ? 'Evening review' : 'Morning briefing') + '</small></summary><p>' + esc(m.text) + '</p></details>'; }).join('')).join('') + '</div>';
   return h + '</section>';
 }
