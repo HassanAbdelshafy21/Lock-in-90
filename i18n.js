@@ -356,11 +356,14 @@ export const AR = {
   "Loading…": "جارٍ التحميل…", "Link not active": "الرابط غير فعال", "Couldn’t load right now. Check the connection and refresh.": "تعذّر التحميل الآن. تأكد من الاتصال وأعد التحميل.",
   "≈ {n} kg raw ({n} kg cooked)": "≈ {n} كجم نيء ({n} كجم مطبوخ)", "photo": "صورة", "Saved.": "تم الحفظ.",
   "Fasting today?": "صايم النهارده؟", "Tap if you are. Meals stay the same.": "دوس لو صايم. الوجبات زي ما هي.", "Iftar time": "وقت الفطار", "Suhoor: fast starts soon": "السحور: الصيام هيبدأ قريب", "Not fasting today.": "مش صايم النهارده.", "Fasting today. Your iftar time is on the Today screen.": "صايم النهارده. ميعاد الفطار على شاشة النهارده.",
+  "Add cardio while you train, or turn on Cardio after lifting in Train.": "ضيف الكارديو وإنت بتتمرن، أو شغّل «كارديو بعد الحديد» من التمرين.",
 };
 
 // sentences that contain names or lists: [regex, Arabic builder]
 const UNIT = { roll: 'صباع', pigeon: 'حمامة', 'small dish': 'طبق صغير', fish: 'سمكة', quarter: 'ربع', 'whole medium': 'فطيرة وسط كاملة', '¼ kg': 'ربع كيلو', skewer: 'سيخ', 'half chicken': 'نص فرخة', '5 pieces': '5 قطع', 'small box': 'علبة صغيرة', 'medium box': 'علبة وسط', 'large box': 'علبة كبيرة', medium: 'وسط', mug: 'مج', tablet: 'قرص', sachet: 'كيس', s: 'ث', '1-second spray': 'رشة ثانية', pack: 'عبوة', bar: 'قطعة بار', cake: 'قطعة', croissant: 'كرواسون', tortilla: 'تورتيلا', wrap: 'راب', 'box of 6': 'علبة 6 قطع', regular: 'عادي', small: 'صغير', large: 'كبير', 'bottle 1 L': 'زجاجة 1 لتر', handful_: 'حفنة', can: 'علبة', 'large bottle': 'زجاجة كبيرة', 'small bottle': 'زجاجة صغيرة', bottle: 'زجاجة', piece: 'قطعة', cup: 'كوب', tbsp: 'ملعقة كبيرة', tsp: 'ملعقة صغيرة', slice: 'شريحة', egg: 'بيضة', fruit: 'ثمرة', medium: 'متوسطة', loaf: 'رغيف', plate: 'طبق', bowl: 'طبق', handful: 'حفنة', scoop: 'سكوب', glass: 'كوب', sandwich: 'ساندوتش', serving: 'حصة', 'whole dish': 'الطبق كله', date: 'تمرة', portion: 'حصة', white: 'بياض', 'small box': 'علبة صغيرة', 'large box': 'علبة كبيرة', 'bar 40 g': 'لوح 40 جم', 'cup 105 g': 'كوب 105 جم', 'cup 170 g': 'كوب 170 جم' };
 export const AR_PATTERNS = [
+  [/^(\d+) min cardio$/, m => `${m[1]} دقيقة كارديو`],
+  [/^Cardio · (\d+) min( · done ✓)?$/, m => `كارديو · ${m[1]} دقيقة${m[2] ? ' · تمّ ✓' : ''}`], [/^(\d+) min of cardio$/, m => `${m[1]} دقيقة كارديو`],
   [/^Iftar ≈ (\d\d:\d\d) \(Cairo\) · Fajr (\d\d:\d\d)\. Tap again if you’re not fasting\.$/, m => `الفطار تقريبًا ${m[1]} (القاهرة) · الفجر ${m[2]}. دوس تاني لو مش صايم.`],
   [/^(.+) · (never done|done before|last .+)$/, (m, t) => `${t(m[1])} · ${t(m[2])}`],
   [/^(.+) is ready\. Tap ⋯ on any workout to change it\.$/, (m, t) => `${t(m[1])} جاهزة. دوس ⋯ على أي تمرين عشان تغيّره.`],

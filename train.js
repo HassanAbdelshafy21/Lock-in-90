@@ -422,8 +422,9 @@ function homeHTML() {
   return h;
 }
 function focusOf(r) { const c = {}; r.ex.forEach(e => { const m = ex(e.id).pm[0]; if (m) c[m] = (c[m] || 0) + (+e.sets || 0); }); return Object.entries(c).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([m]) => musL(m)).join(', ') || '—'; }
-function woStats(w) { let sets = 0, vol = 0; (w.ex || []).forEach(e => (e.sets || []).forEach(s => { if (s.done && !isW(s)) { sets++; vol += (s.kg || 0) * (s.r || 0); } })); const min = w.t1 && w.t0 ? Math.max(1, Math.round((w.t1 - w.t0) / 60000)) : 0; return { sets, vol: Math.round(vol), min }; }
-function woSummary(w) { const s = woStats(w); return [s.min && `${s.min} min`, (s.sets === 1 ? "1 set" : `${s.sets} sets`), s.vol && `${C.round(s.vol / 1000, 1)} t lifted`].filter(Boolean).join(' · '); }
+function woStats(w) { let sets = 0, vol = 0; (w.ex || []).filter(e => !e.cd).forEach(e => (e.sets || []).forEach(s => { if (s.done && !isW(s)) { sets++; vol += (s.kg || 0) * (s.r || 0); } })); const min = w.t1 && w.t0 ? Math.max(1, Math.round((w.t1 - w.t0) / 60000)) : 0; return { sets, vol: Math.round(vol), min }; }
+function woSummary(w) { const s = woStats(w), cdm = (w.ex || []).filter(e => e.cd && e.sets[0] && e.sets[0].done).reduce((a, e) => a + e.cd.min, 0); return [s.min && `${s.min} min`, s.sets || !cdm ? (s.sets === 1 ? "1 set" : `${s.sets} sets`) : '', s.vol && `${C.round(s.vol / 1000, 1)} t lifted`, cdm && `${cdm} min cardio`].filter(Boolean).join(' · '); }
+function unlogCd(e) { const d = X.dayDoc(D()), k = (d.stamina || []).map(s => s.ex).lastIndexOf(e.id); if (k >= 0) d.stamina.splice(k, 1); }
 const cardioDone = d => (d.stamina || []).some(s => s.src === 'finisher');
 
 /* ---------- live workout ---------- */
@@ -447,7 +448,7 @@ function tgt(w, i, j) {
   return { kg: null, r: lo };
 }
 function liveHTML(w) {
-  const st = woStats(w), total = w.ex.reduce((a, e) => a + e.sets.filter(s => !isW(s)).length, 0), dn = w.ex.reduce((a, e) => a + e.sets.filter(s => s.done && !isW(s)).length, 0);
+  const st = woStats(w), total = w.ex.reduce((a, e) => a + (e.cd ? 0 : e.sets.filter(s => !isW(s)).length), 0), dn = w.ex.reduce((a, e) => a + (e.cd ? 0 : e.sets.filter(s => s.done && !isW(s)).length), 0);
   let h = `<section class="lhd"><div><b class="t">${esc(w.name)}</b><div class="lst"><span>⏱ <b class="num clock" id="wo-clock">${clock(w)}</b></span><span><b class="num">${dn}</b> of ${total} sets</span>${st.vol ? `<span><b class="num">${C.round(st.vol / 1000, 1)} t</b> lifted</span>` : ''}${w.place === 'home' ? '<span>🏠 Home</span>' : ''}</div></div><button class="btn small fin" data-act="tr-finish">Finish</button></section>`;
   if (!w.ex.length) return h + `<p class="hint center" style="margin:18px 0">No exercises yet. Add the first one.</p><button class="btn primary block" data-act="tr-add">+ Add exercise</button>` + restBarHTML();
   let i = 0, pair = 0;
@@ -459,7 +460,14 @@ function liveHTML(w) {
   h += `<button class="btn block" data-act="tr-add">+ Add exercise</button><button class="btn primary block" data-act="tr-finish" style="margin-top:8px">Finish workout</button>`;
   return h + restBarHTML();
 }
+function cardioCardHTML(w, i) {
+  const e = w.ex[i], done = !!(e.sets[0] && e.sets[0].done), mn = e.cd.min, st = (n, l) => `<button class="btn small" data-act="tr-cdmin" data-v="${i}:${n}" aria-label="${n > 0 ? 'Add' : 'Remove'} ${Math.abs(n)} minutes">${l}</button>`;
+  return `<section class="card exc cdx${done ? ' dn' : ''}" id="ex-${i}"><div class="exh2"><button class="thb" data-act="tr-exinfo" data-v="${e.id}" aria-label="How to do ${esc(exName(e))}">${thumb(e.id)}</button><div class="exn"><b>${esc(exName(e))}</b><small>Cardio · ${mn} min${done ? ' · done ✓' : ''}</small></div><button class="dots" data-act="tr-exmenu" data-v="${i}" aria-label="More options for ${esc(exName(e))}">⋯</button></div>
+  <div class="row cdrow">${st(-5, '−5')}${st(-1, '−1')}<b class="num cdmin">${mn} min</b>${st(1, '+1')}${st(5, '+5')}</div>
+  <div class="row exbtns"><button class="btn small${done ? '' : ' primary'} grow" data-act="tr-cddone" data-v="${i}">${done ? 'Undo' : `Done: ${mn} min`}</button></div></section>`;
+}
 function exCardHTML(w, i, pre) {
+  if (w.ex[i].cd) return cardioCardHTML(w, i);
   const e = w.ex[i], x = ex(e.id), last = hist(e.id, D()).pop(), timed = isTimed(e.id), bw = BW(x), tip = suggest(e, x), cs = curSet(e), note = (e.note || ((T() || {}).notes || {})[e.id] || '').trim();
   const lastWork = last ? last.sets.filter(s => !isW(s)) : [], done = e.sets.length && e.sets.every(s => s.done), rs = restFor(e.id, e);
   // only the set you're on now gets the gold outline (both exercises of a pair share it)
@@ -645,13 +653,14 @@ function libHTML() {
   if (!DB) return `<p class="hint center">Loading exercises…</p>`;
   const f = X.S.trLib = X.S.trLib || { q: '', m: '', e: '' };
   return `<section class="card lib"><input class="in" id="tr-q" type="search" placeholder="Search ${nLib()} exercises" value="${esc(f.q)}" autocomplete="off">
-  <div class="chips">${['', ...MUSCLES.slice(0, 14)].map(m => `<button data-act="tr-fm" data-v="${m}" aria-pressed="${f.m === m}">${m ? esc(musL(m)) : 'All'}</button>`).join('')}</div>
+  <div class="chips">${libChips(f)}</div>
   <select class="in" id="tr-fe" aria-label="Equipment"><option value="">Any equipment</option>${Object.keys(EQ_L).filter(Boolean).map(k => `<option value="${k}" ${f.e === k ? 'selected' : ''}>${esc(eqL(k))}</option>`).join('')}</select></section>
   <div id="tr-res">${resHTML(filterLib(f), X.S.trPick ? 'tr-pickex' : 'tr-exinfo')}</div>`;
 }
+const libChips = f => ['', '_cardio', ...MUSCLES.slice(0, 14)].map(m => `<button data-act="tr-fm" data-v="${m}" aria-pressed="${f.m === m}">${m === '_cardio' ? 'Cardio' : m ? esc(musL(m)) : 'All'}</button>`).join('');
 function filterLib(f) {
   const q = (f.q || '').toLowerCase().trim(), words = q.split(/\s+/).filter(Boolean);
-  return DB.list.filter(x => (!f.m || x.pm.includes(f.m)) && (!f.e || x.eq === f.e) && (!words.length || words.every(w => x.name.toLowerCase().includes(w))))
+  return DB.list.filter(x => (!f.m || (f.m === '_cardio' ? x.cat === 'cardio' : x.pm.includes(f.m))) && (!f.e || x.eq === f.e) && (!words.length || words.every(w => x.name.toLowerCase().includes(w))))
     .sort((a, b) => (a.cat === 'strength' ? 0 : 1) - (b.cat === 'strength' ? 0 : 1) || (a.lv === 'b' ? 0 : 1) - (b.lv === 'b' ? 0 : 1) || a.name.localeCompare(b.name)).slice(0, 60);
 }
 function resHTML(res, act) {
@@ -691,7 +700,7 @@ async function openExercise(id) {
 function openLibPick(target) {
   X.S.trPick = target; loadDB().then(() => {
     const f = X.S.trLib = X.S.trLib || { q: '', m: '', e: '' };
-    sheet(`<input class="in" id="tr-q" type="search" placeholder="Search ${nLib()} exercises" value="${esc(f.q)}" autocomplete="off"><div class="chips">${['', ...MUSCLES.slice(0, 14)].map(m => `<button data-act="tr-fm" data-v="${m}" aria-pressed="${f.m === m}">${m ? esc(musL(m)) : 'All'}</button>`).join('')}</div><div id="tr-res">${resHTML(filterLib(f), 'tr-pickex')}</div>`, 'Add exercise', 'trpick');
+    sheet(`<input class="in" id="tr-q" type="search" placeholder="Search ${nLib()} exercises" value="${esc(f.q)}" autocomplete="off"><div class="chips">${libChips(f)}</div><div id="tr-res">${resHTML(filterLib(f), 'tr-pickex')}</div>`, 'Add exercise', 'trpick');
   });
 }
 function swapSrc() { const S = X.S; return S.trSwapMode === 'edit' ? S.trEdit.ex[S.trSwap] : S.trSwapMode === 'wedit' ? S.days[S.trWE].wo.ex[S.trSwap] : (active() || { ex: [] }).ex[S.trSwap]; }
@@ -726,7 +735,7 @@ function prevSame(date, w) { const ks = sessions(date).filter(k => { const p = X
 function openSummary(date) {
   const d = X.S.days[date || D()], w = d && d.wo; if (!w) return; date = date || D();
   const st = woStats(w), prev = prevSame(date, w), ps = prev && woStats(prev.w);
-  const rows = w.ex.filter(e => (e.sets || []).some(s => s.done && !isW(s))).map(e => {
+  const rows = w.ex.filter(e => !e.cd && (e.sets || []).some(s => s.done && !isW(s))).map(e => {
     const work = e.sets.filter(s => s.done && !isW(s)), top = bestSet(work), b0 = best(e.id, date), pe = prev && prev.w.ex.find(z => z.id === e.id), pw = pe ? pe.sets.filter(s => s.done && !isW(s)) : [];
     let tag = '';
     if (top && beats(top, b0)) tag = `<span class="up">▲ record</span>`;
@@ -877,7 +886,7 @@ function openWEdit(date) {
   const w = X.S.days[date].wo; X.S.trWE = date; X.S.trPick = null;
   const mins = w.t1 && w.t0 ? Math.max(1, Math.round((w.t1 - w.t0) / 60000)) : '';
   sheet(`<label class="wrow"><span>Duration</span><span class="kgin"><input class="in num" type="number" inputmode="numeric" min="1" max="400" data-wedur="${date}" value="${mins}"> min</span></label>
-  ${w.ex.map((e, i) => `<div class="wex"><div class="spread"><h3 class="grp">${esc(exName(e))}</h3><span class="row"><button class="rep" data-act="tr-werep" data-v="${i}" aria-label="Replace ${esc(exName(e))}">⇄</button><button class="x" data-act="tr-werm" data-v="${i}" aria-label="Remove ${esc(exName(e))}">✕</button></span></div>${e.sets.map((s, j) => `<div class="weed"><span class="sn ${s.t || ''}">${s.t ? s.t.toUpperCase() : j + 1}</span><input class="in num" type="number" inputmode="decimal" step="0.5" data-woe="${date}:${i}:${j}:kg" value="${s.kg ?? ''}" aria-label="Weight"><em>kg ×</em><input class="in num" type="number" inputmode="numeric" data-woe="${date}:${i}:${j}:r" value="${s.r ?? ''}" aria-label="Reps"><button class="x" data-act="tr-wesrm" data-v="${date}:${i}:${j}" aria-label="Remove set">×</button></div>`).join('')}<button class="btn small" data-act="tr-weadd" data-v="${i}">＋ Set</button></div>`).join('')}
+  ${w.ex.map((e, i) => `<div class="wex"><div class="spread"><h3 class="grp">${esc(exName(e))}</h3><span class="row"><button class="rep" data-act="tr-werep" data-v="${i}" aria-label="Replace ${esc(exName(e))}">⇄</button><button class="x" data-act="tr-werm" data-v="${i}" aria-label="Remove ${esc(exName(e))}">✕</button></span></div>${e.cd ? `<p class="hint">${e.cd.min} min of cardio</p>` : e.sets.map((s, j) => `<div class="weed"><span class="sn ${s.t || ''}">${s.t ? s.t.toUpperCase() : j + 1}</span><input class="in num" type="number" inputmode="decimal" step="0.5" data-woe="${date}:${i}:${j}:kg" value="${s.kg ?? ''}" aria-label="Weight"><em>kg ×</em><input class="in num" type="number" inputmode="numeric" data-woe="${date}:${i}:${j}:r" value="${s.r ?? ''}" aria-label="Reps"><button class="x" data-act="tr-wesrm" data-v="${date}:${i}:${j}" aria-label="Remove set">×</button></div>`).join('')}<button class="btn small" data-act="tr-weadd" data-v="${i}">＋ Set</button></div>`).join('')}
   <button class="btn block" data-act="tr-weaddex">＋ Add exercise</button><button class="btn primary block" data-act="closesheet">Done</button>`, `Edit ${w.name}`);
 }
 
@@ -976,7 +985,7 @@ function finishWorkout() {
 function structOf(w) {
   const n = e => e.sets.filter(s => !isW(s)).length, carry = {};
   w.ex.forEach(e => { if (e.cut) carry[e.cut] = (carry[e.cut] || 0) + n(e); });
-  return w.ex.filter(e => !e.cut).map(e => { const c = carry[e.id] || 0; delete carry[e.id]; return { id: e.id, sets: n(e) + c, from: e.from, e }; }).filter(x => x.sets > 0);
+  return w.ex.filter(e => !e.cut && !e.cd).map(e => { const c = carry[e.id] || 0; delete carry[e.id]; return { id: e.id, sets: n(e) + c, from: e.from, e }; }).filter(x => x.sets > 0);
 }
 function diffOf(w, N) {
   if (!w.orig) return [];
@@ -1172,9 +1181,11 @@ export async function act(a, v, b) {
     case 'tr-eadd': return openLibPick('edit');
     case 'tr-pickex': {
       if (S.trImpFix) { S.trImp.names[S.trImpFix] = { id: v, sc: 1 }; S.trImpFix = null; S.trPick = null; return drawImport(); }
+      if (S.trPick === 'edit' && S.trEdit && ex(v).cat === 'cardio') return X.toast('Add cardio while you train, or turn on Cardio after lifting in Train.');
       if (S.trPick === 'edit' && S.trEdit) { const x = ex(v), iso = x.mech === 'isolation', ne = { id: v, sets: 3, lo: isTimed(v) ? 20 : iso ? 10 : 8, hi: isTimed(v) ? 45 : iso ? 15 : 12 }; ne.sp = spOf(ne); S.trEdit.ex.push(ne); S.trPick = null; return drawEdit(); }
       if (S.trPick === 'wedit' && S.trWE) { const x = ex(v), iso = x.mech === 'isolation'; S.days[S.trWE].wo.ex.push({ id: v, lo: iso ? 10 : 8, hi: iso ? 15 : 12, sets: [{ done: true }] }); S.trPick = null; X.saveDay(S.trWE); X.draw(); return openWEdit(S.trWE); }
       const w = active(); if (!w) return X.closeSheet();
+      if (ex(v).cat === 'cardio') { w.ex.push({ id: v, lo: 0, hi: 0, cd: { min: (t.cardio && t.cardio.min) || 20 }, sets: [{}] }); w.cur = w.ex.length - 1; S.trPick = null; X.saveDay(D()); X.closeSheet(); return X.draw(); }
       const x = ex(v), iso = x.mech === 'isolation'; w.ex.push({ id: v, lo: iso ? 10 : 8, hi: iso ? 15 : 12, sets: [{}, {}, {}] }); w.cur = w.ex.length - 1; S.trPick = null; X.saveDay(D()); X.closeSheet(); return X.draw();
     }
     case 'tr-fm': { S.trLib.m = v; const el = $('tr-res'); if (el) { el.innerHTML = resHTML(filterLib(S.trLib), S.trPick ? 'tr-pickex' : 'tr-exinfo'); document.querySelectorAll('[data-act="tr-fm"]').forEach(x => x.setAttribute('aria-pressed', x.dataset.v === v)); } return; }
@@ -1191,6 +1202,13 @@ export async function act(a, v, b) {
       X.saveDay(v); X.saveSettings(); X.closeSheet(); X.toast('Workout deleted.'); return X.draw();
     }
     case 'tr-cardio': { const r = t.routines && t.routines.find(x => x.id === (wo() || {}).rid); return sheet(cardioBlock(t.cardio, r && r.cd), 'Cardio after lifting'); }
+    case 'tr-cdmin': { const [i, n] = v.split(':').map(Number), e = active().ex[i]; if (!e || !e.cd) return; e.cd.min = Math.min(240, Math.max(1, e.cd.min + n)); if (e.sets[0] && e.sets[0].done) { e.sets[0].done = false; unlogCd(e); } X.saveDay(D()); return X.draw(); }
+    case 'tr-cddone': {
+      const e = active().ex[+v]; if (!e || !e.cd) return; const d = X.dayDoc(D());
+      if (e.sets[0] && e.sets[0].done) { e.sets[0].done = false; unlogCd(e); }
+      else { e.sets[0] = { ...e.sets[0], done: true }; d.stamina = d.stamina || []; d.stamina.push({ mode: exName(e), min: e.cd.min, kind: 'easy', src: 'finisher', ex: e.id }); X.toast(`${e.cd.min} min of cardio logged.`); }
+      X.saveDay(D()); return X.draw();
+    }
     case 'tr-cdlog': {
       const [min, mode] = v.split(':'), d = X.dayDoc(D()), m = CARDIO.find(c => c[0] === mode) || CARDIO[0];
       d.stamina.push({ mode: m[1], min: +min, kind: t.cardio.kind === 'int' ? 'intervals' : 'easy', src: 'finisher' }); X.saveDay(D()); X.closeSheet(); X.toast(`${min} min of cardio logged.`); return X.draw();
