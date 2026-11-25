@@ -5,7 +5,7 @@ import * as C from './core.js';
 import { trText, addFoodNames } from './i18n.js';
 import * as TR from './train.js';
 import * as HC from './health.js';
-const APP_VERSION = '41 · Redesign: logo A6, light and dark, Today · Train · Food · Body · You';
+const APP_VERSION = '42 · Food: one tap per meal';
 import { EX, POSE, figSVG, YT, LINES, FOODS, COACH_MEALS, DEFAULT_SUPPS, COACH_ENC, SLOTS, CARDIO_MODES } from './data.js';
 import { BRANDS, BRAND_BY_CODE } from './brands.js';
 addFoodNames(FOODS); addFoodNames(BRANDS);
@@ -1150,47 +1150,61 @@ function macrosHTML(tot, target) {
   const cell = (label, v, unit, target) => `<div class="mac"><span>${label}</span><b class="num">${kc(v)}<small>${target ? ' / ' + target : ''} ${unit}</small></b>${target ? `<div class="mbar"><i class="${v > target * 1.05 && unit === 'kcal' ? 'over' : ''}" style="width:${Math.min(100, v / target * 100)}%"></i></div>` : ''}</div>`;
   return `<div class="macros">${cell('Calories', tot.k, 'kcal', tk)}${cell('Protein', tot.p, 'g', tp)}${cell('Carbs', tot.c, 'g')}${cell('Fat', tot.f, 'g')}</div>`;
 }
+function gramsField(it, key) { const u = C.isDrink(it) ? 'ml' : 'g'; return `<span class="gstep"><button class="gs" data-act="gstep" data-v="${key}:-1" aria-label="Less ${esc(it.name)}">−</button><label class="g"><input type="number" inputmode="decimal" min="0" step="any" value="${C.round(it.g, 1)}" data-grams="${key}" aria-label="${esc(it.name)} ${u === 'ml' ? 'millilitres' : 'grams'}">${u}</label><button class="gs" data-act="gstep" data-v="${key}:1" aria-label="More ${esc(it.name)}">+</button></span>`; }
 const dropTag = it => C.isDrink(it) ? ' <span class="state s-water">counts as water</span>' : '';
 function itemsEditor(items, scope) {
-  return `<div class="items">${items.length ? items.map((it, i) => { const m = C.itemMacros(it); return `<div class="itm"><div class="nm">${it.meal ? '🍔 ' : ''}${esc(it.name)}${it.cheat ? ' <span class="state s-cheat">🍕 cheat meal</span>' : ''}${dropTag(it)}${comboPartsHTML(it)}${it.meal ? `<button class="link" data-act="mbedit" data-v="${scope}|${i}">Edit meal</button>` : ''}<small>${it.su ? esc(amountTxt(it)) + ' · ' : ''}${kc(m.k)} kcal · ${C.round(m.p, 1)} g protein</small></div>${it.meal ? '<span class="g"></span>' : `<label class="g"><input type="number" inputmode="decimal" min="0" step="any" value="${C.round(it.g, 1)}" data-grams="${scope}:${i}" aria-label="${esc(it.name)} ${C.isDrink(it) ? 'millilitres' : 'grams'}">${C.isDrink(it) ? 'ml' : 'g'}</label>`}<button class="x" data-act="rmitem" data-v="${scope}:${i}" aria-label="Remove ${esc(it.name)}">×</button></div>`; }).join('') : '<p class="hint">No foods yet.</p>'}
+  return `<div class="items">${items.length ? items.map((it, i) => { const m = C.itemMacros(it); return `<div class="itm"><div class="nm">${it.meal ? '🍔 ' : ''}${esc(it.name)}${it.cheat ? ' <span class="state s-cheat">🍕 cheat meal</span>' : ''}${dropTag(it)}${comboPartsHTML(it)}${it.meal ? `<button class="link" data-act="mbedit" data-v="${scope}|${i}">Edit meal</button>` : ''}<small>${it.su ? esc(amountTxt(it)) + ' · ' : ''}${kc(m.k)} kcal · ${C.round(m.p, 1)} g protein</small></div>${it.meal ? '<span class="g"></span>' : gramsField(it, scope + ':' + i)}<button class="x" data-act="rmitem" data-v="${scope}:${i}" aria-label="Remove ${esc(it.name)}">×</button></div>`; }).join('') : '<p class="hint">No foods yet.</p>'}
   <div class="row"><button class="btn small" data-act="addfood" data-v="${scope}">+ Add food</button>${/^(plan|meal):/.test(scope) ? `<button class="btn small" data-act="mealfat" data-v="${scope}">${mealFatItem(items) ? '🧈 Change cooking fat' : '🧈 + Cooking fat'}</button>` : ''}</div></div>`;
 }
+/* Food v2 (v42): one row per meal with one ✓ (ate it as planned, tap again to undo). Tapping the meal opens a sheet
+   with the other choices (something different, same as before, free cheat meal, off-plan, not today). "Something
+   different" and "Off-plan" open a short editor under the meal: − / + per food, add a food, Done. */
+const MEAL_LBL = { plan: 'As planned', swap: 'Changed', cheat: 'Free cheat meal', off: 'Off-plan' };
+function foodSumHTML(date, d) {
+  const tot = C.dayTotals(S.settings, d), tgt = dayTarget(date, d) || {}, C2 = 2 * Math.PI * 35;
+  const left = tgt.k ? Math.round(tgt.k - tot.k) : null, frac = tgt.k ? Math.min(1, tot.k / tgt.k) : 0;
+  return `<section class="card fsum" aria-label="Calories and protein"><span class="fring"><svg viewBox="0 0 84 84" aria-hidden="true"><circle cx="42" cy="42" r="35" class="r4t"/>${frac > 0 ? `<circle cx="42" cy="42" r="35" class="fr${tgt.k && tot.k > tgt.k * 1.05 ? ' over' : ''}" stroke-dasharray="${(C2 * frac).toFixed(1)} ${C2.toFixed(1)}"/>` : ''}</svg>
+  <span class="c">${left != null ? `<b class="num">${kc(Math.abs(left))}</b><span>${left >= 0 ? 'kcal left' : 'kcal over'}</span>` : `<b class="num">${kc(tot.k)}</b><span>kcal</span>`}</span></span>
+  <span class="fs-t"><span class="fs-e">Eaten <b class="num">${kc(tot.k)}</b>${tgt.k ? ` of ${kc(tgt.k)} kcal` : ' kcal'}</span>
+  <span class="fs-p"><span class="spread"><span>Protein</span><b class="num">${kc(tot.p)}${tgt.p ? ` / ${kc(tgt.p)}` : ''} g</b></span>${tgt.p ? `<span class="gbar"><i style="width:${Math.min(100, tot.p / tgt.p * 100).toFixed(0)}%"></i></span>` : ''}</span>
+  <small>Carbs ${kc(tot.c)} g · Fat ${kc(tot.f)} g</small></span></section>`;
+}
 function mealsHTML(date, d, P) {
-  const st = S.settings, meals = d.meals || {}, tot = C.dayTotals(st, d), plan = C.mealsOn(st, date);
+  const st = S.settings, meals = d.meals || {}, plan = C.mealsOn(st, date);
   const unl = plan.filter(m => (m.items || []).length && !(d.skip || {})[m.id] && !(meals[m.id] && meals[m.id].status)).length;
-  let h = `<section class="card" id="sec-meals"><div class="card-h"><h2>Meals</h2>${pill(P.off.length || P.offExtra.length ? 'bad' : P.mealsOk ? 'done' : 'todo', P.off.length || P.offExtra.length ? 'Off-plan' : `${P.clean} / ${P.pm.length} on plan`)}</div>
-  ${macrosHTML(tot, dayTarget(date, d))}${trimCardHTML(date)}${unl ? `<button class="btn good" data-act="allplan">Log ${unl === plan.length ? 'all meals' : unl === 1 ? 'the last planned meal' : 'the other ' + unl} as planned</button>` : ''}<div class="tl">`;
-  const cs = st.cheat && st.cheat.on ? C.cheatsUsed(st, S.days, date, date) : null;
-  const CH = cs ? { ...cs, kind: st.cheat.kind || 'meal', left: Math.max(0, cs.max - cs.used - (P.cheats || 0)), usedTxt: [...cs.on, ...(P.cheats ? [date] : [])].map(x => x === today() ? 'today' : C.DAYNAMES[C.weekday(x)].slice(0, 3) + ' ' + C.parse(x).getDate()).join(', ') } : null;
-  if (CH && CH.kind === 'day') h += `<div class="cheatday">${d.cheatDay ? `<button class="btn cheat" data-act="cheatday" aria-pressed="true">🍕 Free cheat day ✓ · tap to undo</button><p class="hint">Every meal and extra today counts as on plan. Going over your calories is fine.</p>` : CH.left ? `<button class="btn cheat" data-act="cheatday">🍕 Use your free cheat day</button>` : `<p class="hint">🍕 Free cheat day used ${esc(CH.usedTxt)}. The next one is free from ${fmt(C.addDays(CH.to, 1))}.</p>`}</div>`;
+  const logged = plan.filter(m => meals[m.id] && meals[m.id].status).length;
+  let h = foodSumHTML(date, d) + trimCardHTML(date) + `<section class="card mcard" id="sec-meals"><div class="mcard-h"><span><h2>Meals</h2><small>${P.off.length || P.offExtra.length ? 'Something off-plan today' : `${logged} of ${plan.length} logged`}</small></span>${unl ? `<button class="mall" data-act="allplan">Log ${unl === plan.length ? 'all' : 'the rest'} as planned</button>` : ''}</div>`;
+  if (st.cheat && st.cheat.on && (st.cheat.kind || 'meal') === 'day') { const cs = C.cheatsUsed(st, S.days, date, date), left = Math.max(0, cs.max - cs.used); h += `<div class="cheatday">${d.cheatDay ? `<button class="btn cheat" data-act="cheatday" aria-pressed="true">🍕 Free cheat day ✓ · tap to undo</button>` : left ? `<button class="btn cheat" data-act="cheatday">🍕 Use your free cheat day</button>` : ''}</div>`; }
   plan.forEach((m, i) => {
-    const md = meals[m.id] || {}, skip = d.skip && d.skip[m.id], status = skip ? 'skip' : md.status || '';
-    const plan = C.sumItems(m.items);
-    const logged = md.status ? C.sumItems(md.items || []) : null;
-    const open = S.openMeal === m.id && (md.status === 'swap' || md.status === 'off' || md.status === 'cheat');
-    if (md.status && !open && S.expandMeal !== m.id) {
-      const lbl = md.status === 'plan' ? 'As planned' : md.status === 'swap' ? 'Changed' : md.status === 'cheat' ? '🍕 Cheat meal' : 'Off-plan';
-      h += `<div class="meal ${status} compact"><div class="mi">${svgI(mealIcon(m, i))}</div><button class="mrow" data-act="expandmeal" data-v="${m.id}" aria-label="${esc(m.name)}: ${lbl}. Tap to change"><span class="meal-n">${esc(m.name)} <span>${esc(m.time || '')}</span></span><span class="meal-sum"><span class="mstat ${md.status}">${lbl}</span> <b>${kc(logged.k)} kcal · ${C.round(logged.p, 1)} g P</b></span></button></div>`;
-      return;
-    }
-    h += `<div class="meal ${status}"><div class="mi">${svgI(mealIcon(m, i))}</div><div class="mbody">
-      <div class="spread"><div class="meal-n">${esc(m.name)} <span>${esc(m.time || '')}</span></div>${skip ? `<button class="link" data-act="unskip" data-v="${m.id}">Undo</button>` : `<button class="link" data-act="skip" data-v="${m.id}">Not today</button>`}</div>`;
-    if (skip) { h += `<p class="meal-sum">Not part of today’s plan.</p></div></div>`; return; }
-    h += `<div class="meal-sum">${md.status ? `Logged <b>${kc(logged.k)} kcal · ${C.round(logged.p, 1)} g protein</b>` : m.items.length ? `Plan: ${esc(m.items.map(x => x.name.split(',')[0]).join(', '))} · <b>${kc(plan.k)} kcal</b>` : 'No plan set for this meal. Log what you ate.'}</div>
-      <div class="seg wide" role="group" aria-label="${esc(m.name)}">${m.items.length ? `<button class="clean" data-act="meal" data-id="${m.id}" data-v="plan" aria-pressed="${md.status === 'plan'}">As planned</button><button class="clean" data-act="meal" data-id="${m.id}" data-v="swap" aria-pressed="${md.status === 'swap'}">Changed</button>` : `<button class="clean" data-act="meal" data-id="${m.id}" data-v="swap" aria-pressed="${md.status === 'swap'}">Log what I ate</button>`}<button class="off" data-act="meal" data-id="${m.id}" data-v="off" aria-pressed="${md.status === 'off'}">Off-plan</button>${CH && CH.kind === 'meal' ? `<button class="cheat" data-act="meal" data-id="${m.id}" data-v="cheat" aria-pressed="${md.status === 'cheat'}" ${!CH.left && md.status !== 'cheat' ? 'disabled' : ''}>${CH.left || md.status === 'cheat' ? '🍕 Cheat (free)' : `🍕 Used ${esc(CH.usedTxt)}`}</button>` : ''}</div>${CH && CH.kind === 'meal' && !CH.left && md.status !== 'cheat' && !md.status ? `<p class="hint">This week’s free cheat meal was ${esc(CH.usedTxt)}. The next one is free from ${fmt(C.addDays(CH.to, 1))}.</p>` : ''}${md.status === 'off' && !CH ? '<p class="hint">Was it a cheat meal your coach allowed? <button class="link" data-act="cheaton2">Turn on 1 free cheat meal a week</button> and tap 🍕 so the day still counts.</p>' : ''}${md.status === 'cheat' ? '<p class="hint">Free cheat meal: counts as on plan. Logging what you ate is optional but keeps your calories honest.</p>' : ''}`;
-    if (!md.status) h += `<button class="link" data-act="copymeal" data-v="${m.id}">Copy a past meal</button>`;
-    if (md.status === 'plan' && S.expandMeal === m.id) { const fi = mealFatItem(md.items); h += `<div class="row"><button class="btn small" data-act="mealfat" data-v="meal:${m.id}">🧈 ${fi ? `Cooked with ${esc(fatAmt(fi.fid, fi.sq || 1))} ${esc((FATS.find(x => x.k === fi.fid) || { label: '' }).label.toLowerCase())} · +${kc(fi.per.k * fi.g / 100)} kcal` : '+ Cooking fat'}</button><button class="link" data-act="expandmeal" data-v="${m.id}">Done</button></div>`; }
-    if (md.status === 'swap' || md.status === 'off' || md.status === 'cheat') {
-      h += open ? `${itemsEditor(md.items || [], 'meal:' + m.id)}<input class="note" id="note-${m.id}" data-note="${m.id}" placeholder="Note (optional)" value="${esc(md.note || '')}"><div class="row"><button class="link" data-act="closemeal">Done editing</button><button class="link" data-act="copymeal" data-v="${m.id}">Copy a past meal</button></div>`
-        : `<button class="link" data-act="openmeal" data-v="${m.id}">Edit foods (${(md.items || []).length})</button>`;
-    }
-    h += `</div></div>`;
+    const md = meals[m.id] || {}, skip = d.skip && d.skip[m.id], s = md.status || '', sum = s ? C.sumItems(md.items || []) : C.sumItems(m.items || []);
+    const sub = skip ? 'Not today' : s ? `${MEAL_LBL[s]} · ${kc(sum.k)} kcal` : (m.items || []).length ? `${m.items.map(x => x.name.split(',')[0]).join(', ')} · ${kc(sum.k)} kcal` : 'No plan for this meal · tap to log it';
+    const ok = s === 'plan' || s === 'swap' || s === 'cheat';
+    h += `<div class="mrow2${skip ? ' skip' : ''}${s ? ' ' + s : ''}"><button class="ml" data-act="mopts" data-v="${m.id}"><span class="mi2">${ok ? gIco('check', 3) : s === 'off' ? '!' : i + 1}</span><span class="mt"><b>${esc(m.name)} <em>· ${esc(m.time || '')}</em></b><small>${esc(sub)}</small></span></button>`
+      + (skip ? `<button class="ga" data-act="unskip" data-v="${m.id}">Undo</button>` : (m.items || []).length || s ? `<button class="mtick${ok ? ' on' : ''}" data-act="meal" data-id="${m.id}" data-v="${s === 'swap' || s === 'cheat' || s === 'off' ? s : 'plan'}" aria-label="${ok || s ? `${esc(m.name)}: ${MEAL_LBL[s]}. Tap to undo` : `I ate ${esc(m.name)} as planned`}">${gIco('check', 2.8)}</button>` : `<button class="mtick" data-act="meal" data-id="${m.id}" data-v="swap" aria-label="Log ${esc(m.name)}">${gIco('plus', 2.6)}</button>`) + `</div>`;
+    if (S.openMeal === m.id && (s === 'swap' || s === 'off' || s === 'cheat')) h += `<div class="medit">${itemsEditor(md.items || [], 'meal:' + m.id)}<input class="note" id="note-${m.id}" data-note="${m.id}" placeholder="Note (optional)" value="${esc(md.note || '')}"><div class="row"><span class="grow num">${kc(sum.k)} kcal · ${C.round(sum.p, 1)} g protein${(m.items || []).length ? ` · plan was ${kc(C.sumItems(m.items).k)}` : ''}</span><button class="btn primary" data-act="closemeal">Done</button></div></div>`;
   });
-  h += `</div>`;
   const ex = d.extras || [];
-  h += `<div class="sgrp"><span class="sub">Extras outside your meals</span>${ex.length ? `<div class="items">${ex.map((it, i) => { const mm = C.itemMacros(it); return `<div class="itm"><div class="nm">${it.meal ? '🍔 ' : ''}${esc(it.name)} ${it.cheat ? '<span class="state s-cheat">🍕 cheat meal</span>' : it.off ? '<span class="state s-bad">off-plan</span>' : ''}${dropTag(it)}${comboPartsHTML(it)}${it.meal ? `<button class="link" data-act="mbedit" data-v="extra|${i}">Edit meal</button>` : ''}<small>${it.su ? esc(amountTxt(it)) + ' · ' : ''}${kc(mm.k)} kcal · ${C.round(mm.p, 1)} g protein</small></div>${it.meal ? '<span class="g"></span>' : `<label class="g"><input type="number" inputmode="decimal" min="0" step="any" value="${C.round(it.g, 1)}" data-grams="extra:${i}" aria-label="${esc(it.name)} ${C.isDrink(it) ? 'millilitres' : 'grams'}">${C.isDrink(it) ? 'ml' : 'g'}</label>`}<button class="x" data-act="rmitem" data-v="extra:${i}" aria-label="Remove">×</button></div>`; }).join('')}</div>` : ''}
-  <div class="row"><button class="btn small" data-act="addfood" data-v="extra">+ Log an extra (drink, snack, cheat)</button><button class="btn small" data-act="crave">🌊 Craving? Wait 10 minutes</button></div></div></section>`;
-  return h;
+  if (ex.length) h += `<div class="mextra"><span class="sub">Snacks and drinks</span><div class="items">${ex.map((it, i) => { const mm = C.itemMacros(it); return `<div class="itm"><div class="nm">${it.meal ? '🍔 ' : ''}${esc(it.name)} ${it.cheat ? '<span class="state s-cheat">🍕 cheat meal</span>' : it.off ? '<span class="state s-bad">off-plan</span>' : ''}${dropTag(it)}${comboPartsHTML(it)}${it.meal ? `<button class="link" data-act="mbedit" data-v="extra|${i}">Edit meal</button>` : ''}<small>${it.su ? esc(amountTxt(it)) + ' · ' : ''}${kc(mm.k)} kcal · ${C.round(mm.p, 1)} g protein</small></div>${it.meal ? '<span class="g"></span>' : gramsField(it, 'extra:' + i)}<button class="x" data-act="rmitem" data-v="extra:${i}" aria-label="Remove">×</button></div>`; }).join('')}</div></div>`;
+  return h + `<button class="madd" data-act="addfood" data-v="extra">+ Add a snack or drink</button><button class="link mcrave" data-act="crave">Craving? Wait 10 minutes</button></section>`;
+}
+// the meal's choices sheet
+function openMealOpts(id) {
+  const date = editDate(), st = S.settings, d = S.days[date] || {}, m = C.mealsOn(st, date).find(x => x.id === id); if (!m) return;
+  const md = (d.meals || {})[id] || {}, s = md.status || '', skip = d.skip && d.skip[id], sum = C.sumItems(m.items || []);
+  const cs = st.cheat && st.cheat.on ? C.cheatsUsed(st, S.days, date, date) : null, mine = Object.entries(d.meals || {}).filter(([k, x]) => k !== id && x && x.status === 'cheat').length;
+  const cLeft = cs ? Math.max(0, cs.max - cs.used - mine) : 0;
+  const opt = (a, ic, title, sub, cls = '', on = false) => `<button class="mopt ${cls}${on ? ' on' : ''}" data-act="mopt" data-v="${a}|${id}"><span class="oi">${ic}</span><span><b>${esc(title)}</b><small>${esc(on ? 'Chosen now · tap to undo' : sub)}</small></span></button>`;
+  const I = p => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${p}"/></svg>`;
+  SH = { scope: 'mopts', id }; $('sheet').hidden = false;
+  $('sheet').innerHTML = `<div class="sheet moptsheet" role="dialog" aria-modal="true" aria-label="${esc(m.name)}"><div class="grab" aria-hidden="true"></div>
+  <div class="spread"><h2>${esc(m.name)} <em>· ${esc(m.time || '')}</em></h2><button class="x" data-act="closesheet" aria-label="Close">×</button></div>
+  ${(m.items || []).length ? `<p class="hint">Plan: ${esc(m.items.map(x => x.name.split(',')[0]).join(', '))} · ${kc(sum.k)} kcal</p>` : '<p class="hint">No foods planned for this meal. Log what you ate.</p>'}
+  ${skip ? `<button class="btn primary block" data-act="mopt" data-v="unskip|${id}">Put it back in today’s plan</button>` : (m.items || []).length ? `<button class="btn primary block mbig" data-act="mopt" data-v="plan|${id}">${gIco('check', 2.8)} ${s === 'plan' ? 'Eaten as planned · tap to undo' : 'I ate it as planned'}</button>` : ''}
+  <div class="mopts">${opt('swap', I('M4 20h4L19 9l-4-4L4 16zM14 6l4 4'), (m.items || []).length ? 'I ate something different' : 'Log what I ate', 'Change the foods or amounts', 'b', s === 'swap')}
+  ${opt('copy', I('M4 12a8 8 0 1 0 3-6.2M4 4v5h5'), 'Same as a meal I ate before', 'Pick from your last 3 weeks')}
+  ${cs ? opt('cheat', I('M3 20l9-17 9 17zM8 15h.01M12 10h.01M14 16h.01'), 'Free cheat meal', cLeft ? `${cLeft} left this week · the day still counts` : 'None left this week', 'f', s === 'cheat') : opt('cheaton', I('M3 20l9-17 9 17zM8 15h.01M12 10h.01M14 16h.01'), 'Free cheat meal', 'Turns on 1 a week, then uses it here', 'f')}
+  ${opt('off', I('M6 6l12 12M18 6L6 18'), 'Off-plan', 'It won’t count as on plan today', 'x', s === 'off')}
+  ${skip ? '' : opt('skip', I('M5 12h14'), 'Not eating it today', 'Takes it out of today’s plan')}</div></div>`;
 }
 function waterHTML(P) {
   const pct = Math.min(100, P.w / P.goal * 100); let ticks = '';
@@ -2539,6 +2553,20 @@ document.addEventListener('click', async ev => {
       S.settings.group = null; saveSettings(); toast('You left the group.'); break;
     }
     case 'closemeal': S.expandMeal = null; S.openMeal = null; break;
+    case 'mopts': return openMealOpts(v);
+    case 'mopt': { // a choice from a meal's sheet: close it, then do what the old per-meal buttons did
+      const [a, id] = v.split('|'); closeSheet();
+      if (a === 'copy') return openCopy(id);
+      if (a === 'skip') { d().skip[id] = true; saveDay(D); break; }
+      if (a === 'unskip') { delete d().skip[id]; saveDay(D); break; }
+      if (a === 'cheaton') { S.settings.cheat = { per: '1w', kind: 'meal', ...(S.settings.cheat || {}), on: true }; saveSettings(); }
+      const f = document.createElement('button'); f.hidden = true; f.dataset.act = 'meal'; f.dataset.id = id; f.dataset.v = a === 'cheaton' ? 'cheat' : a; document.body.appendChild(f); f.click(); f.remove(); return;
+    }
+    case 'gstep': { // − / + next to a food's grams
+      const p = v.split(':'), dir = +p.pop(), i = +p.pop(), scope = p.join(':'), it = itemList(scope)[i]; if (!it) break;
+      const step = C.isDrink(it) ? 50 : it.g >= 100 ? 10 : 5, g = Math.max(0, Math.round((it.g + dir * step) / step) * step);
+      if (it.parts) scaleCombo(it, g); it.g = g; delete it.su; delete it.sq; saveScope(scope); break;
+    }
     case 'skip': d().skip[v] = true; saveDay(D); break;
     case 'unskip': delete d().skip[v]; saveDay(D); break;
     case 'addfood': return openSheet(v);

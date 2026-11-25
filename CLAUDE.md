@@ -140,8 +140,16 @@ Capgo-API stub `hcstub.js`), t39 (Arabic), regressions t16/t20/t22. If rebuildin
 - Preview harness (not in the repo): scratchpad `harness/` serves the repo with Firebase stubbed by in-memory data
   (`fs.js`, options ?theme ?band ?coach ?lang=ar ?tracker) and screenshots with headless Edge (`shots.sh`).
 
+## Done in v42 (2026-11-25): simpler Food
+- Approved design: "Food v2" row on the redesign canvas. `mealsHTML` now = `foodSumHTML` (kcal left ring, protein bar,
+  carbs/fat) + one row per meal (`.mrow2`) with one ✓ (`data-act="meal" data-v="plan"`, tap again to undo). Tapping the
+  meal opens `openMealOpts(id)` (sheet scope 'mopts'): as planned, something different (swap → inline editor `.medit`),
+  same as before (openCopy), free cheat meal (or turn it on), off-plan, not today (skip). Choices go through `mopt`,
+  which closes the sheet and re-dispatches the existing `meal` action. `gramsField()` adds − / + (`gstep`) to every
+  food editor (5 g steps, 10 g from 100 g, 50 ml for drinks).
+
 ## Next steps
-1. Hassan: install the v41 APK (then switch on Coach in You > Optional extras if wanted).
+1. Hassan: install the v42 APK (then switch on Coach in You > Optional extras if wanted).
    Earlier: install the v38 APK, turn on notifications (Me > Reminders), try a workout with the screen locked, allow
    Strava posting once, add the CLAUDE_CODE_OAUTH_TOKEN secret. Fix whatever the real phone shows.
 2. Later: remote MCP connector (get_today, get_week_summary, log_note); release signing so updates install in place.

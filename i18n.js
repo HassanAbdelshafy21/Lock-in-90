@@ -1,6 +1,13 @@
 // Arabic translations for Locked In. Keys are the English UI text; numbers are written as {n} and filled in order.
 // Used by the app (on screen) and the cloud job (notifications). No DOM access here.
 export const AR = {
+  // v42 Food: one tap per meal, the meal's choices sheet
+  "Log all as planned": "سجّل الكل حسب الخطة", "Log the rest as planned": "سجّل الباقي حسب الخطة", "Something off-plan today": "فيه حاجة خارج الخطة النهارده", "Snacks and drinks": "سناكس ومشروبات",
+  "+ Add a snack or drink": "+ ضيف سناك أو مشروب", "Craving? Wait 10 minutes": "نفسك في حاجة؟ استنى 10 دقايق", "Eaten": "أكلت", "kcal over": "سعرة زيادة",
+  "I ate it as planned": "أكلتها حسب الخطة", "Eaten as planned · tap to undo": "اتاكلت حسب الخطة · اضغط للتراجع", "I ate something different": "أكلت حاجة مختلفة", "Change the foods or amounts": "غيّر الأكل أو الكميات",
+  "Same as a meal I ate before": "زي وجبة أكلتها قبل كده", "Pick from your last 3 weeks": "اختار من آخر 3 أسابيع", "None left this week": "مفيش باقي الأسبوع ده", "Turns on 1 a week, then uses it here": "بيشغّل واحدة في الأسبوع ويستخدمها هنا",
+  "It won’t count as on plan today": "مش هيتحسب على الخطة النهارده", "Not eating it today": "مش هاكلها النهارده", "Takes it out of today’s plan": "بتشيلها من خطة النهارده", "Chosen now · tap to undo": "متختار دلوقتي · اضغط للتراجع",
+  "Put it back in today’s plan": "رجّعها لخطة النهارده", "No plan for this meal · tap to log it": "مفيش خطة للوجبة دي · اضغط وسجّلها", "No foods planned for this meal. Log what you ate.": "مفيش أكل مخطط للوجبة دي. سجّل اللي أكلته.",
   // v41 redesign: tabs, Today, Journey, You (appearance, optional extras)
   "You": "أنت", "Log": "سجّل", "Dark": "داكن", "Resume": "كمّل", "Your 90 days": "الـ90 يوم بتوعك", "Your journey": "رحلتك", "Lock in today": "ثبّت يومك", "Today’s goals": "أهداف النهارده",
   "Appearance": "المظهر", "Like phone": "زي الموبايل", "Optional extras": "إضافات اختيارية", "Coach (Claude)": "المدرب (Claude)", "Share with a coach": "شارك مع مدرب",
@@ -419,6 +426,10 @@ export const AR = {
 const UNIT = { roll: 'صباع', pigeon: 'حمامة', 'small dish': 'طبق صغير', fish: 'سمكة', quarter: 'ربع', 'whole medium': 'فطيرة وسط كاملة', '¼ kg': 'ربع كيلو', skewer: 'سيخ', 'half chicken': 'نص فرخة', '5 pieces': '5 قطع', 'small box': 'علبة صغيرة', 'medium box': 'علبة وسط', 'large box': 'علبة كبيرة', medium: 'وسط', mug: 'مج', tablet: 'قرص', sachet: 'كيس', s: 'ث', '1-second spray': 'رشة ثانية', pack: 'عبوة', bar: 'قطعة بار', cake: 'قطعة', croissant: 'كرواسون', tortilla: 'تورتيلا', wrap: 'راب', 'box of 6': 'علبة 6 قطع', regular: 'عادي', small: 'صغير', large: 'كبير', 'bottle 1 L': 'زجاجة 1 لتر', handful_: 'حفنة', can: 'علبة', 'large bottle': 'زجاجة كبيرة', 'small bottle': 'زجاجة صغيرة', bottle: 'زجاجة', piece: 'قطعة', cup: 'كوب', tbsp: 'ملعقة كبيرة', tsp: 'ملعقة صغيرة', slice: 'شريحة', egg: 'بيضة', fruit: 'ثمرة', medium: 'متوسطة', loaf: 'رغيف', plate: 'طبق', bowl: 'طبق', handful: 'حفنة', scoop: 'سكوب', glass: 'كوب', sandwich: 'ساندوتش', serving: 'حصة', 'whole dish': 'الطبق كله', date: 'تمرة', portion: 'حصة', white: 'بياض', 'small box': 'علبة صغيرة', 'large box': 'علبة كبيرة', 'bar 40 g': 'لوح 40 جم', 'cup 105 g': 'كوب 105 جم', 'cup 170 g': 'كوب 170 جم' };
 export const AR_PATTERNS = [
   // v41 redesign: Today's day card
+  // v42 Food
+  [/^(\d+) of (\d+) logged$/, m => `${m[1]} من ${m[2]} متسجّلين`], [/^of ([\d,]+) kcal$/, m => `من ${m[1]} سعرة`], [/^Carbs ([\d,]+) g · Fat ([\d,]+) g$/, m => `كربوهيدرات ${m[1]} جم · دهون ${m[2]} جم`],
+  [/^(\d+) left this week · the day still counts$/, m => `فاضل ${m[1]} الأسبوع ده · اليوم بيتحسب`], [/^· (\d\d?:\d\d)$/, m => `· ${m[1]}`],
+  [/^([\d,]+) kcal · ([\d.]+) g protein · plan was ([\d,]+)$/, m => `${m[1]} سعرة · ${m[2]} جم بروتين · الخطة كانت ${m[3]}`], [/^Less (.+)$/, m => `أقل ${m[1]}`], [/^More (.+)$/, m => `أكتر ${m[1]}`],
   [/^(\d+) to go$/, m => `فاضل ${m[1]}`], [/^(\d+) of (\d+) done$/, m => `${m[1]} من ${m[2]} اتعمل`], [/^(\d+) h left to lock in$/, m => `فاضل ${m[1]} ساعة على تثبيت اليوم`], [/^Day (\d+) counts\. Rest well\.$/, m => `اليوم ${m[1]} اتحسب. ارتاح كويس.`],
   [/^((?:meals|water|training|supplements|food)(?:(?:, | and )(?:meals|water|training|supplements|food))*)$/i, m => m[1].toLowerCase().replace(/meals/g, 'الوجبات').replace(/water/g, 'المية').replace(/training/g, 'التمرين').replace(/supplements/g, 'المكملات').replace(/food/g, 'الأكل').replace(/, /g, '، ').replace(/ and /g, ' و')],
   [/^Synced (\d+) (min|h|days) ago$/, m => `اتزامن من ${m[1]} ${m[2] === 'min' ? 'دقيقة' : m[2] === 'h' ? 'ساعة' : 'أيام'}`], [/^(\d+) h (\d\d)$/, m => `${m[1]} س ${m[2]}`], [/^([\d.]+) ms$/, m => `${m[1]} مللي ث`],
