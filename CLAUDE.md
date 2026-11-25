@@ -41,6 +41,9 @@ never early), used by the countdown row and by `waterPace` (water window iftar -
 wins when both apply. `scripts/tick.mjs` shifts water reminders to the evening on fasting days. Cairo is hard-coded: another city
 needs a location setting.
 
+## Cardio in workouts (v36, on main)
+Add exercise > Cardio chip lists the 14 library cardio exercises. A cardio exercise is a minutes card (`e.cd = {min}`), not kg x reps; Done pushes `{mode, min, kind:'easy', src:'finisher', ex}` to `day.stamina` (counts for the cardio score), Undo removes it. Cardio is excluded from set counts, volume, `structOf` (plan diff). Not available in the routine editor yet (toast explains).
+
 ## Architecture decisions
 - Capacitor, files bundled in the APK (`native/build-www.mjs` copies app files to `www/` and vendors Firebase into
   `www/vendor/firebase`; `--cdn` skips that). `www/` and `android/` are git-ignored (generated).
