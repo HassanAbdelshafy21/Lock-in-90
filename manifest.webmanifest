@@ -1,13 +1,13 @@
 {
-  "name": "Lock In 90",
-  "short_name": "Lock In 90",
+  "name": "Locked In",
+  "short_name": "Locked In",
   "description": "90-day challenge tracker that works offline and syncs.",
   "start_url": "./#today",
   "scope": "./",
   "display": "standalone",
   "orientation": "portrait",
-  "background_color": "#283A58",
-  "theme_color": "#283A58",
+  "background_color": "#0B0F14",
+  "theme_color": "#0B0F14",
   "icons": [
     {
       "src": "icons/icon-192.png",

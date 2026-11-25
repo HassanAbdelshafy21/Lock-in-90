@@ -5,7 +5,7 @@ import * as C from './core.js';
 import { trText, addFoodNames } from './i18n.js';
 import * as TR from './train.js';
 import * as HC from './health.js';
-const APP_VERSION = '38 · workout notification, coach, reminders in the Android app';
+const APP_VERSION = '39 · Locked In: new name and logo, loading screen, Strava and coach status';
 import { EX, POSE, figSVG, YT, LINES, FOODS, COACH_MEALS, DEFAULT_SUPPS, COACH_ENC, SLOTS, CARDIO_MODES } from './data.js';
 import { BRANDS, BRAND_BY_CODE } from './brands.js';
 addFoodNames(FOODS); addFoodNames(BRANDS);
@@ -113,7 +113,7 @@ async function pushOn() {
   if (FM()) {
     try {
       const pr = await FM().requestPermissions();
-      if (pr.receive !== 'granted') { toast('Notifications weren’t allowed. Allow them for Lock In 90 in your phone’s settings.'); return draw(); }
+      if (pr.receive !== 'granted') { toast('Notifications weren’t allowed. Allow them for Locked In in your phone’s settings.'); return draw(); }
       const { token } = await FM().getToken(); if (!token) throw new Error('no token');
       const p = S.settings.push = S.settings.push || {}; p.android = [...new Set([...(p.android || []), token])].slice(-3);
       try { localStorage.setItem('lk-push-a', token); } catch (e) { }
@@ -138,9 +138,9 @@ function pushOff() {
   const p = S.settings.push || {}; p.tokens = (p.tokens || []).filter(t => t !== mine); S.settings.push = p; saveSettings(); toast('Notifications off on this phone.'); draw();
 }
 async function pushTest() {
-  if (NP('WorkoutNotif')) return NP('WorkoutNotif').ping({ title: 'Lock In 90', body: 'This is how reminders will look. Real ones come from the reminder job.' }).catch(() => toast('Notifications are blocked for Lock In 90 in your phone’s settings.'));
+  if (NP('WorkoutNotif')) return NP('WorkoutNotif').ping({ title: 'Locked In', body: 'This is how reminders will look. Real ones come from the reminder job.' }).catch(() => toast('Notifications are blocked for Locked In in your phone’s settings.'));
   const reg = await navigator.serviceWorker.ready;
-  reg.showNotification('Lock In 90', { body: 'This is how reminders will look. Real ones come from the reminder job.', icon: 'icons/icon-192.png', badge: 'icons/favicon.png', tag: 'test' });
+  reg.showNotification('Locked In', { body: 'This is how reminders will look. Real ones come from the reminder job.', icon: 'icons/icon-192.png', badge: 'icons/favicon.png', tag: 'test' });
 }
 // the plan editor works on the normal plan or the Ramadan plan
 const editingRamadan = () => S.planEdit === 'ramadan';
@@ -228,7 +228,7 @@ function draw() {
   drawPanel();
   if (S.got.days) splashDone();
 }
-const topIdle = () => `<div class="top-row"><div class="brand"><img src="icons/logo.svg" alt=""><div><div class="daylabel">90-day challenge</div><div class="daynum">LOCK IN</div></div></div></div>`;
+const topIdle = () => `<div class="top-row"><div class="brand"><img src="icons/logo.svg" alt=""><div><div class="daylabel">90-day challenge</div><div class="daynum">LOCKED IN</div></div></div></div>`;
 function syncDot() { const s = !S.online ? 'off' : (S.pend.s || S.pend.d || Object.keys(timers).length) ? 'pend' : 'ok'; return `<span class="syncdot ${s}" title="${s === 'off' ? 'Offline · saved on phone' : s === 'pend' ? 'Syncing' : 'Synced'}" aria-label="${s === 'off' ? 'Offline, saved on phone' : s === 'pend' ? 'Syncing' : 'Synced'}"></span>`; }
 function syncChip() {
   if (!S.online) return `<span class="chip sync off">Offline · saved on phone</span>`;
@@ -270,7 +270,7 @@ function bannersHTML(R) {
 
 /* ---------- sign-in and welcome ---------- */
 function signinHTML() {
-  return `<section class="signin"><button class="langbtn" data-act="lang" data-v="${LANG() === 'ar' ? 'en' : 'ar'}">${LANG() === 'ar' ? 'English' : 'العربية'}</button><img class="signin-logo" src="icons/logo.svg" alt=""><h1>LOCK<br><span>IN 90</span></h1><p class="hint">Sign in once. After that the app works offline and syncs when you’re back online.</p>
+  return `<section class="signin"><button class="langbtn" data-act="lang" data-v="${LANG() === 'ar' ? 'en' : 'ar'}">${LANG() === 'ar' ? 'English' : 'العربية'}</button><img class="signin-logo" src="icons/logo.svg" alt=""><h1>LOCKED<br><span>IN</span></h1><p class="hint">Sign in once. After that the app works offline and syncs when you’re back online.</p>
   <button class="btn primary block" data-act="signin">Sign in with Google</button>
   <span class="sub">or with email (works in every browser, best on iPhone)</span>
   <form class="form" id="email-form" style="text-align:left"><label class="full">Email<input class="in" id="si-email" type="email" autocomplete="email" required></label>
@@ -282,7 +282,7 @@ function waterSelect(id, attr, val) { return `<select class="in" id="${id}" ${at
 function welcomeHTML() {
   const md = S.wMode || 'tracker', ch = md === 'challenge';
   return `<section class="card"><div class="card-h"><h2>${ch ? 'Start your 90 days' : 'How do you want to use it?'}</h2><button class="langbtn" data-act="lang" data-v="${LANG() === 'ar' ? 'en' : 'ar'}">${LANG() === 'ar' ? 'English' : 'العربية'}</button></div>
-  <div class="modepick" role="radiogroup" aria-label="Mode"><button role="radio" data-act="wmode" data-v="tracker" aria-checked="${!ch}"><span class="em">🌿</span><b>Daily health tracker <i class="tg">Default</i></b><small>Log food, water, training and supplements, and see how each day went. A bad day is just a bad day: nothing resets.</small></button><button role="radio" data-act="wmode" data-v="challenge" aria-checked="${ch}"><span class="em">🔥</span><b>Lock In 90 challenge <i class="tg hard">Hard mode</i></b><small>90 days in a row. Every day needs all four. Miss one and you’re back to Day 1.</small></button></div>
+  <div class="modepick" role="radiogroup" aria-label="Mode"><button role="radio" data-act="wmode" data-v="tracker" aria-checked="${!ch}"><span class="em">🌿</span><b>Daily health tracker <i class="tg">Default</i></b><small>Log food, water, training and supplements, and see how each day went. A bad day is just a bad day: nothing resets.</small></button><button role="radio" data-act="wmode" data-v="challenge" aria-checked="${ch}"><span class="em">🔥</span><b>Locked In challenge <i class="tg hard">Hard mode</i></b><small>90 days in a row. Every day needs all four. Miss one and you’re back to Day 1.</small></button></div>
   <p class="hint"><span>You can switch any time in Me → Mode.</span> ${ch ? 'Every day needs every planned meal on plan, your water goal, that day’s training and your core supplements. Miss any of them and the counter goes back to Day 1. ' : ''}${isOwner() ? 'Your coach’s meal plan is already loaded; edit it in Me.' : 'You start with Breakfast, Lunch and Dinner. Add your own meal plan and supplements in Me, or just log what you eat and the app counts the calories.'}</p>
   <div class="form"><label>Start date<input class="in" id="w-start" type="date" value="${today()}" max="${today()}"></label>
   <label>Water goal${waterSelect('w-water', '', 4000)}</label>
@@ -384,7 +384,7 @@ async function shareWeekImage() {
   try { await document.fonts.load('800 40px Alexandria'); await document.fonts.ready; } catch (e) { }
   const NAVY = '#14213D', NAVY2 = '#1F2E52', SPARK = '#F2B33D', GOOD = '#4ADE9B', CREAM = '#FFFFFF', MUTE = '#9FB0D0', DISP = 'Alexandria,sans-serif', MONO = 'Alexandria,sans-serif', BODY = 'Alexandria,sans-serif';
   const grd = g.createLinearGradient(0, 0, 0, H); grd.addColorStop(0, NAVY2); grd.addColorStop(1, NAVY); g.fillStyle = grd; g.fillRect(0, 0, W, H);
-  g.fillStyle = MUTE; g.font = `500 30px ${MONO}`; g.fillText('LOCK IN 90 · WEEKLY REPORT', 80, 110);
+  g.fillStyle = MUTE; g.font = `500 30px ${MONO}`; g.fillText('LOCKED IN · WEEKLY REPORT', 80, 110);
   g.fillStyle = CREAM; let fs = 64; const head = `${boardName().toUpperCase()} · WEEK ENDING ${fmt(t).toUpperCase()}`; do { g.font = `700 ${fs}px ${DISP}`; fs -= 2; } while (g.measureText(head).width > W - 160 && fs > 30); g.fillText(head, 80, 190);
   g.fillStyle = SPARK; g.font = `800 230px ${DISP}`; g.fillText(`${rv.locked}/${rv.n}`, 72, 420);
   g.fillStyle = CREAM; g.font = `700 52px ${DISP}`; g.fillText('DAYS FULLY ON PLAN', 80, 490);
@@ -422,7 +422,7 @@ async function shareMonthImage(mk) {
   const m = monthData(mk), W = 1080, H = 1350, cv = document.createElement('canvas'); cv.width = W; cv.height = H; const g = cv.getContext('2d');
   try { await document.fonts.load('800 40px Alexandria'); await document.fonts.ready; } catch (e) { }
   const F = 'Alexandria,sans-serif', grd = g.createLinearGradient(0, 0, W, H); grd.addColorStop(0, '#1F2E52'); grd.addColorStop(1, '#14213D'); g.fillStyle = grd; g.fillRect(0, 0, W, H);
-  g.fillStyle = '#9FB0D0'; g.font = `500 30px ${F}`; g.fillText(`LOCK IN 90 · ${monthName(mk).toUpperCase()}`, 80, 110);
+  g.fillStyle = '#9FB0D0'; g.font = `500 30px ${F}`; g.fillText(`LOCKED IN · ${monthName(mk).toUpperCase()}`, 80, 110);
   g.fillStyle = '#fff'; { const tt = `${boardName()}'s month`; let fs = 76; do { g.font = `800 ${fs}px ${F}`; fs -= 4; } while (g.measureText(tt).width > W - 160 && fs > 36); g.fillText(tt, 80, 205); }
   const cells = [[`${m.locked}`, `Days locked in (of ${m.n})`], [`${m.wos}`, 'Workouts'], [`${C.round(m.vol / 1000, 1)} t`, 'Total lifted'], [m.wDelta == null ? '—' : `${m.wDelta > 0 ? '+' : ''}${m.wDelta} kg`, 'Weight change'], [`${m.cmin}`, 'Cardio and sport minutes'], [m.rank || '—', m.rank0 && m.rank0 !== m.rank ? `Strength rank (was ${m.rank0})` : 'Strength rank']];
   cells.forEach(([v, k], i) => { const x = 80 + (i % 2) * 470, y = 270 + Math.floor(i / 2) * 200; g.fillStyle = 'rgba(255,255,255,.08)'; rr(g, x, y, 450, 176, 26); g.fill(); g.fillStyle = '#fff'; let fs = 72; do { g.font = `800 ${fs}px ${F}`; fs -= 4; } while (g.measureText(v).width > 390 && fs > 30); g.fillText(v, x + 30, y + 98); g.fillStyle = '#9FB0D0'; g.font = `500 26px ${F}`; g.fillText(k, x + 30, y + 145); });
@@ -431,7 +431,7 @@ async function shareMonthImage(mk) {
   y = 1140; g.fillStyle = '#C9D3E8'; g.font = `500 28px ${F}`; if (m.most.length) g.fillText(`Most trained: ${m.most.join(', ').toLowerCase()}`, 80, y); g.fillText(`Least trained: ${m.least.join(', ').toLowerCase()}`, 80, y + 44);
   g.fillStyle = '#F2B33D'; rr(g, 80, 1240, 250, 64, 32); g.fill(); g.fillStyle = '#14213D'; g.font = `800 30px ${F}`; g.fillText((() => { const R0 = C.computeRun(S.settings, S.days, now()); return R0.tracker ? `${R0.done} in a row` : `Day ${Math.min(R0.dayNum, 90)}`; })(), 112, 1283);
   const blob = await new Promise(r => cv.toBlob(r, 'image/png')), file = new File([blob], `lock-in-${mk}.png`, { type: 'image/png' });
-  try { if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], text: `${monthName(mk)} on Lock In 90` }); return; } } catch (e) { if (e && e.name === 'AbortError') return; }
+  try { if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], text: `${monthName(mk)} on Locked In` }); return; } } catch (e) { if (e && e.name === 'AbortError') return; }
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = file.name; document.body.appendChild(a); a.click(); a.remove(); toast('Image saved. Send it from your gallery.');
 }
 
@@ -889,7 +889,7 @@ async function shareCard() {
   try { await document.fonts.load('800 40px Alexandria'); await document.fonts.ready; } catch (e) { }
   const NAVY = '#14213D', NAVY2 = '#1F2E52', SPARK = '#F2B33D', CREAM = '#FFFFFF', MUTE = '#9FB0D0', DISP = 'Alexandria,sans-serif', MONO = 'Alexandria,sans-serif';
   const grd = g.createLinearGradient(0, 0, 0, H); grd.addColorStop(0, NAVY2); grd.addColorStop(1, NAVY); g.fillStyle = grd; g.fillRect(0, 0, W, H);
-  g.fillStyle = MUTE; g.font = `500 32px ${MONO}`; g.fillText('LOCK IN 90', 90, 130); g.textAlign = 'right'; g.fillText(fmt(c.date).toUpperCase(), W - 90, 130); g.textAlign = 'left';
+  g.fillStyle = MUTE; g.font = `500 32px ${MONO}`; g.fillText('LOCKED IN', 90, 130); g.textAlign = 'right'; g.fillText(fmt(c.date).toUpperCase(), W - 90, 130); g.textAlign = 'left';
   g.fillStyle = CREAM; g.font = `800 110px ${DISP}`; g.fillText('DAY', 90, 300);
   g.fillStyle = SPARK; g.font = `800 380px ${DISP}`; g.fillText(String(c.day), 72, 650);
   g.fillStyle = CREAM; g.font = `700 92px ${DISP}`; g.fillText((c.victory ? '90 days. Done.' : c.mile ? c.mile[1] : c.done ? 'Locked in' : 'In progress').toUpperCase(), 90, 770);
@@ -949,6 +949,35 @@ function weekStripHTML(date) {
   return `<div class="wkstrip" role="img" aria-label="This week">${Array.from({ length: 7 }, (_, i) => { const dt = C.addDays(ws, i), e = dt <= t && dt >= st.startDate ? C.evalDay(st, S.days[dt], dt) : null; const full = e && e.complete, cls = full ? 'f' : e && e.hit ? 'h' : e && dt < t ? 'm' : ''; return `<button data-act="dayview" data-v="${dt}" ${dt > t || dt < st.startDate ? 'disabled' : ''} class="${cls}${dt === date ? ' t' : ''}"><u>${full ? '✓' : e ? e.hit : ''}</u><span>${esc(C.DAYNAMES[C.weekday(dt)].slice(0, 2))}</span></button>`; }).join('')}</div>`;
 }
 // the coach's latest message today (written by the tick job with Claude; advice only)
+// Android app: one tap to turn on reminders, until they're on or dismissed
+function pushNudgeHTML() {
+  if (!FM() || pushState() === 'on' || (S.settings.nag || {}).push) return '';
+  return '<section class="card nudge"><div><b>Turn on notifications</b><p class="hint">Reminders, the rest timer on your lock screen and the coach’s messages.</p></div><div class="row"><button class="btn primary" data-act="pushon">Turn on</button><button class="btn ghost" data-act="nagoff" data-v="push">Not now</button></div></section>';
+}
+const GH = 'https://github.com/HassanAbdelshafy21/Lock-in-90';
+const agoMin = iso => { const m = Math.round((Date.now() - Date.parse(iso)) / 60000); return m < 1 ? 'just now' : m < 60 ? m + ' min ago' : m < 1440 ? Math.round(m / 60) + ' h ago' : Math.round(m / 1440) + ' d ago'; };
+const extA = () => NATIVE ? '' : ' target="_blank" rel="noopener"';
+// Strava, always visible: what works now and the one next step
+function stravaHTML(sv) {
+  const jb = S.meta.jobs, ok = sv && sv.ok, ext = extA();
+  const head = (p) => '<section class="card"><div class="card-h"><h2>Strava</h2>' + p + '</div>';
+  if (!jb) return head(pill('todo', 'Checking')) + '<p class="hint">The background job runs every 30 minutes and reports here. If this stays for more than an hour, open the Actions tab on GitHub and check the “tick” job.</p></section>';
+  if (!jb.stravaKeys) return head(pill('todo', 'Not set up')) + '<p class="hint">Step 1 of 2: Strava keys. On strava.com/settings/api create an app (any name; Authorization Callback Domain: <b>localhost</b>). Then on GitHub add two repository secrets, <b>STRAVA_CLIENT_ID</b> and <b>STRAVA_CLIENT_SECRET</b>, with its Client ID and Client Secret.</p><div class="row"><a class="btn small" href="https://www.strava.com/settings/api"' + ext + '>Strava API settings</a><a class="btn small ghost" href="' + GH + '/settings/secrets/actions/new"' + ext + '>Add a secret</a></div></section>';
+  const cid = (sv && sv.cid) || jb.stravaCid, url = 'https://www.strava.com/oauth/authorize?client_id=' + encodeURIComponent(cid) + '&response_type=code&redirect_uri=http://localhost&approval_prompt=force&scope=read,activity:read_all,activity:write';
+  if (!ok) return head(pill('todo', sv && sv.error === 'reconnect' ? 'Reconnect' : 'Not connected')) + '<p class="hint">' + (sv && sv.error === 'reconnect' ? 'Strava stopped accepting the connection. Connect again:' : 'Step 2 of 2: connect your account.') + ' 1) Tap <b>Connect Strava</b> and Authorize. 2) The next page won’t load: copy its whole address (starts with localhost). 3) Tap <b>Paste it on GitHub</b>, choose Run workflow, paste, run. Within 30 minutes this card says Connected.</p><div class="row"><a class="btn small primary" href="' + url + '"' + ext + '>Connect Strava</a><a class="btn small" href="' + GH + '/actions/workflows/strava-auth.yml"' + ext + '>Paste it on GitHub</a></div></section>';
+  return head(pill('done', 'Connected')) + '<p class="hint">' + (sv.lastSync ? 'Checked ' + agoMin(sv.lastSync) + '. ' : '') + (sv.count ? sv.count + ' activities from Strava. ' : '') + 'Checks every 30 minutes.</p>' + stvCard({ ...sv, cid }) + '</section>';
+}
+// Coach: status, setup steps, and every briefing so far
+function coachMeHTML() {
+  const jb = S.meta.jobs, cm = S.meta.coach, ext = extA();
+  const days = Object.keys(S.brief).sort().reverse().filter(d => S.brief[d].morning || S.brief[d].evening).slice(0, 14);
+  let h = '<section class="card"><div class="card-h"><h2>Coach</h2>' + (!jb ? pill('todo', 'Checking') : !jb.coachToken ? pill('todo', 'Not set up') : cm && cm.ok === false ? pill('todo', 'Problem') : pill('done', 'On')) + '</div>';
+  if (jb && !jb.coachToken) h += '<p class="hint">Claude writes you a short morning briefing (after your band syncs) and an evening review (after training), using your Claude subscription. To turn it on: 1) on your computer run <b>claude setup-token</b> and copy the token. 2) Add it on GitHub as a repository secret named <b>CLAUDE_CODE_OAUTH_TOKEN</b>. Never paste it anywhere else.</p><a class="btn small" href="' + GH + '/settings/secrets/actions/new"' + ext + '>Add the secret on GitHub</a>';
+  else if (cm && cm.ok === false) h += '<p class="safety">The last ' + esc(cm.kind || '') + ' message didn’t go through (' + esc(cm.err || 'unknown') + '). It tries again on the next run. If it keeps failing, make a new token with claude setup-token and replace the secret.</p>';
+  else if (jb) h += '<p class="hint">Morning briefing once your band has synced (5:00–13:00), evening review 30 minutes after a workout or at 21:30. Switch either off in Reminders above. ' + (cm && cm.at ? 'Last message ' + agoMin(cm.at) + '.' : 'No message yet.') + '</p>';
+  if (days.length) h += '<div class="coachlog">' + days.map(d => ['evening', 'morning'].filter(k => S.brief[d][k]).map(k => { const m = S.brief[d][k]; return '<details><summary><b>' + esc(m.head) + '</b><small>' + fmt(d) + ' · ' + (k === 'evening' ? 'Evening review' : 'Morning briefing') + '</small></summary><p>' + esc(m.text) + '</p></details>'; }).join('')).join('') + '</div>';
+  return h + '</section>';
+}
 function coachHTML(t) {
   const b = S.brief[t]; if (!b) return '';
   const k = b.evening ? 'evening' : b.morning ? 'morning' : null; if (!k) return '';
@@ -996,7 +1025,7 @@ function todayHTML(R) {
   const next = upNextHTML(R, d, date, P);
   h += `<div class="lift">${lift || next}</div>`;
   if (lift && next) h += next;
-  if (date === t) h += coachHTML(t);
+  if (date === t) h += pushNudgeHTML() + coachHTML(t);
   h += todayNotesHTML(R);
   const shown = ((lift ? '' : next).match(/data-act="meal" data-id="([^"]+)"/) || [])[1];
   h += todayListHTML(R, date, d, P, line, shown);
@@ -1403,7 +1432,7 @@ function weightChart(pts, goal) {
 
 async function shareWeek() {
   const rv = weekReview(), t = today(), hit = k => rv.past - rv.miss[k];
-  const lines = [`Lock In 90 · week ending ${fmt(t)}`, `Days fully on plan: ${rv.locked}/${rv.n}`];
+  const lines = [`Locked In · week ending ${fmt(t)}`, `Days fully on plan: ${rv.locked}/${rv.n}`];
   if (rv.wNow) lines.push(`Weight (7-day avg): ${C.round(rv.wNow, 1)} kg${rv.wDelta != null ? ` (${rv.wDelta > 0 ? '+' : ''}${C.round(rv.wDelta, 1)} vs last week)` : ''}`);
   if (rv.kcal) lines.push(`Avg calories: ${kc(rv.kcal)}${rv.tk ? ` (plan ${kc(rv.tk)})` : ''} · protein ${kc(rv.prot)} g${rv.tp ? ` (plan ${kc(rv.tp)} g)` : ''}`);
   if (rv.past) lines.push(`Meals on plan ${hit('Meals')}/${rv.past} · water ${hit('Water')}/${rv.past} · training ${hit('Training')}/${rv.past} · supplements ${hit('Supplements')}/${rv.past}`);
@@ -1483,18 +1512,18 @@ function dayStartHTML(st) {
   <div class="ds-ticks" aria-hidden="true"><span style="left:0">6 pm</span><span class="c" style="left:42.9%">midnight</span><span class="c" style="left:71.4%">4 am</span><span style="right:0">8 am</span></div>
   <p class="hint">${mode === 'midnight' ? 'Grey: the day you’re in. Green: the next day. Until 3 am you can still switch to “Yesterday” on Today.' : `Grey: still the day you’re in. Green: the next day starts at ${C.minTxt(startM)}. Reminders and the friends board follow this.`}</p></div>`;
 }
-/* Me → Mode: daily tracker or the Lock In 90 challenge */
+/* Me → Mode: daily tracker or the Locked In challenge */
 const GOAL_ROWS = [['food', 'Food', 'Meals on plan, or calories within your target'], ['water', 'Water goal', ''], ['train', 'Training', 'On your training days'], ['supps', 'Supplements', 'Your core ones']];
 function modeHTML(st, R) {
   const trk = C.isTracker(st), G = C.goalsOf(st), ask = S.modeAsk, noPlan = !C.mealsOn(st, today()).some(m => (m.items || []).length);
   let h = `<section class="card" id="sec-mode"><div class="card-h"><h2>Mode</h2></div>
-  <div class="seg wide" role="group" aria-label="Mode"><button data-act="modeask" data-v="tracker" aria-pressed="${trk}">🌿 Daily tracker</button><button data-act="modeask" data-v="challenge" aria-pressed="${!trk}">🔥 Lock In 90</button></div>`;
+  <div class="seg wide" role="group" aria-label="Mode"><button data-act="modeask" data-v="tracker" aria-pressed="${trk}">🌿 Daily tracker</button><button data-act="modeask" data-v="challenge" aria-pressed="${!trk}">🔥 Locked In</button></div>`;
   if (trk) h += `<span class="sub">A full day means</span>${GOAL_ROWS.map(([k, l, d]) => `<div class="spread goalrow"><span><b>${l}</b>${d ? `<small class="sub" style="display:block">${d}</small>` : ''}</span><button class="switch" role="switch" data-act="goaltog" data-v="${k}" aria-checked="${!!G[k]}" aria-label="${l}"><i></i></button></div>`).join('')}
   <div class="setup-r"><label for="s-kt">Daily calorie target<small class="sub" style="display:block">${noPlan ? 'For the food goal, since you have no meal plan' : 'Only used if your meal plan is empty'}</small></label><input class="in" id="s-kt" type="number" inputmode="numeric" min="800" max="6000" step="50" data-setting="kcalTarget" value="${st.kcalTarget || ''}" placeholder="optional" style="width:110px"></div>`;
-  else h += `<p class="hint">You’re in the Lock In 90 challenge: Day ${Math.min(R.dayNum, 90)}, attempt ${R.attemptNo}. Every day needs all four, and a miss sends you back to Day 1.</p>`;
-  if (ask === 'challenge' && trk) h += `<div class="modeask"><b>Start the 90-day challenge</b><p class="hint">Today becomes Day 1. Every day needs all four, and a miss sends you back to Day 1. Your history stays.</p><div class="row"><button class="btn primary" data-act="modego" data-v="challenge">🔥 Start Lock In 90 today</button><button class="btn ghost" data-act="modeask" data-v="">Not now</button></div></div>`;
+  else h += `<p class="hint">You’re in the Locked In challenge: Day ${Math.min(R.dayNum, 90)}, attempt ${R.attemptNo}. Every day needs all four, and a miss sends you back to Day 1.</p>`;
+  if (ask === 'challenge' && trk) h += `<div class="modeask"><b>Start the 90-day challenge</b><p class="hint">Today becomes Day 1. Every day needs all four, and a miss sends you back to Day 1. Your history stays.</p><div class="row"><button class="btn primary" data-act="modego" data-v="challenge">🔥 Start Locked In today</button><button class="btn ghost" data-act="modeask" data-v="">Not now</button></div></div>`;
   else if (ask === 'tracker' && !trk) h += `<div class="modeask warn"><b>Leave the challenge?</b><p class="hint">The day counter stops at Day ${Math.min(R.dayNum, 90)}. Your days, records and friends stay as they are. If you come back later, you start again at Day 1.</p><div class="row"><button class="btn danger" data-act="modego" data-v="tracker">Switch to the daily tracker</button><button class="btn ghost" data-act="modeask" data-v="">Stay in the challenge</button></div></div>`;
-  else if (trk) h += `<div class="modeask"><b>Want a challenge?</b><p class="hint">Lock In 90: 90 days in a row, all four every day. Miss one and you’re back to Day 1.</p><button class="btn block" data-act="modeask" data-v="challenge">🔥 Start the 90-day challenge</button></div>`;
+  else if (trk) h += `<div class="modeask"><b>Want a challenge?</b><p class="hint">Locked In: 90 days in a row, all four every day. Miss one and you’re back to Day 1.</p><button class="btn block" data-act="modeask" data-v="challenge">🔥 Start the 90-day challenge</button></div>`;
   return h + '</section>';
 }
 function setupHTML(R) {
@@ -1549,12 +1578,11 @@ function setupHTML(R) {
   const rm = st.reminders || {}, sv = S.meta.strava;
   const pushOn = pushState() === 'on';
   h += `<section class="card"><div class="card-h"><h2>Reminders</h2>${pushOn ? pill('done', 'On this phone') : ''}</div><p class="hint">Each reminder checks your day first and stays quiet if there’s nothing to do. Times can run 5 to 15 minutes late.</p>
-  ${pushOn ? `<div class="row"><button class="btn small" data-act="pushtest">Send a test</button><button class="btn small ghost" data-act="pushoff">Turn off on this phone</button></div>` : pushState() === 'blocked' ? `<p class="safety">Notifications are blocked for this app. Allow them in your phone’s settings for Lock In 90, then come back.</p>` : pushState() === 'install' ? `<p class="hint"><b>iPhone:</b> add the app to your Home Screen first (Share → Add to Home Screen), open it from there, then turn notifications on.</p>` : pushState() === 'none' ? `<p class="hint">This browser can’t show app notifications. Use the ntfy app below instead.</p>` : `<button class="btn primary block" data-act="pushon">Turn on notifications</button>`}
+  ${pushOn ? `<div class="row"><button class="btn small" data-act="pushtest">Send a test</button><button class="btn small ghost" data-act="pushoff">Turn off on this phone</button></div>` : pushState() === 'blocked' ? `<p class="safety">Notifications are blocked for this app. Allow them in your phone’s settings for Locked In, then come back.</p>` : pushState() === 'install' ? `<p class="hint"><b>iPhone:</b> add the app to your Home Screen first (Share → Add to Home Screen), open it from there, then turn notifications on.</p>` : pushState() === 'none' ? `<p class="hint">This browser can’t show app notifications. Use the ntfy app below instead.</p>` : `<button class="btn primary block" data-act="pushon">Turn on notifications</button>`}
   <details${st.ntfyTopic && !pushOn ? ' open' : ''}><summary class="hint">Use the ntfy app instead</summary><p class="hint">Only used when app notifications are off on all your phones.</p>
   <div class="sup-r"><span class="sub">Your ntfy topic</span><div class="row"><input class="in grow" id="s-topic" data-topic="1" value="${esc(st.ntfyTopic || '')}" placeholder="e.g. lockin90-a1b2c3d4e5f6" autocomplete="off" spellcheck="false"><button class="btn small" data-act="gentopic">New</button></div><p class="hint">Subscribe to this exact name in the ntfy app. Treat it like a password. Leave it empty and no reminders are sent.</p></div></details>
   ${REMINDERS.map(([k, label]) => { const on = k === 'meals' ? rm[k] === true : rm[k] !== false; return `<div class="setup-r"><span>${esc(label)}</span><div class="seg"><button data-act="remind" data-v="${k}:1" aria-pressed="${on}">On</button><button data-act="remind" data-v="${k}:0" aria-pressed="${!on}">Off</button></div></div>`; }).join('')}</section>`;
-  if (sv) h += `<section class="card"><div class="card-h"><h2>Strava</h2>${sv && sv.ok ? pill('done', 'Connected') : pill('todo', 'Not connected')}</div>
-  <p class="hint">${sv && sv.lastSync ? `Last sync ${new Date(sv.lastSync).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}. ${sv.count ? sv.count + ' activities synced.' : ''}` : 'Connects once the Strava step in the setup guide is done. Checks every 30 minutes.'}</p>${stvCard(sv)}</section>`;
+  h += stravaHTML(sv) + coachMeHTML();
   // account and data
   h += bandHTML();
   h += `<section class="card"><div class="card-h"><h2>Data</h2></div>
@@ -2206,6 +2234,8 @@ document.addEventListener('click', async ev => {
   if (act === 'startover') return openStartOver();
   if (act.startsWith('so-')) return startOverAct(act, v, b);
   if (act === 'pushon') return pushOn();
+  if (act === 'stepgoal') { const b0 = S.settings.band = S.settings.band || {}; b0.stepGoal = Math.max(2000, Math.min(30000, stepGoal() + +v)); saveSettings(); return draw(); }
+  if (act === 'nagoff') { S.settings.nag = { ...(S.settings.nag || {}), [v]: true }; saveSettings(); return draw(); }
   if (act === 'pushoff') return pushOff();
   if (act === 'pushtest') return pushTest();
   if (act === 'daynav' && SH && SH.scope === 'day') { SH.date = v; return drawDay(); }
@@ -2371,7 +2401,7 @@ document.addEventListener('click', async ev => {
     case 'sharecard': return shareCard();
     case 'sharerecap': {
       const R2 = C.computeRun(S.settings, S.days, now()), r = recapData(R2, +v);
-      const text = [`Lock In 90 · Day ${r.cp} recap`, `Days locked in: ${r.locked}/${r.cp}`, r.wChange != null ? `Weight: ${r.wChange > 0 ? '+' : ''}${C.round(r.wChange, 1)} kg` : '', r.prot ? `Avg protein ${kc(r.prot)} g · avg calories ${kc(r.kcal)}` : '', `Water: ${C.round(r.water / 1000)} L · training days: ${r.trained} · cardio ${r.cardio} min`].filter(Boolean).join('\n');
+      const text = [`Locked In · Day ${r.cp} recap`, `Days locked in: ${r.locked}/${r.cp}`, r.wChange != null ? `Weight: ${r.wChange > 0 ? '+' : ''}${C.round(r.wChange, 1)} kg` : '', r.prot ? `Avg protein ${kc(r.prot)} g · avg calories ${kc(r.kcal)}` : '', `Water: ${C.round(r.water / 1000)} L · training days: ${r.trained} · cardio ${r.cardio} min`].filter(Boolean).join('\n');
       try { if (navigator.share) { await navigator.share({ text }); return; } } catch (e) { if (e && e.name === 'AbortError') return; }
       try { await navigator.clipboard.writeText(text); toast('Recap copied.'); } catch (e) { toast('Couldn’t share the recap.'); }
       return;
@@ -2395,7 +2425,7 @@ document.addEventListener('click', async ev => {
       S.settings.group = code; saveSettings(); toast('Joined. Your friends can see you now.'); break;
     }
     case 'grpinvite': {
-      const text = `Join my Lock In 90 group. Open the app, go to Progress → Friends → Join, and enter the code ${S.settings.group}\n${location.origin + location.pathname}`;
+      const text = `Join my Locked In group. Open the app, go to Progress → Friends → Join, and enter the code ${S.settings.group}\n${location.origin + location.pathname}`;
       try { if (navigator.share) { await navigator.share({ text }); return; } } catch (e) { if (e && e.name === 'AbortError') return; }
       try { await navigator.clipboard.writeText(text); toast('Invite copied. Paste it in WhatsApp.'); } catch (e) { toast(`Your group code is ${S.settings.group}`); }
       return;
@@ -2415,7 +2445,7 @@ document.addEventListener('click', async ev => {
     case 'modeask': S.modeAsk = v || null; return draw();
     case 'modego': {
       const st = S.settings; S.modeAsk = null;
-      if (v === 'challenge') { st.mode = 'challenge'; st.attemptStart = today() > st.startDate ? today() : st.startDate; saveSettings(); toast('Lock In 90 starts today. Day 1.'); }
+      if (v === 'challenge') { st.mode = 'challenge'; st.attemptStart = today() > st.startDate ? today() : st.startDate; saveSettings(); toast('Locked In starts today. Day 1.'); }
       else { st.mode = 'tracker'; saveSettings(); toast('You’re on the daily tracker. Nothing resets.'); }
       return draw();
     }
@@ -2445,7 +2475,7 @@ document.addEventListener('click', async ev => {
     case 'coachoff': { if (S.confirm !== 'coachoff') { S.confirm = 'coachoff'; b.textContent = 'Tap again to stop sharing'; return; } S.confirm = null; const tk = S.settings.coach && S.settings.coach.token; if (tk) deleteDoc(doc(db, `shares/${tk}`)).catch(() => { }); S.settings.coach = null; S.coachLast = null; saveSettings(); toast('Coach link turned off.'); break; }
     case 'coachnotes': S.settings.coach = { ...S.settings.coach, notes: v === '1' }; S.coachLast = null; saveSettings(); break;
     case 'coachopen': window.open(coachURL(), '_blank'); return;
-    case 'coachshare': { const text = `My Lock In 90 progress (live, read-only):\n${coachURL()}`; try { if (navigator.share) { await navigator.share({ text }); return; } } catch (e) { if (e && e.name === 'AbortError') return; } try { await navigator.clipboard.writeText(text); toast('Link copied. Paste it to your coach.'); } catch (e) { toast('Copy the link above.'); } return; }
+    case 'coachshare': { const text = `My Locked In progress (live, read-only):\n${coachURL()}`; try { if (navigator.share) { await navigator.share({ text }); return; } } catch (e) { if (e && e.name === 'AbortError') return; } try { await navigator.clipboard.writeText(text); toast('Link copied. Paste it to your coach.'); } catch (e) { toast('Copy the link above.'); } return; }
     case 'shareweekimg': return shareWeekImage();
     case 'cheer': { const [to, kind] = v.split(':'); return sendCheer(to, kind); }
     case 'cheersok': { const code = S.settings.group; Object.keys(S.cheers || {}).forEach(id => deleteDoc(doc(db, `groups/${code}/members/${uid()}/cheers/${id}`)).catch(() => { })); S.cheers = {}; break; }
@@ -2665,7 +2695,7 @@ function bandKV() {
 function bandKV2() { // recovery, steps and oxygen for today
   const t = today(), d = S.health[t] || {}, rc = C.recovery(S.health, t, (S.settings && S.settings.sleepGoal) || 7.5), [, ox] = latest('spo2');
   const lv = rc && rc.score != null ? { good: 'Ready to train', ok: 'Take it steady', low: 'Go easy today' }[rc.level] : '';
-  return `<div class="kv3"><div class="${rc && rc.level ? 'rk-' + rc.level : ''}"><b class="num">${rc && rc.score != null ? rc.score : '—'}</b><small>${lv ? `Recovery · ${lv}` : 'Recovery'}</small></div><div><b class="num">${d.steps != null ? d.steps.toLocaleString('en-US') : '—'}</b><small>Steps today</small></div><div><b class="num">${ox ? ox.avg + '%' : '—'}</b><small>Oxygen</small></div></div>`;
+  return `<div class="kv3"><div class="${rc && rc.level ? 'rk-' + rc.level : ''}"><b class="num">${rc && rc.score != null ? rc.score : '—'}</b><small>${lv ? `Recovery · ${lv}` : 'Recovery'}</small></div><div class="${d.steps >= stepGoal() ? 'rk-good' : ''}"><b class="num">${d.steps != null ? d.steps.toLocaleString('en-US') : '—'}</b><small>Steps · goal ${stepGoal().toLocaleString('en-US')}</small></div><div><b class="num">${ox ? ox.avg + '%' : '—'}</b><small>Oxygen</small></div></div>`;
 }
 function bandSum() {
   if (HC.supported()) return bandOn() ? (hcLast() ? `Synced ${agoTxt(hcLast())}` : 'Connected') : 'Not connected';
@@ -2676,7 +2706,7 @@ function bandHTML() {
   const priv = extra => `<p class="hint band-l">${extra} <button class="linkb" data-act="hcprivacy">Privacy</button></p>`;
   if (!HC.supported()) {
     const has = Object.keys(S.health).length;
-    return head('Android app', 's-todo') + `<p class="hint">Band data comes through Android Health Connect, so it works in the Lock In 90 Android app, not in the browser. Data already synced from your phone shows here too.</p>${has ? bandKV() + `<button class="btn small primary" data-act="bandopen">See all band data</button><button class="linkb danger" data-act="hcdel">Delete band data</button>` : ''}${priv('Band data is never shown on the friends board or coach link.')}</section>`;
+    return head('Android app', 's-todo') + `<p class="hint">Band data comes through Android Health Connect, so it works in the Locked In Android app, not in the browser. Data already synced from your phone shows here too.</p>${has ? bandKV() + `<button class="btn small primary" data-act="bandopen">See all band data</button><button class="linkb danger" data-act="hcdel">Delete band data</button>` : ''}${priv('Band data is never shown on the friends board or coach link.')}</section>`;
   }
   const hc = S.hc;
   if (!hc) { if (!S.hcAsked) { S.hcAsked = true; setTimeout(hcRefresh, 0); } }
@@ -2689,12 +2719,14 @@ function bandHTML() {
   const chip = ([k, l]) => { const f = FIELD[k] || k, ok = granted.includes(k), has = k === 'exercise' || recent.some(d => d[f] != null && !(Array.isArray(d[f]) && !d[f].length)); return `<i class="${!ok ? 'hc-off' : has ? 'hc-on' : 'hc-nd'}">${l}${ok && !has ? ' · no data yet' : !ok ? ' · off' : ''}</i>`; };
   const more = !(S.settings.band && S.settings.band.more) && HC.TYPES.some(t => !granted.includes(t));
   return head('Connected', 's-done') + `<p class="hint">${S.hcBusy ? 'Syncing…' : hcLast() ? `Synced ${agoTxt(hcLast())}` : 'Not synced yet'} · reads the last 3 days each time you open the app.</p>
-    ${more ? `<div class="banner b-info"><strong>More from your band</strong><p>Lock In 90 can now also read distance, floors, breathing rate, VO2 max, blood pressure and weight, if your band app saves them. <button class="link" data-act="hcconnect">Allow in Health Connect</button></p></div>` : ''}
+    ${more ? `<div class="banner b-info"><strong>More from your band</strong><p>Locked In can now also read distance, floors, breathing rate, VO2 max, blood pressure and weight, if your band app saves them. <button class="link" data-act="hcconnect">Allow in Health Connect</button></p></div>` : ''}
     ${bandKV()}<button class="btn primary block" data-act="bandopen">See all band data</button><div class="hctypes">${BAND_TYPES.map(chip).join('')}</div>
+    <div class="setup-r"><span>Daily step goal</span><span class="row"><button class="btn small" data-act="stepgoal" data-v="-1000" aria-label="1000 fewer">−</button><b class="num">${stepGoal().toLocaleString('en-US')}</b><button class="btn small" data-act="stepgoal" data-v="1000" aria-label="1000 more">+</button></span></div>
     <div class="row"><button class="btn small" data-act="hcsync"${S.hcBusy ? ' disabled' : ''}>Sync now</button><button class="btn small ghost" data-act="hcperms">Permissions</button></div>
     <button class="linkb danger" data-act="hcdel">Disconnect and delete band data</button>${priv('Band data is never shown on the friends board or coach link.')}</section>`;
 }
 /* ---------- Band screen: everything the band sends, one day at a time (a sheet, like the Day sheet) ---------- */
+const stepGoal = () => (S.settings && S.settings.band && S.settings.band.stepGoal) || 8000;
 // [type, label, has data that day?, which app wrote it, Health Connect permission if it differs from type]
 const BAND_ALL = [
   ['sleep', 'Sleep', d => !!(d.sleep && (d.sleep.asleepMin || (d.sleep.naps || []).length)), d => d.sleep && d.sleep.src],
@@ -2761,7 +2793,7 @@ function drawBand() {
     const g = [];
     g.push(d.hrv ? bTile('HRV', Math.round(d.hrv.rmssd), 'ms', [d.hrv.window === 'sleep' ? 'during sleep' : 'over the day', bandDelta(d.hrv.rmssd, avg(x => x.hrv && x.hrv.rmssd), ' ms', true)]) : bTile('HRV', '—', '', [none('hrv')]));
     g.push(d.rhr ? bTile('Resting HR', d.rhr.bpm, 'bpm', [bandDelta(d.rhr.bpm, avg(x => x.rhr && x.rhr.bpm), '', false)]) : bTile('Resting HR', '—', '', [none('rhr')]));
-    g.push(d.steps != null ? bTile('Steps', d.steps.toLocaleString('en-US'), '', [[d.dist != null ? `${C.round(d.dist / 1000, 1)} km` : '', d.floors != null ? `${d.floors} floors` : ''].filter(Boolean).join(' · '), bandDelta(d.steps, avg(x => x.steps), '', true)]) : bTile('Steps', '—', '', [none('steps')]));
+    g.push(d.steps != null ? bTile('Steps', d.steps.toLocaleString('en-US'), '', [d.steps >= stepGoal() ? `<span class="dl up">✓ Goal ${stepGoal().toLocaleString('en-US')} reached</span>` : `${(stepGoal() - d.steps).toLocaleString('en-US')} to your ${stepGoal().toLocaleString('en-US')} goal`, [d.dist != null ? `${C.round(d.dist / 1000, 1)} km` : '', d.floors != null ? `${d.floors} floors` : ''].filter(Boolean).join(' · '), bandDelta(d.steps, avg(x => x.steps), '', true)]) : bTile('Steps', '—', '', [none('steps')]));
     g.push(d.kcal && d.kcal.active != null ? bTile('Active calories', d.kcal.active, 'kcal', [d.kcal.total != null ? `${d.kcal.total.toLocaleString('en-US')} total` : '']) : d.kcal && d.kcal.total != null ? bTile('Total calories', d.kcal.total.toLocaleString('en-US'), 'kcal', []) : bTile('Active calories', '—', '', [none('activeKcal')]));
     g.push(d.spo2 ? bTile('Oxygen', d.spo2.avg, '%', [`lowest ${d.spo2.min}%${d.spo2.window === 'sleep' ? ' during sleep' : ''}`]) : bTile('Oxygen', '—', '', [none('spo2')]));
     g.push(d.hr ? bTile('Heart rate', d.hr.avg, 'bpm', [d.hr.min != null ? `${d.hr.min}–${d.hr.max} bpm today` : 'average today']) : bTile('Heart rate', '—', '', [none('hr')]));
@@ -2773,11 +2805,11 @@ function drawBand() {
     if (d.weight) g.push(bTile('Weight', d.weight.kg, 'kg', ['from your band app']));
     body += `<div class="tiles">${g.join('')}</div>`;
   }
-  // workouts: what the band/other apps saved, plus what you logged in Lock In 90
+  // workouts: what the band/other apps saved, plus what you logged in Locked In
   const dd = S.days[date] || {}, wk = [];
   ((d && d.exercise) || []).forEach(x => wk.push([x.start, x.title || typeLabel(x.type), x.min, HC.appName(x.src)]));
-  if (dd.wo && dd.wo.t1 && dd.wo.t0) wk.push([clockOf(dd.wo.t0), dd.wo.name, Math.max(1, Math.round((dd.wo.t1 - dd.wo.t0) / 60000)), 'Lock In 90']);
-  (dd.stamina || []).filter(s => s.src !== 'strava' && s.src !== 'finisher').forEach(s => wk.push(['', typeLabel(s.mode), s.min, 'Lock In 90']));
+  if (dd.wo && dd.wo.t1 && dd.wo.t0) wk.push([clockOf(dd.wo.t0), dd.wo.name, Math.max(1, Math.round((dd.wo.t1 - dd.wo.t0) / 60000)), 'Locked In']);
+  (dd.stamina || []).filter(s => s.src !== 'strava' && s.src !== 'finisher').forEach(s => wk.push(['', typeLabel(s.mode), s.min, 'Locked In']));
   if (wk.length) body += `<span class="sub">Workouts</span><ul class="list bwk">${wk.sort((a, b) => (a[0] || '99') < (b[0] || '99') ? -1 : 1).map(([at, n, m, src]) => `<li><span>${at ? `<b class="num">${at}</b> ` : ''}${esc(n)}</span><span><span class="num">${minsTxt(m)}</span>${src ? ` · <em>${esc(src)}</em>` : ''}</span></li>`).join('')}</ul>`;
   // 7-day trend ending on the chosen day
   const TRD = {
@@ -2802,7 +2834,7 @@ function drawBand() {
   }).join('');
   body += `<details class="bsrc"${Object.keys(S.health).length ? '' : ' open'}><summary>What your band sends</summary><p class="hint">Last 7 days, by data type, and which app saved it.</p><ul class="srcl">${rows}</ul>
     <p class="hint">Your band app’s own scores, like body battery, body load, stress or a sleep score, stay in that app: Health Connect has no place for them.</p></details>
-    <details class="bsrc"><summary>How Recovery works</summary><p class="hint">Lock In 90’s own score, worked out on your phone with no AI. It compares today with your previous 14 days: HRV (45%), resting heart rate (25%) and sleep against your ${goalH} h goal (30%). An ordinary day for you lands around 60 on HRV and resting heart rate, so the score tracks changes in you, not charts for other people. It needs 4 earlier days to start. 67+ ready to train, 34–66 take it steady, under 34 go easy. A night under 80% of your sleep goal keeps the day at take it steady at most.</p></details>`;
+    <details class="bsrc"><summary>How Recovery works</summary><p class="hint">Locked In’s own score, worked out on your phone with no AI. It compares today with your previous 14 days: HRV (45%), resting heart rate (25%) and sleep against your ${goalH} h goal (30%). An ordinary day for you lands around 60 on HRV and resting heart rate, so the score tracks changes in you, not charts for other people. It needs 4 earlier days to start. 67+ ready to train, 34–66 take it steady, under 34 go easy. A night under 80% of your sleep goal keeps the day at take it steady at most.</p></details>`;
   if (HC.supported()) body += `<div class="row"><button class="btn small" data-act="hcsync"${S.hcBusy ? ' disabled' : ''}>${S.hcBusy ? 'Syncing…' : 'Sync now'}</button><button class="btn small ghost" data-act="hcperms">Permissions</button></div>`;
   $('sheet').innerHTML = `<div class="sheet full bandsh" role="dialog" aria-modal="true" aria-label="Health band"><div class="grab" aria-hidden="true"></div><div class="spread"><h2>Health band</h2><button class="x" data-act="closesheet" aria-label="Close">×</button></div>
     <div class="row dnav"><button class="btn small" data-act="bandnav" data-v="${prev}" ${prev < first ? 'disabled' : ''}>‹ Previous</button><span class="state s-todo">${dayLbl}</span><button class="btn small" data-act="bandnav" data-v="${next}" ${next > t ? 'disabled' : ''}>Next ›</button></div>
@@ -2819,7 +2851,7 @@ async function importBackup(file) {
   if (!file) return;
   try {
     const j = JSON.parse(await file.text());
-    if (j.app !== 'lock-in-90' || !j.settings) return toast('That file isn’t a Lock In 90 backup.');
+    if (j.app !== 'lock-in-90' || !j.settings) return toast('That file isn’t a Locked In backup.');
     const writes = [['settings/main', j.settings], ...Object.entries(j.days || {}).map(([k, v]) => ['days/' + k, v]), ...Object.entries(j.checkins || {}).map(([k, v]) => ['checkins/' + k, v]), ...Object.entries(j.health || {}).map(([k, v]) => ['health/' + k, v]), ...Object.entries(j.foods || {}).map(([k, v]) => ['foods/' + k, v]), ...Object.entries(j.photos || {}).map(([k, v]) => ['photos/' + k, v])];
     for (let i = 0; i < writes.length; i += 400) { const b = writeBatch(db); writes.slice(i, i + 400).forEach(([p, v]) => b.set(doc(db, up(p)), stamp(p, clone(v)))); b.commit().catch(() => toast('Part of the import didn’t save.')); }
     S.settings = clone(j.settings); Object.assign(S.days, clone(j.days || {})); Object.assign(S.checkins, clone(j.checkins || {}));
@@ -2909,7 +2941,7 @@ function subscribe() {
    anything Strava already has at that time. Edits change the title and description; Strava's API can't delete. */
 const STVO = {};
 const STV_SPORT = { 'Incline treadmill': ['Walk', true], 'Bike': ['Ride', true], 'Rower': ['Rowing', true], 'Elliptical': ['Elliptical', true], 'Stair climber': ['StairStepper', true], 'Outdoor walk': ['Walk', false] };
-const stvOn = () => !!(S.settings && S.settings.strava && S.settings.strava.post);
+const stvOn = () => !!S.settings && !(S.settings.strava && S.settings.strava.post === false); // on unless switched off
 const localIso = ms => { const x = new Date(ms), p = n => String(n).padStart(2, '0'); return `${x.getFullYear()}-${p(x.getMonth() + 1)}-${p(x.getDate())}T${p(x.getHours())}:${p(x.getMinutes())}:${p(x.getSeconds())}`; };
 const hashStr = t => { let h = 5381; for (let i = 0; i < t.length; i++) h = ((h * 33) ^ t.charCodeAt(i)) >>> 0; return h.toString(36); };
 function stvItems(date) {
@@ -2921,7 +2953,7 @@ function stvItems(date) {
     const [sport, trainer] = STV_SPORT[x.mode] || ['Workout', true];
     const t0 = localIso(x.t).slice(0, 10) === date ? x.t - x.min * 60e3 : new Date(`${date}T18:00:00`).getTime(); // logged for an earlier day: 6 pm that day
     const kind = x.kind === 'intervals' ? ' · intervals' : x.kind === 'test' ? ' · 12-minute test' : '';
-    out.push({ key: `${date}-c${x.t}`, name: x.mode + kind, sport, trainer, t0, sec: x.min * 60, ...(x.dist ? { dist: Math.round(x.dist > 100 ? x.dist : x.dist * 1000) } : {}), desc: [`${x.min} min${x.hr ? ` · average heart rate ${x.hr}` : ''}`, 'Logged with Lock In 90'].join('\n') });
+    out.push({ key: `${date}-c${x.t}`, name: x.mode + kind, sport, trainer, t0, sec: x.min * 60, ...(x.dist ? { dist: Math.round(x.dist > 100 ? x.dist : x.dist * 1000) } : {}), desc: [`${x.min} min${x.hr ? ` · average heart rate ${x.hr}` : ''}`, 'Logged with Locked In'].join('\n') });
   });
   return out.map(it => ({ ...it, date, start: localIso(it.t0), h: hashStr(JSON.stringify(it)) }));
 }
@@ -2930,7 +2962,7 @@ function stvQueue(date) {
   if (!stvOn() || !S.user) return;
   clearTimeout(stvT[date]);
   stvT[date] = setTimeout(async () => {
-    if (date < (S.settings.strava.since || '') || date < C.addDays(today(), -3)) return; // never back-fills older days
+    if (date < ((S.settings.strava || {}).since || '') || date < C.addDays(today(), -3)) return; // never back-fills older days
     if (S.days[date] && S.days[date].wo && !(await TR.loadDB())) return; // exercise names first, or the description would change (and re-post) later
     const items = stvItems(date), keys = new Set(items.map(i => i.key)), put = (k, v) => setDoc(doc(db, up('stravaOut/' + k)), { ...v, u: serverTimestamp() }, { merge: true }).catch(() => { });
     items.forEach(it => { const o = STVO[it.key]; if (o && o.h === it.h && !o.gone) return; STVO[it.key] = { ...(o || {}), ...it, gone: false }; put(it.key, { ...it, gone: false }); });
@@ -2939,11 +2971,11 @@ function stvQueue(date) {
 }
 function stvCard(sv) {
   const sp = (S.settings && S.settings.strava) || {}, ext = NATIVE ? '' : ' target="_blank" rel="noopener"';
-  const need = sp.post && (sv.needWrite || !String(sv.scope || '').includes('activity:write'));
+  const need = stvOn() && (sv.needWrite || !String(sv.scope || '').includes('activity:write'));
   const url = sv.cid && `https://www.strava.com/oauth/authorize?client_id=${encodeURIComponent(sv.cid)}&response_type=code&redirect_uri=http://localhost&approval_prompt=force&scope=read,activity:read_all,activity:write`;
   const posts = Object.values(STVO).filter(o => o.date >= C.addDays(today(), -6) && !(o.gone && !o.posted)).sort((a, b) => b.t0 - a.t0).slice(0, 6);
   const st = o => o.posted ? (o.gone ? `Deleted here · <a href="https://www.strava.com/activities/${o.posted.id}"${ext}>delete it on Strava</a>` : `<a href="https://www.strava.com/activities/${o.posted.id}"${ext}>On Strava</a>`) : o.skip ? 'Already on Strava' : o.err ? 'Didn’t go through, trying again' : 'Waiting (up to 30 min)';
-  return `<div class="setup-r"><span>Post my workouts and cardio to Strava</span><div class="seg"><button data-act="stvpost" data-v="1" aria-pressed="${!!sp.post}">On</button><button data-act="stvpost" data-v="0" aria-pressed="${!sp.post}">Off</button></div></div>
+  return `<div class="setup-r"><span>Post my workouts and cardio to Strava</span><div class="seg"><button data-act="stvpost" data-v="1" aria-pressed="${stvOn()}">On</button><button data-act="stvpost" data-v="0" aria-pressed="${!stvOn()}">Off</button></div></div>
   <p class="hint">Gym workouts (with every set) and cardio you log here appear on Strava within about 30 minutes. If Strava already has an activity at the same time, it’s skipped, so nothing doubles up.</p>
   ${need ? `<div class="banner b-warn"><strong>Allow posting once</strong><p>Strava was connected for reading only. 1) ${url ? `<a href="${url}"${ext}>Open Strava</a>` : 'Open Strava (the link appears after the next sync)'} and tap Authorize. 2) The next page won’t load: copy its whole address (it starts with localhost). 3) On GitHub, run the <b>strava-connect</b> workflow and paste it.</p></div>` : ''}
   ${posts.length ? `<ul class="list">${posts.map(o => `<li><span>${esc(o.name)} · ${fmt(o.date)}</span><span>${st(o)}</span></li>`).join('')}</ul>` : ''}`;
@@ -3107,9 +3139,13 @@ onAuthStateChanged(auth, u => {
 });
 // Android: the padlock launch screen stays until the first real screen is drawn, so the "Loading…" state never shows
 const NP = n => NATIVE && window.Capacitor.Plugins && window.Capacitor.Plugins[n];
-let splashUp = !!NP("SplashScreen");
-function splashDone() { if (!splashUp) return; splashUp = false; NP("SplashScreen").hide({ fadeOutDuration: 200 }).catch(() => { }); }
-if (splashUp) setTimeout(splashDone, 8000); // never stuck behind it (slow network, sign-in trouble)
+// The loading screen (#boot in index.html) looks exactly like the Android launch screen, so Android hands over to it
+// at once; it stays (logo pulsing) until the first real screen is drawn, then fades out.
+const bootEl = document.getElementById("boot");
+if (NP("SplashScreen")) requestAnimationFrame(() => setTimeout(() => NP("SplashScreen").hide({ fadeOutDuration: 0 }).catch(() => { }), 30));
+let bootUp = !!bootEl;
+function splashDone() { if (!bootUp) return; bootUp = false; bootEl.classList.add("off"); setTimeout(() => bootEl.remove(), 350); }
+if (bootUp) setTimeout(splashDone, 8000); // never stuck behind it (slow network, sign-in trouble)
 // buttons on the native workout notification (taps made while the app was closed arrive when it starts)
 if (NP('WorkoutNotif')) NP('WorkoutNotif').addListener('action', e => { const a = `${e.id}|${e.at || ''}`; if (S.settings && S.got.days) TR.notifAction(a); else pendingWo = a; });
 // Android back: close the top layer first, then go to Today; on Today the app goes to the background (it does not quit)

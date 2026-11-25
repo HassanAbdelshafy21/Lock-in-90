@@ -74,7 +74,7 @@ export function buildInput({ kind, date, nowHM, settings, days, health, run }) {
 const LANG = { ar: 'Write in Egyptian Arabic (colloquial, like the app), Arabic script, Western digits.', en: 'Write in plain English.' };
 export function systemPrompt(kind, lang) {
   return [
-    'You are the coach inside Lock In 90, a 90-day fitness challenge app (meals, water, gym, cardio, sleep). You write for one person.',
+    'You are the coach inside Locked In, a 90-day fitness challenge app (meals, water, gym, cardio, sleep). You write for one person.',
     kind === 'morning'
       ? 'Write the MORNING BRIEFING: how recovered they are and what that means for today’s planned training (push, train normally, or keep it lighter), plus one concrete thing to get right today.'
       : 'Write the EVENING REVIEW: how today’s training went (compare with sameWorkoutLastTime when given), what is still missing today and can still be done, and one thing for tonight (sleep, food or water).',
@@ -135,9 +135,11 @@ export async function coach({ db, admin, uid, settings, TZ, push }) {
     const out = askClaude(systemPrompt(kind, settings.lang), input);
     await ref.set({ date, [kind]: { ...out, at: new Date().toISOString(), rec: input.recovery.score != null ? { score: input.recovery.score, level: input.recovery.level } : null }, u: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
     console.log('coach', kind, 'written');
+    await db.doc(`users/${uid}/meta/coach`).set({ ok: true, at: new Date().toISOString(), kind, err: null }, { merge: true });
     await push(out.head, out.text, { tags: 'coach' });
   } catch (e) {
     console.log('coach failed', kind, e.message);
+    await db.doc(`users/${uid}/meta/coach`).set({ ok: false, at: new Date().toISOString(), kind, err: String(e.message).slice(0, 200) }, { merge: true });
     await ref.set({ date, [kind + 'Tries']: (b[kind + 'Tries'] || 0) + 1, [kind + 'Err']: String(e.message).slice(0, 200), u: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
   }
 }

@@ -35,13 +35,16 @@ if (existsSync(RES)) {
   await cp('native/res', RES, { recursive: true });
   const ST = `${RES}/values/styles.xml`;
   let s = await readFile(ST, 'utf8'); const was = s;
-  // Android 12+ draws its own launch screen (icon on a colour) and ignores @drawable/splash
-  if (!s.includes('windowSplashScreenBackground'))
-    s = s.replace(/(<style name="AppTheme\.NoActionBarLaunch"[^>]*>)/, `$1
-        <item name="windowSplashScreenBackground">@color/ic_launcher_background</item>
-        <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher_foreground</item>
+  // Android 12+ draws its own launch screen (icon on a colour) and ignores @drawable/splash: the lime disc on black
+  s = s.replace(/\s*<item name="windowSplashScreen(Background|AnimatedIcon)">[^<]*<\/item>/g, '').replace(/\s*<item name="postSplashScreenTheme">[^<]*<\/item>/g, '');
+  s = s.replace(/(<style name="AppTheme\.NoActionBarLaunch"[^>]*>)/, `$1
+        <item name="windowSplashScreenBackground">@color/launch_background</item>
+        <item name="windowSplashScreenAnimatedIcon">@mipmap/splash_icon</item>
         <item name="postSplashScreenTheme">@style/AppTheme.NoActionBar</item>`);
   if (s !== was) await writeFile(ST, s);
+  // the name under the icon (cap add wrote the old one)
+  const SX = `${RES}/values/strings.xml`;
+  if (existsSync(SX)) { const x = await readFile(SX, 'utf8'), y = x.replace(/(<string name="(app_name|title_activity_main)">)[^<]*(<\/string>)/g, '$1Locked In$3'); if (y !== x) await writeFile(SX, y); }
   console.log('Icons and launch screen copied from native/res.');
 }
 

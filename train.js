@@ -355,7 +355,7 @@ function setupHTML() {
   }
   return (w.step === 0 ? lyftaCard() : '') + `<section class="card trsetup"><span class="sub">New plan · step ${w.step + 1} of ${steps.length}</span><h3>${esc(q)}</h3>${sub ? `<p class="hint">${esc(sub)}</p>` : ''}<div class="wzbar">${steps.map((_, i) => `<i class="${i <= w.step ? 'on' : ''}"></i>`).join('')}</div><div class="opts">${body}</div>
   <div class="row">${w.step ? `<button class="btn ghost" data-act="tr-wizback">Back</button>` : T() && (T().shelf || []).length ? `<button class="btn ghost" data-act="tr-wizcancel">Cancel</button>` : ''}${w.step < steps.length - 1 ? `<button class="btn primary grow" data-act="tr-wiznext">Next</button>` : `<button class="btn primary grow" data-act="tr-wizdone"${k === 'past' && !w.past ? ' disabled' : ''}>Create my plan</button>`}</div></section>
-  <p class="hint center">Exercises and photos: <a href="https://github.com/yuhonas/free-exercise-db" target="_blank" rel="noopener">free-exercise-db</a> (public domain). Band exercises drawn for Lock In 90.</p>`;
+  <p class="hint center">Exercises and photos: <a href="https://github.com/yuhonas/free-exercise-db" target="_blank" rel="noopener">free-exercise-db</a> (public domain). Band exercises drawn for Locked In.</p>`;
 }
 function rngTxt(e) { return `${e.sets} × ${e.lo === e.hi ? e.lo : e.lo + '–' + e.hi}${isTimed(e.id) ? ' s' : ''}`; }
 function routineList(r, cfg) {
@@ -434,7 +434,7 @@ export function stravaDesc(w) {
     const tm = isTimed(e.id);
     return `${nm}: ${ss.map(x => (isW(x) ? "warm-up " : "") + (tm ? `${x.r || 0} s` : x.kg ? `${C.round(x.kg, 2)} kg × ${x.r || 0}` : `${x.r || 0} reps`)).join(", ")}`;
   }).filter(Boolean);
-  return [...lines, "", woSummary(w), "Logged with Lock In 90"].join('\n');
+  return [...lines, "", woSummary(w), "Logged with Locked In"].join('\n');
 }
 function unlogCd(e) { const d = X.dayDoc(D()), k = (d.stamina || []).map(s => s.ex).lastIndexOf(e.id); if (k >= 0) d.stamina.splice(k, 1); }
 const cardioDone = d => (d.stamina || []).some(s => s.src === 'finisher');
@@ -556,7 +556,7 @@ async function showWo(title, body, actions, loud, native) {
   if (WN()) { if (!wnAsked) { wnAsked = true; try { await WN().ask(); } catch (e) { } } WN().show({ title, body, ...native }).catch(() => { }); return; }
   try { const reg = await navigator.serviceWorker.ready; await reg.showNotification(title, { body, tag: 'wo', renotify: !!loud, silent: !loud, requireInteraction: true, icon: 'icons/icon-192.png', badge: 'icons/favicon.png', actions, data: { wo: true, url: './#train' }, ...(loud ? { vibrate: [250, 120, 250] } : {}) }); } catch (e) { }
 }
-function woHead() { const w = active(); return w ? `Lock In 90 · ${w.name} · ${Math.max(1, Math.round((Date.now() - w.t0) / 60000))} min` : 'Lock In 90'; }
+function woHead() { const w = active(); return w ? `Locked In · ${w.name} · ${Math.max(1, Math.round((Date.now() - w.t0) / 60000))} min` : 'Locked In'; }
 function restAfter(nx) { const w = active(), G = group(w, nx.i), s = nx.e.sets[nx.j]; if ((G.length > 1 && nx.i !== G[G.length - 1]) || (s && s.t === 'd')) return 0; const last = w.ex[G[G.length - 1]]; return restFor(last.id, last) || 0; }
 function notifyWorking() { const nx = nextUp(); if (!nx) return; showWo(nx.txt.split(' · ').slice(0, 2).join(' · '), `${woHead()}${nx.txt.split(' · ')[2] ? ' · ' + nx.txt.split(' · ')[2] : ''}`, [{ action: 'done', title: '✓ Set done' }, { action: 'open', title: 'Open' }], false, { mode: 'work', restSec: restAfter(nx) }); }
 function notifyRest() { const nx = nextUp(), at = new Date(RS.end); showWo(`Rest until ${String(at.getHours()).padStart(2, '0')}:${String(at.getMinutes()).padStart(2, '0')}:${String(at.getSeconds()).padStart(2, '0')}`, `${nx ? 'Next: ' + nx.txt : woHead()}`, [{ action: 'add15', title: '+15 s' }, { action: 'skip', title: 'Skip rest' }], false, { mode: 'rest', title: nx ? 'Rest · next: ' + nx.txt.split(' · ').slice(0, 2).join(' · ') : 'Rest', body: nx ? nx.txt : woHead(), endAt: RS.end }); }

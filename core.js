@@ -1,4 +1,4 @@
-// Shared rules for Lock In 90: used by the app (browser) and by the cloud job (Node).
+// Shared rules for Locked In: used by the app (browser) and by the cloud job (Node).
 // No DOM access in this file.
 
 export const DAYNAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -303,7 +303,7 @@ export function trimPlan(meals, cut) {
   });
   return out;
 }
-/* two ways to use the app: 'challenge' (Lock In 90: every day needs all four, a miss resets to Day 1)
+/* two ways to use the app: 'challenge' (Locked In: every day needs all four, a miss resets to Day 1)
    and 'tracker' (daily health tracker: you pick the goals, nothing resets).
    Accounts made before modes existed have no mode and stay in the challenge. */
 export const isTracker = s => !!s && s.mode === 'tracker';

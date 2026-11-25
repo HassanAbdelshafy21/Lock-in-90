@@ -59,7 +59,7 @@ async function stravaToken(uid) {
     body: JSON.stringify({ client_id: process.env.STRAVA_CLIENT_ID, client_secret: process.env.STRAVA_CLIENT_SECRET, grant_type: 'refresh_token', refresh_token: s.refresh_token })
   });
   const j = await r.json();
-  if (!r.ok) { console.log('strava refresh failed', r.status, j.message); return null; }
+  if (!r.ok) { console.log('strava refresh failed', r.status, j.message); await db.doc(`users/${uid}/meta/strava`).set({ ok: false, error: 'reconnect', lastSync: new Date().toISOString() }, { merge: true }); return null; }
   await ref.set({ ...s, access_token: j.access_token, refresh_token: j.refresh_token, expires_at: j.expires_at }, { merge: true });
   return j.access_token;
 }
@@ -71,7 +71,7 @@ async function stravaSync(uid, settings) {
   const r = await fetch(`https://www.strava.com/api/v3/athlete/activities?after=${after}&per_page=60`, { headers: { Authorization: `Bearer ${token}` } });
   if (!r.ok) { console.log('strava list failed', r.status); await db.doc(`users/${uid}/meta/strava`).set({ ok: false, lastSync: new Date().toISOString(), error: r.status }, { merge: true }); return; }
   const acts = await r.json();
-  // what Lock In 90 posted itself never comes back in as a Strava activity (it would count twice)
+  // what Locked In posted itself never comes back in as a Strava activity (it would count twice)
   const out = await db.collection(`users/${uid}/stravaOut`).get();
   const own = new Set(out.docs.map(d => d.data().posted && String(d.data().posted.id)).filter(Boolean));
   const batch = db.batch();
@@ -92,9 +92,9 @@ async function stravaSync(uid, settings) {
   const count = (await db.collection(`users/${uid}/activities`).count().get()).data().count;
   await db.doc(`users/${uid}/meta/strava`).set({ ok: true, lastSync: new Date().toISOString(), count, cid: process.env.STRAVA_CLIENT_ID }, { merge: true });
   console.log('strava synced', acts.length, 'gym days ticked', [...gymDates]);
-  if (settings.strava && settings.strava.post) await stravaPost(uid, token, acts, out.docs, own);
+  if (!(settings.strava && settings.strava.post === false)) await stravaPost(uid, token, acts, out.docs, own); // on unless switched off
 }
-// Posts what the phone queued in users/{uid}/stravaOut (Lock In 90 workouts and cardio, built by the app).
+// Posts what the phone queued in users/{uid}/stravaOut (Locked In workouts and cardio, built by the app).
 // Skips anything Strava already has at the same time (a watch or another app posted it). Edits after posting
 // update the title and description; Strava's API can't delete or change times, so those stay as first posted.
 async function stravaPost(uid, token, acts, docs, own) {
@@ -162,7 +162,7 @@ async function reminders(uid, settings) {
   const L = ml => String(C.round(ml / 1000, 2));
   const ar = settings.lang === 'ar', A = (en, a) => ar ? a : en, trl = s => ar ? (trText(s) ?? s) : s;
 
-  if (TEST) await ntfy(A('Lock In 90 test', 'تجربة Lock In 90'), A(`Notifications work. Day ${Math.min(R.dayNum, 90)} of 90, streak ${R.done}.`, `التنبيهات تعمل. اليوم ${Math.min(R.dayNum, 90)} من 90، السلسلة ${R.done}.`), { tags: 'white_check_mark' });
+  if (TEST) await ntfy(A('Locked In test', 'تجربة Locked In'), A(`Notifications work. Day ${Math.min(R.dayNum, 90)} of 90, streak ${R.done}.`, `التنبيهات تعمل. اليوم ${Math.min(R.dayNum, 90)} من 90، السلسلة ${R.done}.`), { tags: 'white_check_mark' });
 
   // meal log reminders (opt-in): 45 min after each planned meal time if it isn't logged
   if (rm.meals === true) {
@@ -250,6 +250,8 @@ for (const { id, settings } of all) {
   const u = { id };
   CURRENT_TOPIC = settings.ntfyTopic || (firstUser && firstUser.id === id ? TOPIC : null);
   CURRENT_PUSH = { uid: id, tokens: ((settings.push || {}).tokens || []).filter(Boolean).slice(-5), android: ((settings.push || {}).android || []).filter(Boolean).slice(-3) };
+  // what this job can do for the app's Connections card (no secrets, just yes/no)
+  try { await db.doc(`users/${u.id}/meta/jobs`).set({ at: new Date().toISOString(), stravaKeys: !!(process.env.STRAVA_CLIENT_ID && process.env.STRAVA_CLIENT_SECRET), stravaCid: process.env.STRAVA_CLIENT_ID || null, coachToken: !!process.env.CLAUDE_CODE_OAUTH_TOKEN }, { merge: true }); } catch (e) { console.log('jobs meta error', e.message); }
   try { await stravaSync(u.id, settings); } catch (e) { console.log('strava error', e.message); }
   try { await reminders(u.id, settings); } catch (e) { console.log('reminder error', e.message); }
   try { await pushCheers(u.id, settings); } catch (e) { console.log('cheers error', e.message); }

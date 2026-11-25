@@ -3,19 +3,21 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>Lock In 90</title>
-<meta name="theme-color" content="#283A58">
+<title>Locked In</title>
+<meta name="theme-color" content="#0B0F14">
 <meta name="description" content="90-day challenge tracker: meals, water, training, supplements, calisthenics and stamina. Works offline and syncs.">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icons/favicon.png" type="image/png">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Lock In 90">
+<meta name="apple-mobile-web-app-title" content="Locked In">
 <link rel="preload" href="fonts/Alexandria.ttf" as="font" type="font/ttf" crossorigin>
+<style>#boot{position:fixed;inset:0;z-index:100;background:#0B0F14;display:grid;place-items:center;align-content:center;gap:0;transition:opacity .3s}#boot.off{opacity:0;pointer-events:none}#boot .boot-i{width:240px;height:240px;animation:bootp 1.4s ease-in-out .5s infinite alternate}#boot b{position:absolute;bottom:calc(64px + env(safe-area-inset-bottom,0px));left:0;right:0;text-align:center;color:#A3E635;font:800 15px/1 system-ui,sans-serif;letter-spacing:.32em;opacity:0;animation:bootf .4s ease .3s forwards}@keyframes bootp{to{transform:scale(1.06)}}@keyframes bootf{to{opacity:.9}}@media (prefers-reduced-motion:reduce){#boot .boot-i{animation:none}}</style>
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
+<div id="boot" aria-hidden="true"><svg class="boot-i" viewBox="0 0 512 512"><circle cx="256" cy="256" r="170" fill="#A3E635"/><g transform="translate(256 256) scale(.56) translate(-256 -256)"><circle cx="256" cy="256" r="170" fill="none" stroke="#0B0F14" stroke-width="34"/><path d="M290 92L166 286h82l-30 134 128-200h-84l28-128z" transform="translate(256 256) scale(1.32) translate(-256 -256)" fill="#A3E635" stroke="#A3E635" stroke-width="34" stroke-linejoin="round"/><path d="M290 92L166 286h82l-30 134 128-200h-84l28-128z" transform="translate(256 256) scale(1.32) translate(-256 -256)" fill="#0B0F14" stroke="#0B0F14" stroke-width="8" stroke-linejoin="round"/></g></svg><b>LOCKED IN</b></div>
 <header class="top"><div class="top-in" id="top"></div></header>
 <main class="wrap" id="main"><div class="card hint">Loading…</div></main>
 <nav class="tabs" id="tabs" aria-label="Sections" hidden><div class="tabs-in">

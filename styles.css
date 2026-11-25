@@ -1125,3 +1125,11 @@ details.why{margin-top:6px}
 .coachc .coach-h{font-family:var(--f-head, inherit);font-weight:700;font-size:17px;margin:2px 0 4px;color:var(--ink)}
 .coachc p{margin:0 0 6px}.coachc .hint{margin:4px 0 0;font-size:12px}
 .coachc.rk-good{border-inline-start:4px solid var(--good)}.coachc.rk-ok{border-inline-start:4px solid var(--warn)}.coachc.rk-low{border-inline-start:4px solid var(--bad)}
+
+/* a sheet or panel owns the scroll: reaching its end never scrolls the page behind it */
+.scrim,.sheet,#panel > *{overscroll-behavior:contain}
+html:has(#sheet:not([hidden])),html:has(#panel:not([hidden])),html:has(#timer:not([hidden])),html:has(#cele:not([hidden])){overflow:hidden}
+
+/* Today: notification prompt; Me: coach history */
+.card.nudge{display:grid;gap:10px;border:1.5px solid var(--accent-soft)}.card.nudge p{margin:2px 0 0}
+.coachlog{display:grid;gap:6px;margin-top:8px}.coachlog details{background:var(--surface-2);border-radius:12px;padding:9px 12px}.coachlog summary{cursor:pointer;list-style:none;display:grid;gap:2px}.coachlog summary::-webkit-details-marker{display:none}.coachlog summary small{color:var(--muted);font-size:12px}.coachlog p{margin:8px 0 2px}

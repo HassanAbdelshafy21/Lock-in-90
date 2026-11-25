@@ -47,7 +47,7 @@ const ARS = {
   'Locked in': 'مكتمل', 'Free cheat meal': 'وجبة فري (شيت ميل)', '{0} free cheat meals': '{0} وجبات فري', 'Allowed in the plan, so the day counted.': 'مسموح بها في الخطة، فاليوم اتحسب.', 'Cheat meal': 'وجبة فري', 'In progress': 'جارٍ', 'Missed: {0}': 'فات: {0}', 'note': 'ملاحظة', 'Latest note': 'آخر ملاحظة',
   '{0} / {1} kcal': '{0} / {1} سعرة', '{0} kcal': '{0} سعرة', '{0} g protein': '{0} جم بروتين', '{0} / {1} g protein': '{0} / {1} جم بروتين', '{0} / {1} L water': '{0} / {1} لتر مياه', 'Rest day': 'يوم راحة', 'Supps {0}/{1}': 'المكملات {0}/{1}', '{0} h sleep': '{0} ساعة نوم', '{0} kg': '{0} كجم', '{0} g': '{0} جم',
   'Measurements': 'القياسات', '{0} check-ins': '{0} متابعات', '1 check-in': 'متابعة واحدة', 'waist': 'الوسط', 'chest': 'الصدر', 'hips': 'الأرداف', 'arm': 'الذراع', 'neck': 'الرقبة', 'waist ÷ height': 'الوسط ÷ الطول', 'under 0.5 is healthy': 'أقل من 0.5 صحي', '{0} cm': '{0} سم',
-  'Read-only view shared from the Lock In 90 app · updates when {0} logs': 'عرض للقراءة فقط من تطبيق Lock In 90 · يتحدث عندما يسجل {0}', 'Dark mode': 'الوضع الداكن', 'Light mode': 'الوضع الفاتح',
+  'Read-only view shared from the Locked In app · updates when {0} logs': 'عرض للقراءة فقط من تطبيق Locked In · يتحدث عندما يسجل {0}', 'Dark mode': 'الوضع الداكن', 'Light mode': 'الوضع الفاتح',
   'This link is missing its code. Ask for a new link.': 'الرابط ناقص الكود. اطلب رابطًا جديدًا.', 'This link isn’t active any more. Ask for a new one.': 'هذا الرابط لم يعد فعالًا. اطلب رابطًا جديدًا.', 'Link not active': 'الرابط غير فعال', 'Couldn’t load right now. Check the connection and refresh.': 'تعذر التحميل الآن. تحقق من الاتصال وحدّث الصفحة.', 'Loading…': 'جارٍ التحميل…',
 };
 const t = (s, ...a) => (AR() && ARS[s] != null ? ARS[s] : s).replace(/\{(\d)\}/g, (_, i) => a[i] ?? '');
@@ -252,13 +252,13 @@ function render(s) {
   s.weights = (s.weights || []).map(x => Array.isArray(x) ? x : [x.d, x.w]).filter(([d, w]) => d && w).sort((a, b) => a[0] < b[0] ? -1 : 1);
   const html = document.documentElement; html.lang = AR() ? 'ar' : 'en'; html.dir = AR() ? 'rtl' : 'ltr';
   const days = s.days || [], wts = s.weights, name = s.name || 'Athlete', upd = s.updated || null, stale = upd && Date.now() - upd > 36 * 36e5;
-  document.title = `${name} · Lock In 90`;
-  $('hdr').innerHTML = `<div class="brand"><span><img src="icons/logo.svg" alt="">Lock In 90 · ${t('Coach view')}</span><span class="tools"><button class="tbtn" id="theme" aria-label="${isDark() ? t('Light mode') : t('Dark mode')}" title="${isDark() ? t('Light mode') : t('Dark mode')}">${isDark() ? '☀' : '☾'}</button><button class="tbtn" id="lang">${AR() ? 'English' : 'العربية'}</button></span></div>
+  document.title = `${name} · Locked In`;
+  $('hdr').innerHTML = `<div class="brand"><span><img src="icons/logo.svg" alt="">Locked In · ${t('Coach view')}</span><span class="tools"><button class="tbtn" id="theme" aria-label="${isDark() ? t('Light mode') : t('Dark mode')}" title="${isDark() ? t('Light mode') : t('Dark mode')}">${isDark() ? '☀' : '☾'}</button><button class="tbtn" id="lang">${AR() ? 'English' : 'العربية'}</button></span></div>
   <div class="who"><span class="av" aria-hidden="true">${esc([...name.trim()][0] || '?').toUpperCase()}</span><div><h1><span class="keep">${esc(name)}</span> · ${s.mode === 't' ? t('Daily tracker') : t('Day {0} of 90', s.day)}</h1><small><i class="live${stale ? ' stale' : ''}"></i>${upd ? ago(upd) + ' · ' : ''}${s.startDate ? t('started {0}', fmt(s.startDate)) : ''}</small></div></div>
   <div class="chips">${s.mode === 't' ? `<span>✓ ${t('In a row')} <b class="num">${s.streak ?? 0}</b></span><span>${t('Best run')} <b class="num">${s.best ?? 0}</b></span>` : `<span>🔥 ${t('Streak')} <b class="num">${s.streak ?? 0}</b></span><span>${t('Best')} <b class="num">${s.best ?? 0}</b></span><span>${t('Attempt {0}', s.attempt ?? 1)}</span>`}${s.goalWeight ? `<span>${t('Goal {0} kg', s.goalWeight)}</span>` : ''}${s.rank ? `<span>${t('Rank')} <b>${esc(trw(s.rank))}</b></span>` : ''}</div>`;
   if (!days.length) { $('main').innerHTML = `<section class="card span3"><p class="hint">${t('None logged yet.')}</p></section>`; bind(s, days); return; }
   $('main').innerHTML = weekCard(s, days) + flagsCard(s, days, wts) + weightCard(s, wts) + foodCard(days) + trainCard(days) + heatCard(s, days) + measureCard(s);
-  $('foot').textContent = t('Read-only view shared from the Lock In 90 app · updates when {0} logs', name);
+  $('foot').textContent = t('Read-only view shared from the Locked In app · updates when {0} logs', name);
   bind(s, days);
   translate($('main'));
 }

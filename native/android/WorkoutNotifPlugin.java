@@ -68,7 +68,7 @@ public class WorkoutNotifPlugin extends Plugin {
         android.app.PendingIntent tap = open == null ? null : android.app.PendingIntent.getActivity(c, 5, open, android.app.PendingIntent.FLAG_IMMUTABLE | android.app.PendingIntent.FLAG_UPDATE_CURRENT);
         androidx.core.app.NotificationCompat.Builder b = new androidx.core.app.NotificationCompat.Builder(c, "reminders")
             .setSmallIcon(R.drawable.ic_stat_notify).setColor(0xFF283A58)
-            .setContentTitle(call.getString("title", "Lock In 90")).setContentText(call.getString("body", ""))
+            .setContentTitle(call.getString("title", "Locked In")).setContentText(call.getString("body", ""))
             .setAutoCancel(true).setContentIntent(tap);
         try { androidx.core.app.NotificationManagerCompat.from(c).notify(9072, b.build()); } catch (SecurityException e) { call.reject("not allowed"); return; }
         call.resolve();

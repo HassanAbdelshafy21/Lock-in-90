@@ -1,5 +1,5 @@
 // Offline support: app files are served from cache and refreshed in the background.
-const VERSION = 'lockin-v42';
+const VERSION = 'lockin-v43';
 const EXC = 'lockin-ex-1'; // exercise photos and data: kept across app updates
 const FB = '10.14.1';
 const SHELL = ['./', './index.html', './styles.css', './app.js', './core.js', './data.js', './i18n.js', './train.js', './program.js', './brands.js', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png', './icons/maskable-192.png', './icons/maskable-512.png', './icons/favicon.png', './icons/apple-touch-icon.png', './icons/logo.svg', './fonts/Alexandria.ttf'];
@@ -54,8 +54,8 @@ self.addEventListener('fetch', e => {
 // App notifications (sent by the reminder job through Firebase Cloud Messaging)
 self.addEventListener('push', e => {
   let m = {};
-  try { const j = e.data ? e.data.json() : {}; m = j.data || j.notification || j; } catch (err) { m = { title: 'Lock In 90', body: e.data ? e.data.text() : '' }; }
-  e.waitUntil(self.registration.showNotification(m.title || 'Lock In 90', { body: m.body || '', icon: './icons/icon-192.png', badge: './icons/favicon.png', tag: m.tag || 'lockin', renotify: true, data: { url: m.url || './' } }));
+  try { const j = e.data ? e.data.json() : {}; m = j.data || j.notification || j; } catch (err) { m = { title: 'Locked In', body: e.data ? e.data.text() : '' }; }
+  e.waitUntil(self.registration.showNotification(m.title || 'Locked In', { body: m.body || '', icon: './icons/icon-192.png', badge: './icons/favicon.png', tag: m.tag || 'lockin', renotify: true, data: { url: m.url || './' } }));
 });
 self.addEventListener('notificationclick', e => {
   const n = e.notification, a = e.action;

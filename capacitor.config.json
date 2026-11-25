@@ -1,11 +1,11 @@
 {
   "appId": "io.github.hassanabdelshafy21.lockin90",
-  "appName": "Lock In 90",
+  "appName": "Locked In",
   "webDir": "www",
   "android": { "allowMixedContent": false },
   "plugins": {
     "FirebaseAuthentication": { "skipNativeAuth": true, "providers": ["google.com"] },
     "FirebaseMessaging": { "presentationOptions": ["sound", "alert"] },
-    "SplashScreen": { "launchAutoHide": false, "backgroundColor": "#283A58", "showSpinner": false, "launchFadeOutDuration": 200 }
+    "SplashScreen": { "launchAutoHide": false, "backgroundColor": "#0B0F14", "showSpinner": false, "launchFadeOutDuration": 200 }
   }
 }

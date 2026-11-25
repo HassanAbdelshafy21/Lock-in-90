@@ -22,7 +22,7 @@ import androidx.core.app.ServiceCompat;
 import androidx.core.content.ContextCompat;
 
 /**
- * The workout notification (Lock In 90). Stays up for the whole workout: the next set with a "Set done" button,
+ * The workout notification (Locked In). Stays up for the whole workout: the next set with a "Set done" button,
  * then a rest countdown that Android draws itself (keeps running with the screen off), then "Rest over" with a
  * vibration. A foreground service so the rest end fires on time and the app's process stays alive mid-workout.
  * State lives in static fields: the JS side sets it through WorkoutNotifPlugin.show(), the buttons through
@@ -117,7 +117,7 @@ public class WorkoutService extends Service {
         NotificationCompat.Builder b = new NotificationCompat.Builder(c, CH)
             .setSmallIcon(R.drawable.ic_stat_notify)
             .setColor(0xFF283A58)
-            .setContentTitle(title.isEmpty() ? "Lock In 90" : title)
+            .setContentTitle(title.isEmpty() ? "Locked In" : title)
             .setContentText(body)
             .setStyle(new NotificationCompat.BigTextStyle().bigText(body))
             .setOngoing(true).setOnlyAlertOnce(true).setSilent(true)

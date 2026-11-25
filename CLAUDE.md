@@ -1,4 +1,4 @@
-# Lock In 90: project context for Claude Code
+# Locked In (formerly Lock In 90): project context for Claude Code
 
 Hassan's 90-day fitness challenge PWA (vanilla JS, Firebase Auth + Firestore, Arabic/English via i18n.js).
 Live site: https://hassanabdelshafy21.github.io/Lock-in-90/ (GitHub Pages, from `main`).
@@ -96,6 +96,18 @@ Capgo-API stub `hcstub.js`), t39 (Arabic), regressions t16/t20/t22. If rebuildin
   Needs the user's GitHub secret CLAUDE_CODE_OAUTH_TOKEN; without it the coach silently does nothing.
 - Split nights (a part ending after 18:00 counts toward the next morning), band card second row (recovery, steps,
   oxygen), never-sent tiles hidden, Arabic for Strava/coach/recovery explainer, keep-screen-on during workouts.
+
+## Done in v39 (2026-11-25)
+- Renamed to **Locked In** (user-facing text only; app id, repo, Firebase, URLs unchanged). Logo "R6": black ring + bolt
+  on neon lime (#A3E635, ink #0B0F14). All icons come from `native/make-icons.mjs` (needs sharp; run from a folder that
+  has it). Android launch screen = lime disc on black; `#boot` in index.html draws the same disc so Android hands
+  over at once and it pulses until the first real draw (`splashDone`).
+- Sheets/panels: overscroll contained, page locked behind (CSS :has).
+- Me: Strava card always visible with the next step (keys → connect → connected/posting); Coach card (status, setup,
+  history). tick writes `meta/jobs` (stravaKeys, stravaCid, coachToken) and coach writes `meta/coach` (ok/err).
+  Strava posting is on by default (settings.strava.post === false turns it off).
+- Today: "Turn on notifications" card in the APK until on or dismissed (settings.nag.push). Step goal (band.stepGoal).
+- privacy.html now describes the coach (summaries sent to Claude).
 
 ## Next steps
 1. Hassan: install the v38 APK, turn on notifications (Me > Reminders), try a workout with the screen locked, allow
