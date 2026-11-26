@@ -303,7 +303,7 @@ export function trimPlan(meals, cut) {
   });
   return out;
 }
-/* two ways to use the app: 'challenge' (Locked In: every day needs all four, a miss resets to Day 1)
+/* two ways to use the app: 'challenge' (Locked In: a missed workout or off-plan food resets to Day 1; unfinished meals, water and supplements don't)
    and 'tracker' (daily health tracker: you pick the goals, nothing resets).
    Accounts made before modes existed have no mode and stay in the challenge. */
 export const isTracker = s => !!s && s.mode === 'tracker';
@@ -326,7 +326,16 @@ export function evalDay(settings, day, date) {
   if (ms.length) miss.supps.push(`Supplements: ${ms.map(s => s.name).join(', ')}`);
   const keys = Object.keys(miss).filter(k => G[k] && (!tr || k !== 'supps' || P.req.length));
   const missing = keys.flatMap(k => miss[k]);
-  return { complete: missing.length === 0, missing, offPlan: P.off.length > 0 || P.offExtra.length > 0, P, goals: keys, hit: keys.filter(k => !miss[k].length).length, miss };
+  const offPlan = P.off.length > 0 || P.offExtra.length > 0, complete = missing.length === 0;
+  // challenge: only a missed workout or off-plan food breaks the chain (eating less than the plan, water and supplements don't reset you).
+  // tracker: nothing resets, so broke just mirrors incomplete.
+  const broke = tr ? !complete : (!!miss.train.length || offPlan);
+  return { complete, broke, missing, offPlan, P, goals: keys, hit: keys.filter(k => !miss[k].length).length, miss };
+}
+/* does a finished day keep the run alive and count toward the 90? today counts once it is fully complete */
+export function dayHeld(settings, day, date, today) {
+  const e = evalDay(settings, day, date);
+  return e.complete || (date < today && !e.broke);
 }
 
 /* sports: MET values from the 2024 Adult Compendium of Physical Activities (easy / normal / hard).
@@ -375,14 +384,14 @@ export function computeRun(settings, days, now) {
   let lastFail = null;
   for (let d = attemptStart; d < today; d = addDays(d, 1)) {
     if (d === grace) continue;
-    if (!evalDay(settings, days[d], d).complete) {
+    if (evalDay(settings, days[d], d).broke) {
       attempts.push({ start: attemptStart, fail: d, len: diffDays(attemptStart, d) });
       attemptStart = addDays(d, 1);
       lastFail = d;
     }
   }
   let done = 0;
-  for (let d = attemptStart; d <= today; d = addDays(d, 1)) if (evalDay(settings, days[d], d).complete) done++;
+  for (let d = attemptStart; d <= today; d = addDays(d, 1)) if (dayHeld(settings, days[d], d, today)) done++;
   const todayEval = evalDay(settings, days[today], today);
   const best = Math.max(done, ...attempts.map(a => a.len), 0);
   return { attemptStart, attempts, dayNum: diffDays(attemptStart, today) + 1, done, todayEval, best, grace, critical: lastFail === addDays(today, -1), attemptNo: attempts.length + 1 + (settings.attemptBase || 0), victory: done >= 90 };

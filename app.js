@@ -5,7 +5,7 @@ import * as C from './core.js';
 import { trText, addFoodNames } from './i18n.js';
 import * as TR from './train.js';
 import * as HC from './health.js';
-const APP_VERSION = '42 · Food: one tap per meal';
+const APP_VERSION = '43 · only a missed workout or off-plan food resets the day';
 import { EX, POSE, figSVG, YT, LINES, FOODS, COACH_MEALS, DEFAULT_SUPPS, COACH_ENC, SLOTS, CARDIO_MODES } from './data.js';
 import { BRANDS, BRAND_BY_CODE } from './brands.js';
 addFoodNames(FOODS); addFoodNames(BRANDS);
@@ -267,7 +267,7 @@ function topHTML(R) {
   const t = today();
   return `<div class="top-row"><div><div class="daylabel">Day · attempt ${R.attemptNo}</div><div class="daynum num">${Math.min(R.dayNum, 90)}<small>/ 90</small></div></div>
   <div class="chips">${flameChip(R)}${syncChip()}</div></div>
-  <div class="strip" role="img" aria-label="${R.done} of 90 days locked in">${Array.from({ length: 90 }, (_, i) => { const d = C.addDays(R.attemptStart, i); return `<i class="${d <= t && C.evalDay(S.settings, S.days[d], d).complete ? 'd' : d === t ? 't' : ''}"></i>`; }).join('')}</div>`;
+  <div class="strip" role="img" aria-label="${R.done} of 90 days locked in">${Array.from({ length: 90 }, (_, i) => { const d = C.addDays(R.attemptStart, i); return `<i class="${d <= t && C.dayHeld(S.settings, S.days[d], d, t) ? 'd' : d === t ? 't' : ''}"></i>`; }).join('')}</div>`;
 }
 function bannersHTML(R) {
   let h = '';
@@ -302,7 +302,7 @@ function welcomeHTML() {
   const md = S.wMode || 'tracker', ch = md === 'challenge';
   return `<section class="card"><div class="card-h"><h2>${ch ? 'Start your 90 days' : 'How do you want to use it?'}</h2><button class="langbtn" data-act="lang" data-v="${LANG() === 'ar' ? 'en' : 'ar'}">${LANG() === 'ar' ? 'English' : 'العربية'}</button></div>
   <div class="modepick" role="radiogroup" aria-label="Mode"><button role="radio" data-act="wmode" data-v="tracker" aria-checked="${!ch}"><span class="em">🌿</span><b>Daily health tracker <i class="tg">Default</i></b><small>Log food, water, training and supplements, and see how each day went. A bad day is just a bad day: nothing resets.</small></button><button role="radio" data-act="wmode" data-v="challenge" aria-checked="${ch}"><span class="em">🔥</span><b>Locked In challenge <i class="tg hard">Hard mode</i></b><small>90 days in a row. Every day needs all four. Miss one and you’re back to Day 1.</small></button></div>
-  <p class="hint"><span>You can switch any time in Me → Mode.</span> ${ch ? 'Every day needs every planned meal on plan, your water goal, that day’s training and your core supplements. Miss any of them and the counter goes back to Day 1. ' : ''}${isOwner() ? 'Your coach’s meal plan is already loaded; edit it in Me.' : 'You start with Breakfast, Lunch and Dinner. Add your own meal plan and supplements in Me, or just log what you eat and the app counts the calories.'}</p>
+  <p class="hint"><span>You can switch any time in Me → Mode.</span> ${ch ? 'Every day you need that day’s training and every meal you eat on plan. Skip the workout or eat off-plan and the counter goes back to Day 1. Water, supplements and finishing every meal still lock the day in, but missing them doesn’t reset you. ' : ''}${isOwner() ? 'Your coach’s meal plan is already loaded; edit it in Me.' : 'You start with Breakfast, Lunch and Dinner. Add your own meal plan and supplements in Me, or just log what you eat and the app counts the calories.'}</p>
   <div class="form"><label>Start date<input class="in" id="w-start" type="date" value="${today()}" max="${today()}"></label>
   <label>Water goal${waterSelect('w-water', '', 4000)}</label>
   <label>Current weight (kg)<input class="in" id="w-weight" type="number" inputmode="decimal" step="0.1"></label>
@@ -429,7 +429,7 @@ const monthName = mk => new Date(+mk.slice(0, 4), +mk.slice(5, 7) - 1, 1).toLoca
 function monthData(mk) {
   const from = mk + '-01', end = (() => { const d = new Date(+mk.slice(0, 4), +mk.slice(5, 7), 0); return `${mk}-${C.pad(d.getDate())}`; })(), to = end > today() ? today() : end, st = S.settings;
   let locked = 0, n = 0; const ws = [];
-  for (let d = from; d <= to; d = C.addDays(d, 1)) { if (d < st.startDate) continue; n++; if (C.evalDay(st, S.days[d], d).complete) locked++; if (S.days[d] && S.days[d].weight) ws.push(S.days[d].weight); }
+  for (let d = from; d <= to; d = C.addDays(d, 1)) { if (d < st.startDate) continue; n++; if (C.dayHeld(st, S.days[d], d, today())) locked++; if (S.days[d] && S.days[d].weight) ws.push(S.days[d].weight); }
   const ms = TR.monthStats(from, to), r1 = TR.rankOf(C.addDays(to, 1)), r0 = TR.rankOf(from);
   return { mk, from, to, locked, n, wDelta: ws.length > 1 ? C.round(ws[ws.length - 1] - ws[0], 1) : null, ...ms, rank: r1 && r1.name, rank0: r0 && r0.name };
 }
@@ -533,7 +533,7 @@ function cheatFix(date) {
   else { P.off.forEach(m => { nd.meals[m.id].status = 'cheat'; }); (nd.extras || []).forEach(x => { if (x.off) { x.off = false; x.cheat = true; } }); }
   const uses = c.kind === 'day' ? 1 : offs, cu = C.cheatsUsed(st2, S.days, date, date);
   if (cu.used + uses > cu.max) return { blocked: true, uses, max: cu.max, used: cu.used, next: C.addDays(cu.to, 1) };
-  if (!C.evalDay(st2, nd, date).complete) return null;
+  if (C.evalDay(st2, nd, date).broke) return null;
   return { nd, uses, turnOn: !(st.cheat && st.cheat.on), kind: c.kind || 'meal' };
 }
 function cheatFixHTML(date) {
@@ -546,7 +546,7 @@ function reflectHTML(R) {
   if ((dsMode() === 'midnight' && n.hour < 3) || y < S.settings.startDate) return '';
   { const lf = (R.attempts || []).slice(-1)[0]; if (lf && lf.fail !== y && lf.fail >= C.addDays(t, -7)) { const cf = cheatFix(lf.fail); if (cf && !cf.blocked) return `<section class="card reflect"><span class="sub">Your streak reset on ${fmt(lf.fail)}</span>${cheatFixHTML(lf.fail)}</section>`; } }
   const yd = S.days[y] || {};
-  if (C.evalDay(S.settings, yd, y).complete) return '';
+  if (!C.evalDay(S.settings, yd, y).broke) return '';
   { const cf = cheatFix(y); if (cf && !cf.blocked) return `<section class="card reflect"><span class="sub">Yesterday didn’t count</span>${cheatFixHTML(y)}</section>`; }
   if (yd.missWhy && yd.missWhy !== 'pending') {
     const si = WHY_SUGGEST[yd.missWhy];
@@ -695,7 +695,7 @@ const weekStart = d => C.addDays(d, -((C.weekday(d) + 1) % 7));
 function chalNow() { const ws = weekStart(today()), i = Math.floor(C.diffDays('2026-01-03', ws) / 7) % CHAL.length; return { ws, c: CHAL[(i + CHAL.length) % CHAL.length] }; }
 function myWeekStats() {
   const ws = weekStart(today()); let water = 0, active = 0, locked = 0, sl = 0, sn = 0;
-  for (let dt = ws > S.settings.startDate ? ws : S.settings.startDate; dt <= today(); dt = C.addDays(dt, 1)) { const d = S.days[dt] || {}; water += C.waterTotal(d); active += (d.sports || []).reduce((s, x) => s + (x.min || 0), 0) + (d.stamina || []).reduce((s, x) => s + (x.min || 0), 0); if (C.evalDay(S.settings, d, dt).complete) locked++; if (d.sleep) { sl += d.sleep; sn++; } }
+  for (let dt = ws > S.settings.startDate ? ws : S.settings.startDate; dt <= today(); dt = C.addDays(dt, 1)) { const d = S.days[dt] || {}; water += C.waterTotal(d); active += (d.sports || []).reduce((s, x) => s + (x.min || 0), 0) + (d.stamina || []).reduce((s, x) => s + (x.min || 0), 0); if (C.dayHeld(S.settings, d, dt, today())) locked++; if (d.sleep) { sl += d.sleep; sn++; } }
   return { k: ws, water: Math.round(water / 500) / 2, active, locked, sleep: sn ? Math.round(sl / sn * 2) / 2 : 0 };
 }
 function challengeHTML() {
@@ -809,8 +809,8 @@ function drawDay() {
   const cali = Object.entries(d.cali || {}).filter(([, a]) => Array.isArray(a) && a.some(v => v > 0)).map(([id, a]) => { const e = EX.find(x => x.id === id); return `${e ? e.name : id}: ${a.filter(v => v > 0).join(' · ')}`; }).join('; ');
   const prev = C.addDays(date, -1), next = C.addDays(date, 1);
   $('sheet').innerHTML = `<div class="sheet" role="dialog" aria-modal="true" aria-label="Day ${fmt(date)}"><div class="spread"><h2>${dayNo >= 1 && dayNo <= 90 ? `Day ${dayNo} · ` : ''}${fmt(date)}</h2><button class="x" data-act="closesheet" aria-label="Close">×</button></div>
-  <div class="row dnav"><button class="btn small" data-act="daynav" data-v="${prev}" ${prev < st.startDate ? 'disabled' : ''}>‹ Previous</button><span class="state ${ev.complete ? 's-done' : date === t ? 's-todo' : 's-bad'}">${ev.complete ? 'Locked in' : date === t ? 'In progress' : 'Missed'}</span><button class="btn small" data-act="daynav" data-v="${next}" ${next > t ? 'disabled' : ''}>Next ›</button></div>
-  ${!ev.complete && ev.missing.length ? `<ul class="missing">${ev.missing.map(x => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}${!ev.complete && date < t ? cheatFixHTML(date) : ''}
+  <div class="row dnav"><button class="btn small" data-act="daynav" data-v="${prev}" ${prev < st.startDate ? 'disabled' : ''}>‹ Previous</button><span class="state ${ev.complete || (date < t && !ev.broke) ? 's-done' : date === t ? 's-todo' : 's-bad'}">${ev.complete ? 'Locked in' : date < t && !ev.broke ? 'Counted' : date === t ? 'In progress' : 'Missed'}</span><button class="btn small" data-act="daynav" data-v="${next}" ${next > t ? 'disabled' : ''}>Next ›</button></div>
+  ${!ev.complete && ev.missing.length ? `<ul class="missing">${ev.missing.map(x => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}${ev.broke && date < t ? cheatFixHTML(date) : ''}
   <div class="review"><div><b class="num">${kc(tot.k)}${tgt.k ? `<small> / ${kc(tgt.k)}</small>` : ''}</b><span>Calories</span></div><div><b class="num">${kc(tot.p)} g</b><span>Protein</span></div><div><b class="num">${L(P.w)} L</b><span>Water${P.wDrinks ? ` · ${L(P.wDrinks)} L from drinks` : ''}</span></div><div><b>${P.tt === 'rest' ? 'Rest' : d.trainingDone ? 'Done' : 'Not done'}</b><span>${esc(C.TT[P.tt].label)}</span></div></div>
   <span class="sub">Meals</span><ul class="list">${meals}${ex}</ul>
   ${sp ? `<p class="hint"><b>Sports:</b> ${esc(sp)}</p>` : ''}${cali ? `<p class="hint"><b>Calisthenics:</b> ${esc(cali)}</p>` : ''}
@@ -1387,7 +1387,7 @@ function progressParts(R) {
   if (R.tracker) h += calendarHTML(R); else {
   h += `<div class="stats"><div class="stat feature"><div class="big num">${R.done}</div><span>Days locked in</span></div><div class="stat"><div class="big num">${Math.min(R.dayNum, 90)}</div><span>Day now</span></div><div class="stat"><div class="big num">${R.best}</div><span>Best streak</span></div><div class="stat"><div class="big num">${Math.floor(R.done / 7)}</div><span>Perfect weeks</span></div></div>`;
   const ms = C.MILES.map(m => m[0]);
-  h += `<section class="card"><div class="card-h"><h2>The chain</h2><span class="hint">Tap a day to see it</span></div><div class="grid90">${Array.from({ length: 90 }, (_, i) => { const dt = C.addDays(R.attemptStart, i); let c = ''; if (dt <= t && C.evalDay(st, S.days[dt], dt).complete) c = 'done'; else if (dt === t) c = 'today'; else if (dt === R.grace) c = 'open'; if (ms.includes(i + 1)) c += ' m'; return dt <= t ? `<button class="${c}" data-act="dayview" data-v="${dt}" aria-label="Day ${i + 1}, ${fmt(dt)}">${i + 1}</button>` : `<i class="${c}" title="Day ${i + 1} · ${fmt(dt)}">${i + 1}</i>`; }).join('')}</div></section>`;
+  h += `<section class="card"><div class="card-h"><h2>The chain</h2><span class="hint">Tap a day to see it</span></div><div class="grid90">${Array.from({ length: 90 }, (_, i) => { const dt = C.addDays(R.attemptStart, i); let c = ''; if (dt <= t && C.dayHeld(st, S.days[dt], dt, t)) c = 'done'; else if (dt === t) c = 'today'; else if (dt === R.grace) c = 'open'; if (ms.includes(i + 1)) c += ' m'; return dt <= t ? `<button class="${c}" data-act="dayview" data-v="${dt}" aria-label="Day ${i + 1}, ${fmt(dt)}">${i + 1}</button>` : `<i class="${c}" title="Day ${i + 1} · ${fmt(dt)}">${i + 1}</i>`; }).join('')}</div></section>`;
   h += `<section class="card"><div class="card-h"><h2>Milestones</h2>${pill('todo', `${C.MILES.filter(m => R.done >= m[0]).length} / ${C.MILES.length}`)}</div><div class="miles">${C.MILES.map(m => `<div class="mile ${R.done >= m[0] ? 'got' : ''}"><b class="num">${m[0]}</b><span>${m[1]}</span></div>`).join('')}</div></section>`;
   if (R.attempts.length) h += `<section class="card"><div class="card-h"><h2>Attempts</h2></div><ul class="list">${R.attempts.map((a, i) => `<li><span>Attempt ${i + 1}</span><span class="num">${a.len} day${a.len === 1 ? '' : 's'} · broke ${fmt(a.fail)}</span></li>`).join('')}<li><span>Attempt ${R.attemptNo}</span><span class="num">${R.done} days and counting</span></li></ul></section>`;
   }
@@ -1629,10 +1629,10 @@ function modeHTML(st, R) {
   <div class="seg wide" role="group" aria-label="Mode"><button data-act="modeask" data-v="tracker" aria-pressed="${trk}">🌿 Daily tracker</button><button data-act="modeask" data-v="challenge" aria-pressed="${!trk}">🔥 Locked In</button></div>`;
   if (trk) h += `<span class="sub">A full day means</span>${GOAL_ROWS.map(([k, l, d]) => `<div class="spread goalrow"><span><b>${l}</b>${d ? `<small class="sub" style="display:block">${d}</small>` : ''}</span><button class="switch" role="switch" data-act="goaltog" data-v="${k}" aria-checked="${!!G[k]}" aria-label="${l}"><i></i></button></div>`).join('')}
   <div class="setup-r"><label for="s-kt">Daily calorie target<small class="sub" style="display:block">${noPlan ? 'For the food goal, since you have no meal plan' : 'Only used if your meal plan is empty'}</small></label><input class="in" id="s-kt" type="number" inputmode="numeric" min="800" max="6000" step="50" data-setting="kcalTarget" value="${st.kcalTarget || ''}" placeholder="optional" style="width:110px"></div>`;
-  else h += `<p class="hint">You’re in the Locked In challenge: Day ${Math.min(R.dayNum, 90)}, attempt ${R.attemptNo}. Every day needs all four, and a miss sends you back to Day 1.</p>`;
-  if (ask === 'challenge' && trk) h += `<div class="modeask"><b>Start the 90-day challenge</b><p class="hint">Today becomes Day 1. Every day needs all four, and a miss sends you back to Day 1. Your history stays.</p><div class="row"><button class="btn primary" data-act="modego" data-v="challenge">🔥 Start Locked In today</button><button class="btn ghost" data-act="modeask" data-v="">Not now</button></div></div>`;
+  else h += `<p class="hint">You’re in the Locked In challenge: Day ${Math.min(R.dayNum, 90)}, attempt ${R.attemptNo}. Train on your planned days and stay on plan: a missed workout or off-plan food sends you back to Day 1.</p>`;
+  if (ask === 'challenge' && trk) h += `<div class="modeask"><b>Start the 90-day challenge</b><p class="hint">Today becomes Day 1. A missed workout or off-plan food sends you back to Day 1. Your history stays.</p><div class="row"><button class="btn primary" data-act="modego" data-v="challenge">🔥 Start Locked In today</button><button class="btn ghost" data-act="modeask" data-v="">Not now</button></div></div>`;
   else if (ask === 'tracker' && !trk) h += `<div class="modeask warn"><b>Leave the challenge?</b><p class="hint">The day counter stops at Day ${Math.min(R.dayNum, 90)}. Your days, records and friends stay as they are. If you come back later, you start again at Day 1.</p><div class="row"><button class="btn danger" data-act="modego" data-v="tracker">Switch to the daily tracker</button><button class="btn ghost" data-act="modeask" data-v="">Stay in the challenge</button></div></div>`;
-  else if (trk) h += `<div class="modeask"><b>Want a challenge?</b><p class="hint">Locked In: 90 days in a row, all four every day. Miss one and you’re back to Day 1.</p><button class="btn block" data-act="modeask" data-v="challenge">🔥 Start the 90-day challenge</button></div>`;
+  else if (trk) h += `<div class="modeask"><b>Want a challenge?</b><p class="hint">Locked In: 90 days in a row. Miss a workout or eat off-plan and you’re back to Day 1.</p><button class="btn block" data-act="modeask" data-v="challenge">🔥 Start the 90-day challenge</button></div>`;
   return h + '</section>';
 }
 function setupHTML(R) {
