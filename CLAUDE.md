@@ -148,7 +148,13 @@ Capgo-API stub `hcstub.js`), t39 (Arabic), regressions t16/t20/t22. If rebuildin
   which closes the sheet and re-dispatches the existing `meal` action. `gramsField()` adds − / + (`gstep`) to every
   food editor (5 g steps, 10 g from 100 g, 50 ml for drinks).
 
+## Reset rule (v43, on main)
+Challenge: only a missed workout (training day) or off-plan food/extra resets to Day 1 (`evalDay().broke`). Eating less than
+the plan, water and supplements don't reset; a closed day that didn't break counts toward the 90 (`dayHeld`). Tracker unchanged.
+
 ## Next steps
+0. Build **Couch to 5K as a cardio option**: full spec in `docs/couch-to-5k.md`, approved design canvas linked there.
+   Then build the APK (WSL steps above) and give Hassan the file.
 1. Hassan: install the v42 APK (then switch on Coach in You > Optional extras if wanted).
    Earlier: install the v38 APK, turn on notifications (Me > Reminders), try a workout with the screen locked, allow
    Strava posting once, add the CLAUDE_CODE_OAUTH_TOKEN secret. Fix whatever the real phone shows.
